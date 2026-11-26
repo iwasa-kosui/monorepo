@@ -1,8 +1,18 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
 import { sql, SQLite } from '@codemirror/lang-sql';
-import { bracketMatching, HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { EditorState, type Extension, Prec } from '@codemirror/state';
+import {
+  bracketMatching,
+  codeFolding,
+  ensureSyntaxTree,
+  foldable,
+  foldEffect,
+  foldGutter,
+  foldKeymap,
+  HighlightStyle,
+  syntaxHighlighting,
+} from '@codemirror/language';
+import { EditorState, type Extension, Prec, type StateEffect } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 
@@ -11,6 +21,7 @@ export type EditorOptions = {
   label: string;
   readOnly?: boolean;
   wrap?: boolean;
+  foldExportsExcept?: string;
   typecheck?: Extension;
   onChange?: (doc: string) => void;
   onCursor?: (line: number, column: number) => void;
@@ -18,36 +29,65 @@ export type EditorOptions = {
 };
 
 const theme = EditorView.theme({
-  '&': { maxHeight: '22rem', fontSize: '0.875rem', backgroundColor: 'var(--role-surface)', color: 'var(--role-fg)' },
-  '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-code)' },
-  '.cm-gutters': { backgroundColor: 'var(--role-sunken)', color: 'var(--role-muted)', border: 'none' },
-  '.cm-cursor': { borderLeftColor: 'var(--role-fg)' },
-  '.cm-selectionBackground': { backgroundColor: 'var(--role-accent-soft)' },
-  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
-    backgroundColor: 'var(--role-accent-soft)',
+  '&': {
+    maxHeight: '22rem',
+    fontSize: 'var(--text-code)',
+    backgroundColor: 'var(--role-ground)',
+    color: 'var(--role-ink)',
   },
-  '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--role-accent-soft) 40%, transparent)' },
-  '.cm-activeLineGutter': { backgroundColor: 'color-mix(in srgb, var(--role-accent-soft) 40%, transparent)' },
+  '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-code)', lineHeight: 'var(--leading-normal)' },
+  '.cm-gutters': { backgroundColor: 'var(--role-ground)', color: 'var(--role-ink-sub)', border: 'none' },
+  '.cm-lineNumbers .cm-gutterElement': { minWidth: '2.5rem', padding: '0 var(--space-2)' },
+  '.cm-foldGutter .cm-gutterElement': { minWidth: 'var(--tap-min)', textAlign: 'center', cursor: 'pointer' },
+  '.cm-foldPlaceholder': {
+    backgroundColor: 'var(--role-surface)',
+    color: 'var(--role-ink-sub)',
+    border: 'none',
+    fontSize: 'var(--text-note)',
+  },
+  '.cm-cursor': { borderLeftColor: 'var(--role-ink)' },
+  '.cm-selectionBackground': { backgroundColor: '#cfe3ff' },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { backgroundColor: '#cfe3ff' },
+  '.cm-activeLine': { backgroundColor: '#f3f3f3' },
+  '.cm-activeLineGutter': { backgroundColor: '#f3f3f3', color: 'var(--role-ink)' },
 });
 
 const highlightStyle = HighlightStyle.define([
   {
     tag: [tags.keyword, tags.controlKeyword, tags.operatorKeyword, tags.definitionKeyword, tags.moduleKeyword],
-    color: 'var(--role-code-keyword)',
+    color: '#0000ff',
   },
-  { tag: [tags.string, tags.special(tags.string), tags.regexp], color: 'var(--role-code-string)' },
-  { tag: [tags.number, tags.bool, tags.null], color: 'var(--role-code-number)' },
-  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'var(--role-code-comment)', fontStyle: 'italic' },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp], color: '#a31515' },
+  { tag: [tags.number, tags.bool, tags.null], color: '#0b6b3a' },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'var(--role-ink-sub)', fontStyle: 'italic' },
   {
     tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.definition(tags.propertyName)],
-    color: 'var(--role-code-function)',
+    color: '#795e26',
   },
-  { tag: [tags.typeName, tags.className], color: 'var(--role-code-type)' },
+  { tag: [tags.typeName, tags.className], color: '#1f6f86' },
   {
     tag: [tags.variableName, tags.propertyName, tags.operator, tags.punctuation, tags.bracket, tags.name],
-    color: 'var(--role-fg)',
+    color: 'var(--role-ink)',
   },
 ]);
+
+const exportPattern = /^export const (\w+)/gm;
+
+const foldedExports = (state: EditorState, except: string): StateEffect<{ from: number; to: number }>[] => {
+  ensureSyntaxTree(state, state.doc.length, 1000);
+  const effects: StateEffect<{ from: number; to: number }>[] = [];
+  for (const match of state.doc.toString().matchAll(exportPattern)) {
+    if (match[1] === except) {
+      continue;
+    }
+    const line = state.doc.lineAt(match.index);
+    const range = foldable(state, line.from, line.to);
+    if (range !== null) {
+      effects.push(foldEffect.of(range));
+    }
+  }
+  return effects;
+};
 
 export const createEditorState = (doc: string, options: EditorOptions): EditorState => {
   const extensions: Extension[] = [
@@ -67,6 +107,9 @@ export const createEditorState = (doc: string, options: EditorOptions): EditorSt
   }
   if (options.wrap === true) {
     extensions.push(EditorView.lineWrapping);
+  }
+  if (options.foldExportsExcept !== undefined) {
+    extensions.push(codeFolding(), foldGutter(), keymap.of(foldKeymap));
   }
   if (options.typecheck !== undefined) {
     extensions.push(options.typecheck);
@@ -99,7 +142,11 @@ export const createEditorState = (doc: string, options: EditorOptions): EditorSt
       }
     }));
   }
-  return EditorState.create({ doc, extensions });
+  const state = EditorState.create({ doc, extensions });
+  if (options.foldExportsExcept === undefined) {
+    return state;
+  }
+  return state.update({ effects: foldedExports(state, options.foldExportsExcept) }).state;
 };
 
 export const cursorOf = (state: EditorState): { line: number; column: number } => {

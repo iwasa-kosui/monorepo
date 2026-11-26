@@ -15,7 +15,11 @@ const { labels, label: groupLabel = 'パターン' } = Astro.props;
 >
   {
     labels.map((label, index) => (
-      <button type="button" aria-pressed={index === 0 ? 'true' : 'false'}>
+      <button
+        type="button"
+        class="btn"
+        aria-pressed={index === 0 ? 'true' : 'false'}
+      >
         {label}
       </button>
     ))

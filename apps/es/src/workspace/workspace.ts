@@ -1,11 +1,13 @@
+import { setAction } from '../lesson/action-bar';
 import { createChat } from './chat';
 import { clockOf, formatElapsed } from './clock';
-import { hasFired, keyOf, record } from './conditions';
+import { hasFired, isMet, keyOf, record } from './conditions';
 import { emitSignal, type PanelController } from './panel';
 import { mountPanel } from './panels';
 import { fillTemplate, interimText, type MemoOverride, memoViews, replyGate } from './rules';
 import {
   type ButtonName,
+  type Condition,
   type SignalDetail,
   signalEventName,
   type SignalName,
@@ -30,6 +32,9 @@ export const mountWorkspace = (root: HTMLElement): void => {
     throw new Error('最初から表示するタブがありません');
   }
   const selfActor = Object.entries(scenario.actors).find(([, actor]) => actor.self === true)?.[0] ?? '';
+  const doneWhen: Condition | undefined = scenario.done ?? (scenario.reply === undefined ? undefined : 'chat:replied');
+  const reportsDone = document.querySelector<HTMLElement>('[data-action-bar]')?.dataset.state === 'do';
+  let reportedDone = false;
 
   const startPanel = root.querySelector<HTMLElement>('[data-start]');
   const startButton = root.querySelector<HTMLButtonElement>('[data-action="start"]');
@@ -135,6 +140,13 @@ export const mountWorkspace = (root: HTMLElement): void => {
     });
     updatePanels();
     renderClock();
+    if (reportsDone && doneWhen !== undefined) {
+      const done = isMet(fired, doneWhen);
+      if (done !== reportedDone) {
+        reportedDone = done;
+        setAction({ state: done ? 'done' : 'do' });
+      }
+    }
   }
 
   const startInterval = (): void => {
@@ -386,19 +398,20 @@ export const mountWorkspace = (root: HTMLElement): void => {
   );
   resetButton?.addEventListener('click', reset);
   compact.addEventListener('change', render);
-  const footer = document.querySelector<HTMLElement>('.lesson-footer');
+  const main = document.querySelector<HTMLElement>('main.lesson-main');
   const statusBar = root.querySelector<HTMLElement>('.status-bar');
   const tabStrip = root.querySelector<HTMLElement>('.tab-strip');
   const measureBars = (): void => {
-    const above = timed
-      ? (statusBar?.offsetHeight ?? 0)
-      : Math.max(0, root.getBoundingClientRect().top + window.scrollY);
-    root.style.setProperty('--ws-top', `${above}px`);
+    if (main !== null) {
+      const style = getComputedStyle(main);
+      const height = main.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      root.style.setProperty('--ws-height', `${height}px`);
+    }
+    root.style.setProperty('--ws-top', `${statusBar?.offsetHeight ?? 0}px`);
     if (tabStrip !== null) root.style.setProperty('--ws-strip', `${tabStrip.offsetHeight}px`);
-    if (footer !== null) root.style.setProperty('--ws-bottom', `${footer.offsetHeight}px`);
   };
   const barObserver = new ResizeObserver(measureBars);
-  for (const bar of [footer, statusBar, tabStrip]) {
+  for (const bar of [main, statusBar, tabStrip]) {
     if (bar !== null) barObserver.observe(bar);
   }
   measureBars();

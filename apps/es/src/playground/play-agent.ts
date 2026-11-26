@@ -48,7 +48,6 @@ export const mountAgent = (root: HTMLElement, step: AgentStep, host: AgentHost):
   const requestInput = query<HTMLTextAreaElement>(root, '[data-role="agent-request"]');
   const sendButton = query<HTMLButtonElement>(root, '[data-role="agent-send"]');
   const log = query<HTMLElement>(root, '[data-role="agent-log"]');
-  const closeButton = query<HTMLElement>(root, '[data-role="agent-close"]');
 
   let password = readPassword();
   let conversation: readonly AgentTurn[] = [];
@@ -188,14 +187,6 @@ export const mountAgent = (root: HTMLElement, step: AgentStep, host: AgentHost):
         requestInput.focus();
       }
     });
-  });
-
-  closeButton.addEventListener('click', () => {
-    const details = closeButton.closest('details');
-    if (details !== null) {
-      details.open = false;
-      details.querySelector('summary')?.focus();
-    }
   });
 
   showForm();

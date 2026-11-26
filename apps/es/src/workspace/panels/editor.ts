@@ -3,6 +3,7 @@ import type { PanelMount } from '../panel';
 import { watchSlotSignals } from './watch';
 
 const drawerMaxRem = 40;
+const sidebarOpenMinRem = 56;
 
 export const mountEditor: PanelMount<'editor'> = (host) => {
   watchSlotSignals(host);
@@ -19,14 +20,25 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
   // タブの名前がファイル名でないとき（開始コードを並べるタブ）は、ファイルを選んでも名前を変えない
   const namedByFile = tab.title === `${tab.config.active} — ${project}`;
 
-  const isDrawer = (): boolean => {
-    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    return ide.getBoundingClientRect().width < drawerMaxRem * rem;
+  const remPx = (): number => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+
+  const isDrawer = (): boolean => ide.getBoundingClientRect().width < drawerMaxRem * remPx();
+
+  let decided = false;
+  const decideSidebar = (): void => {
+    if (decided) return;
+    const { width } = ide.getBoundingClientRect();
+    if (width === 0) return;
+    decided = true;
+    if (ide.querySelector('[data-play="add-record"]') === null && width >= sidebarOpenMinRem * remPx()) {
+      ide.dataset.sidebar = 'open';
+    }
   };
 
   const sync = (): void => {
     const open = isDrawer() ? ide.dataset.drawer === 'open' : ide.dataset.sidebar === 'open';
     toggle?.setAttribute('aria-expanded', String(open));
+    toggle?.setAttribute('aria-label', open ? 'EXPLORER を閉じる' : 'EXPLORER を開く');
   };
 
   const setDrawer = (open: boolean): void => {
@@ -63,7 +75,11 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
       address.textContent = browserTab.dataset.url;
     }
   });
-  new ResizeObserver(sync).observe(ide);
+  new ResizeObserver(() => {
+    decideSidebar();
+    sync();
+  }).observe(ide);
+  decideSidebar();
   sync();
   return {};
 };

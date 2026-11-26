@@ -34,7 +34,7 @@ const initial = 'SELECT * FROM visits;';
       ))
     }
   </fieldset>
-  <button type="button" class="run" data-restore>復元する</button>
+  <button type="button" class="btn btn--soft" data-restore>復元する</button>
   <p class="status" aria-live="polite" data-status></p>
   <div class="bar" aria-hidden="true" data-bar hidden><span></span></div>
   <h3 class="restored" data-heading hidden></h3>
@@ -51,10 +51,10 @@ const initial = 'SELECT * FROM visits;';
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  font-size: 1rem;
-  line-height: 1.5;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
 }
 .restore > :global(.playground) {
   align-self: stretch;
@@ -63,46 +63,34 @@ const initial = 'SELECT * FROM visits;';
 .backups {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1.25rem;
+  gap: var(--space-1) var(--space-5);
   margin: 0;
-  border: 1px solid var(--role-rule);
-  border-radius: var(--radius-md);
-  padding: 0.375rem 0.75rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--role-sunken);
+  padding: var(--space-3) var(--space-4);
 }
 .backups legend {
-  padding-inline: 0.25rem;
-  font-weight: 700;
+  margin-bottom: var(--space-1);
+  padding: 0;
+  font-weight: var(--weight-bold);
 }
 .backups label {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
   font-family: var(--font-code);
+  font-size: var(--text-code);
 }
 .backups input {
-  width: 1.125rem;
-  height: 1.125rem;
+  width: 1.25rem;
+  height: 1.25rem;
   accent-color: var(--role-accent);
-}
-.run {
-  min-height: 2.5rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--role-accent);
-  padding: 0 1.25rem;
-  color: var(--role-on-accent);
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-.run:disabled {
-  background: var(--role-sunken);
-  color: var(--role-muted);
-  cursor: not-allowed;
 }
 .status {
   margin: 0;
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 .status:empty {
   display: none;
@@ -111,7 +99,7 @@ const initial = 'SELECT * FROM visits;';
   align-self: stretch;
   height: 0.75rem;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--role-sunken);
 }
 .bar[hidden] {
@@ -126,9 +114,9 @@ const initial = 'SELECT * FROM visits;';
   animation: fill var(--duration, 6000ms) linear forwards;
 }
 .restored {
-  margin: 0.25rem 0 0;
-  font-size: 1.125rem;
-  font-weight: 700;
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
 }
 .restored[hidden] {
   display: none;
@@ -158,6 +146,52 @@ const initial = 'SELECT * FROM visits;';
 .restore :global([data-role="reset-sql"]),
 .restore :global([data-role="restore"]) {
   display: none !important;
+}
+.restore :global(.playground button) {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--role-accent-soft);
+  padding: 0 var(--space-4);
+  color: var(--role-accent);
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+.restore :global(.playground button:disabled) {
+  background: var(--role-rail);
+  color: var(--role-ink-sub);
+}
+.restore :global(.playground-status),
+.restore :global(.playground-origin),
+.restore :global(.playground-hint),
+.restore :global(.playground-note) {
+  color: var(--role-ink-sub);
+  font-size: var(--text-note);
+}
+.restore :global(.playground-editor .cm-editor) {
+  font-size: var(--text-body);
+}
+.restore :global(.playground-editor .cm-scroller) {
+  font-family: var(--font-code);
+}
+.restore :global(.playground-result table) {
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
+}
+.restore :global(.playground-result th) {
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+}
+.restore :global(.playground-result .playground-statement code) {
+  font-size: var(--text-note);
+}
+.restore :global(.playground-label),
+.restore :global(.playground-error),
+.restore :global(.playground pre) {
+  font-size: var(--text-code);
 }
 </style>
 

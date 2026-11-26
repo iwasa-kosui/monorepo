@@ -12,11 +12,11 @@ const { code } = Astro.props;
   <button
     type="button"
     hidden
-    class="absolute top-2 right-2 rounded bg-sunken px-2 py-1 text-xs text-fg"
+    class="btn btn--soft absolute top-2 right-2"
   >
     コピー
   </button>
-  <Code code={code} lang="ts" />
+  <Code code={code} lang="ts" theme="github-light" />
 </div>
 
 <script>

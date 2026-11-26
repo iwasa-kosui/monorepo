@@ -2,7 +2,7 @@
 import { type CollectionEntry, getCollection } from 'astro:content';
 
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { lessonPageOf, pageFlows } from '../../lesson-pages';
+import { lessonPageOf } from '../../lesson-pages';
 import {
   buildChapterPages,
   type ChapterPage,
@@ -15,11 +15,10 @@ import {
   formatElapsed,
   pageLabel,
 } from '../../lib/page-guide';
-import { schedule, withTimeRanges } from '../../schedule';
+import { formatClock, schedule, withTimeRanges } from '../../schedule';
 import '../../styles/lesson-frame.css';
-import LessonFooter from './LessonFooter.astro';
-import LessonPageList from './LessonPageList.astro';
-import TopBar from './TopBar.astro';
+import ActionBar from './ActionBar.astro';
+import LessonBar from './LessonBar.astro';
 
 interface Props {
   chapter: string;
@@ -71,17 +70,34 @@ const groups = groupPages(pages, index).map((group) => {
     })),
   };
 });
-const linkTo = (target: Page | undefined) =>
-  target === undefined ? undefined : {
-    href: pagePath(target.chapter, target.number),
-    hint: target.chapter === chapter ? undefined : rowOf(target.chapter).title,
-    title: labelOf(target),
+const hrefOf = (target: Page | undefined) =>
+  target === undefined ? undefined : pagePath(target.chapter, target.number);
+const chapterIndex = rows.findIndex((candidate) => candidate.id === chapter);
+const segments = rows.map((candidate, rowIndex) => {
+  const state = rowIndex < chapterIndex
+    ? 'done' as const
+    : rowIndex === chapterIndex
+    ? 'current' as const
+    : 'future' as const;
+  return {
+    id: candidate.id,
+    minutes: candidate.minutes,
+    state,
+    fill: state === 'done'
+      ? 1
+      : state === 'current'
+      ? page.number / page.total
+      : 0,
   };
+});
+const limit = formatClock(
+  schedule.reduce((sum, entry) => sum + entry.minutes, 0),
+);
 const fullWidth = meta.flow === 'exercise';
 const wide = chapter === 'intro' || page.entry.data.wide === true;
 const immersive = page.entry.data.immersive === true;
 const goal = page.entry.data.goal;
-const roleParts = meta.role.split('`');
+const nextHref = hrefOf(pages[index + 1]);
 ---
 
 <BaseLayout title={`${row.title} ${page.number}/${page.total}`} chapterPage>
@@ -94,129 +110,36 @@ const roleParts = meta.role.split('`');
     }]}
     data-flow={meta.flow}
   >
-    <TopBar>
-      <h1 class="lesson-bar__title">
-        <span class="lesson-bar__name">{row.title}</span>
-        <span class="lesson-bar__count">{page.number}/{page.total}</span>
-      </h1>
-      <p class="lesson-bar__status">
-        <span>全体 <strong>{index + 1}/{pages.length}</strong></span>
-        <span>目安 {elapsed}ごろ</span>
-        <span class="lesson-bar__range">
-          この章 {row.range}{
-            row.parts !== undefined && (
-              <span class="lesson-bar__parts">：{row.parts}</span>
-            )
-          }
-        </span>
-      </p>
-      <a class="lesson-bar__help" href="/glossary/">用語</a>
-      <a class="lesson-bar__help" href="/troubleshooting/"
-      >うまく動かないとき</a>
-      <details class="lesson-menu">
-        <summary>ページ一覧</summary>
-        <div class="lesson-menu__panel">
-          <div class="lesson-menu__extra">
-            <p class="lesson-menu__status">
-              <span>全体 <strong>{index + 1}/{pages.length}</strong></span>
-              <span>目安 {elapsed}ごろ</span>
-              <span>この章 {row.range}</span>
-            </p>
-            <p class="lesson-menu__links">
-              <a href="/">トップページへ</a>
-              <a href="/glossary/">用語</a>
-              <a href="/troubleshooting/">うまく動かないとき</a>
-            </p>
-          </div>
-          <LessonPageList
-            groups={groups}
-            idPrefix="menu"
-            label="全ページの一覧"
-          />
-        </div>
-      </details>
-    </TopBar>
-    <div class="lesson-frame__body">
-      <div class="lesson-sidebar">
-        <LessonPageList
-          groups={groups}
-          idPrefix="side"
-          label="章ごとのページ"
-          collapsible
-        />
-      </div>
-      <main class="lesson-main content">
-        <p class:list={['lesson-role', { 'visually-hidden': immersive }]}>
-          <strong>{pageFlows[meta.flow]}</strong>: {
-            roleParts.map((part, index) =>
-              index % 2 === 1 ? (
-              <code>{part}</code>
-            ) : part
-            )
-          }
-        </p>
-        {
-          goal !== undefined && (
-            <p class:list={['chapter-goal', { 'visually-hidden': immersive }]}>
-              <strong>できるようになること：</strong>{goal}
-            </p>
-          )
-        }
-        <article class="chapter-body">
-          <slot />
-        </article>
-      </main>
-    </div>
-    <LessonFooter
-      previous={linkTo(pages[index - 1])}
-      next={linkTo(pages[index + 1])}
-      progress={(index + 1) / pages.length}
+    <LessonBar
+      title={row.title}
+      segments={segments}
+      progressLabel={`全体 ${index + 1}/${pages.length}`}
+      estimate={elapsed}
+      limit={limit}
+      number={page.number}
+      total={page.total}
+      previousHref={hrefOf(pages[index - 1])}
+      nextHref={nextHref}
+      groups={groups}
     />
+    <ActionBar state={meta.mode} text={meta.role} nextHref={nextHref} />
+    <main class="lesson-main content">
+      {
+        goal !== undefined && meta.mode === 'listen' && !immersive
+          && (
+          <p class="note chapter-goal">
+            <strong>できるようになること：</strong>{goal}
+          </p>
+        )
+      }
+      <article class="chapter-body">
+        <slot />
+      </article>
+    </main>
   </div>
 </BaseLayout>
 
 <script>
-const revealCurrent = (container: HTMLElement | null): void => {
-  const here = container?.querySelector<HTMLElement>('[aria-current="page"]');
-  if (container == null || here == null || container.clientHeight === 0) return;
-  const box = container.getBoundingClientRect();
-  const rect = here.getBoundingClientRect();
-  if (rect.top < box.top) container.scrollTop += rect.top - box.top;
-  else if (rect.bottom > box.bottom) {
-    container.scrollTop += rect.bottom - box.bottom;
-  }
-};
-
-revealCurrent(document.querySelector<HTMLElement>('.lesson-sidebar'));
-
-const menu = document.querySelector<HTMLDetailsElement>('.lesson-menu');
-
-if (menu !== null) {
-  const close = (): void => {
-    menu.open = false;
-  };
-
-  menu.addEventListener('toggle', () => {
-    if (menu.open) {
-      revealCurrent(menu.querySelector<HTMLElement>('.lesson-menu__panel'));
-    }
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || !menu.open) return;
-    close();
-    menu.querySelector('summary')?.focus();
-  });
-
-  menu.addEventListener('focusout', (event) => {
-    const next = event.relatedTarget;
-    if (menu.open && next instanceof Node && !menu.contains(next)) close();
-  });
-
-  document.addEventListener('click', (event) => {
-    if (
-      menu.open && event.target instanceof Node && !menu.contains(event.target)
-    ) close();
-  });
-}
+import '../../lesson/action-bar-client';
+import '../../lesson/frame-client';
 </script>

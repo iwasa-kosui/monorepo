@@ -48,16 +48,22 @@ const config = JSON.stringify({
   <div class="playground-status" data-role="status">
     <span data-role="status-text" role="status"
     >実行環境を読み込んでいます</span>
-    <button type="button" data-role="retry" hidden>もう一度読み込む</button>
+    <button type="button" class="btn btn--soft" data-role="retry" hidden>
+      もう一度読み込む
+    </button>
   </div>
   <p class="playground-origin" data-role="origin" role="status" hidden></p>
   <div class="playground-toolbar">
-    <button type="button" data-role="run" disabled>実行する</button>
-    <button type="button" data-role="reset" disabled>
+    <button type="button" class="btn btn--soft" data-role="run" disabled>
+      実行する
+    </button>
+    <button type="button" class="btn btn--text" data-role="reset" disabled>
       データベースを最初の状態に戻す
     </button>
-    <button type="button" data-role="reset-sql">最初の SQL に戻す</button>
-    <button type="button" data-role="restore" hidden>
+    <button type="button" class="btn btn--text" data-role="reset-sql">
+      最初の SQL に戻す
+    </button>
+    <button type="button" class="btn btn--text" data-role="restore" hidden>
       読み込む前の SQL に戻す
     </button>
     <span class="playground-hint">

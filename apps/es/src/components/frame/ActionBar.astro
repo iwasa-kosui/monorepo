@@ -1,0 +1,48 @@
+---
+import {
+  actionChipLabels,
+  type ActionState,
+  showsNext,
+} from '../../lesson/action-bar';
+
+interface Props {
+  state: ActionState;
+  text: string;
+  nextHref?: string;
+}
+
+const { state, text, nextHref } = Astro.props;
+const parts = text.split('`');
+---
+
+<section
+  class="action-bar"
+  data-action-bar
+  data-state={state}
+  aria-label="現在の作業"
+  aria-live="polite"
+>
+  <span class="chip action-bar__chip" data-action-chip>{
+    actionChipLabels[state]
+  }</span>
+  <p class="action-bar__text" data-action-text>
+    {parts.map((part, index) => index % 2 === 1 ? <code>{part}</code> : part)}
+  </p>
+  <div class="action-bar__slot" data-action-slot></div>
+  {
+    nextHref !== undefined && (
+      <a
+        class:list={[
+          'btn',
+          state === 'listen' ? 'btn--outline' : 'btn--bar',
+          'action-bar__next',
+        ]}
+        data-action-next
+        href={nextHref}
+        hidden={!showsNext(state)}
+      >
+        次へ
+      </a>
+    )
+  }
+</section>

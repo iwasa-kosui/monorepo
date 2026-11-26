@@ -17,7 +17,7 @@ export const chapter2Explain: WorkspaceScenario = lessonScenario({
   label: '更新処理の中で記録する方針',
   history: earlier,
   timeline: opening(posts.decisionRecord),
-  tabs: [docTab('memo', 'ADR 1: 更新処理の中で記録する', 'adr/1-record-in-update')],
+  tabs: [docTab('memo', 'ADR 1: 更新処理の中で記録する', 'adr/1-record-in-update', true)],
 });
 
 const stepTab = (step: 1 | 2): TabDefinition =>
@@ -28,6 +28,7 @@ export const chapter2Step1: WorkspaceScenario = lessonScenario({
   label: `演習 ${sceneSteps[1].label}`,
   history: [inquiry],
   collapsed: true,
+  done: 'tests:passed',
   tabs: [stepTab(1)],
 });
 
@@ -36,7 +37,7 @@ export const chapter2Table: WorkspaceScenario = lessonScenario({
   label: '記録を1つのテーブルにまとめる',
   history: [...earlier, posts.decisionRecord],
   timeline: opening(posts.tableRecord),
-  tabs: [docTab('memo', 'ADR 2: 記録を1つのテーブルにまとめる', 'adr/2-record-table')],
+  tabs: [docTab('memo', 'ADR 2: 記録を1つのテーブルにまとめる', 'adr/2-record-table', true)],
 });
 
 export const chapter2Step2: WorkspaceScenario = lessonScenario({
@@ -45,6 +46,7 @@ export const chapter2Step2: WorkspaceScenario = lessonScenario({
   history: [inquiry],
   collapsed: true,
   timeline: [{ when: 'tests:passed', kind: 'post', post: thanks }],
+  done: 'tests:passed',
   tabs: [stepTab(2)],
 });
 

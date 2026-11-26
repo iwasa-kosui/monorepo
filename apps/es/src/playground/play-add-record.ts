@@ -1,5 +1,6 @@
 import { EditorView } from '@codemirror/view';
 
+import { setAction } from '../lesson/action-bar.ts';
 import { testReportOf } from './agent-client.ts';
 import type { TestReport } from './agent-protocol.ts';
 import { createRuntime, RuntimeScriptError } from './client.ts';
@@ -84,7 +85,6 @@ const mount = (root: HTMLElement): void => {
   const scene = sceneSteps[config.step];
   const table = config.table;
   const templateMarker = `INSERT INTO ${table}`;
-  const next = query<HTMLElement>(root, '[data-role="next"]');
   const message = query<HTMLElement>(root, '[data-role="message"]');
   const runButton = query<HTMLButtonElement>(root, '[data-role="run"]');
   const templateButton = query<HTMLButtonElement>(root, '[data-role="template"]');
@@ -96,6 +96,9 @@ const mount = (root: HTMLElement): void => {
   const restoreButton = query<HTMLButtonElement>(root, '[data-role="restore"]');
   const testsButton = query<HTMLButtonElement>(root, '[data-role="tests"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
+  const hintsOpenButton = query<HTMLButtonElement>(root, '[data-role="hints-open"]');
+  const hintsCloseButton = query<HTMLButtonElement>(root, '[data-role="hints-close"]');
+  const hintsDialog = query<HTMLDialogElement>(root, '[data-role="hints-dialog"]');
   const visitsBody = query<HTMLElement>(root, '[data-role="visits-body"]');
   const visitsBadge = query<HTMLElement>(root, '[data-role="visits-badge"]');
   const visitsCaption = query<HTMLElement>(root, '[data-role="visits-caption"]');
@@ -132,6 +135,7 @@ const mount = (root: HTMLElement): void => {
     active: editedFile,
     wrap: true,
     typecheck: true,
+    foldExcept: { file: editedFile, name: 'cancelVisit' },
     onChange: () => {
       persist();
       discardBackup();
@@ -183,12 +187,21 @@ const mount = (root: HTMLElement): void => {
     templateButton.disabled = !idle || hasRecordCode();
   };
 
-  const say = (sentences: string[]): void => {
-    next.replaceChildren(
-      ...sentences.join('').split(/`([^`]+)`/).map((part, index) =>
-        index % 2 === 1 ? element('code', { text: part }) : document.createTextNode(part)
-      ),
-    );
+  const labelOf = (button: HTMLButtonElement): string => (button.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  const say = (sentences: string[], button: HTMLButtonElement | null = null): void => {
+    setAction({
+      state: 'do',
+      text: sentences.join('').replaceAll('`', ''),
+      button: button === null ? null : { label: labelOf(button), onClick: () => button.click() },
+    });
+  };
+
+  const showSummary = (value: string, result: 'pass' | 'fail' | 'error' | ''): void => {
+    summary.textContent = value;
+    summary.dataset.result = result;
+    summary.classList.toggle('result--ok', result === 'pass');
+    summary.classList.toggle('result--ng', result === 'fail' || result === 'error');
   };
 
   const pressRun = '「ポチの来院をキャンセルする」を押します。';
@@ -197,25 +210,40 @@ const mount = (root: HTMLElement): void => {
     : '「INSERT を `business_events` 用に書き換える」を押します。';
   const stepOneUnfinished =
     'ステップ1が終わっていないときは、「最初のコードに戻す」を押して、ステップ1の解答から続けます。';
-  const askHints = '迷ったら、右の「ヒントと解答」を上から順に開きます。';
+  const askHints = '判断に迷うときは、右の「ヒントと解答」を上から順に開きます。';
   const blankCount = config.template.match(blankPattern)?.length ?? 0;
   const fillBlanks = config.step === 1
     ? `雛形の ${blankCount} つの空欄を書き換え、\`input\` の型に \`reason\` と \`operatedBy\` を足します。`
     : `雛形の ${blankCount} つの空欄を書き換えます。`;
 
+  const recoverFrom = (retry: string): { sentence: string; button: HTMLButtonElement | null } => {
+    if (hasRecordCode()) {
+      return { sentence: retry, button: null };
+    }
+    if (config.step === 2 && !code().includes(oldInsert)) {
+      return { sentence: stepOneUnfinished, button: resetButton };
+    }
+    return { sentence: pressTemplate, button: templateButton };
+  };
+
   const sayStart = (): void => {
     if (hasRecordCode()) {
-      say(firstBlankPattern.test(code()) ? [fillBlanks, askHints, `終わったら${pressRun}`] : [pressRun]);
+      if (firstBlankPattern.test(code())) {
+        say([fillBlanks, askHints, `終わったら${pressRun}`]);
+      } else {
+        say([pressRun], runButton);
+      }
       return;
     }
     if (config.step === 2 && !code().includes(oldInsert)) {
-      say([stepOneUnfinished]);
+      say([stepOneUnfinished], resetButton);
       return;
     }
     say(
       config.step === 1
         ? [pressRun, `いまのコードで、\`visits\` と \`${table}\` がどう変わるかを見ます。`]
         : [pressRun, `テーブルを \`${table}\` に作り直した後で、ステップ1のコードがどう動くかを見ます。`],
+      runButton,
     );
   };
 
@@ -245,7 +273,7 @@ const mount = (root: HTMLElement): void => {
       const old = before.find((candidate) => candidate.id === row.id);
       const changed = old !== undefined && old.status !== row.status;
       const status = element('td', { className: 'play-status-cell' }, [
-        element('span', { className: 'play-new-value', text: text(row.status) }),
+        element('span', { className: changed ? 'play-new-value marker' : 'play-new-value', text: text(row.status) }),
       ]);
       if (changed) {
         status.dataset.changed = '';
@@ -275,14 +303,14 @@ const mount = (root: HTMLElement): void => {
       className: 'play-table play-event',
       attributes: { 'aria-label': `${table} の行`, 'data-role': 'event-row' },
     }, [
-      ...(added ? [element('caption', { text: '追加された行' })] : []),
+      ...(added ? [element('caption', { className: 'result--ok', text: '追加された行' })] : []),
       element(
         'tbody',
         {},
         Object.entries(row).map(([column, value]) =>
           element('tr', {}, [
             element('th', { text: column, attributes: { scope: 'row' } }),
-            element('td', { text: text(value) }),
+            element('td', {}, [added ? element('span', { className: 'marker', text: text(value) }) : text(value)]),
           ])
         ),
       ),
@@ -375,8 +403,7 @@ const mount = (root: HTMLElement): void => {
 
   const resetOutputs = (initial: RunResult | null): void => {
     clearRunResult(initial);
-    summary.textContent = notRunText;
-    summary.dataset.result = '';
+    showSummary(notRunText, '');
     failed.replaceChildren();
     clearMessage();
   };
@@ -424,7 +451,7 @@ const mount = (root: HTMLElement): void => {
           : []),
       ];
     if (config.step === 2 && !hasRecordCode() && result.error?.includes('visit_cancellations') === true) {
-      say(['`visit_cancellations` テーブルは、もうありません。', ...rolledBack, pressTemplate]);
+      say(['`visit_cancellations` テーブルは、もうありません。', ...rolledBack, pressTemplate], templateButton);
       return;
     }
     say([...rolledBack, 'エラーの文を読んでコードを直し、もう一度押します。']);
@@ -448,7 +475,7 @@ const mount = (root: HTMLElement): void => {
       added,
       `答えの欄の${quoted(answers.map((answer) => answer.label))}が埋まりました。`,
       '「テストを実行する」を押します。',
-    ]);
+    ], testsButton);
   };
 
   const run = async (): Promise<void> => {
@@ -483,16 +510,13 @@ const mount = (root: HTMLElement): void => {
         sayRecorded(result);
         return;
       }
+      const recovery = recoverFrom('コードを見直して、もう一度押します。');
       say([
         statusChanged(result)
           ? `\`visits\` の \`status\` は変わりましたが、\`${table}\` は増えていません。`
           : `\`visits\` の \`status\` も \`${table}\` も変わっていません。`,
-        hasRecordCode()
-          ? 'コードを見直して、もう一度押します。'
-          : config.step === 2 && !code().includes(oldInsert)
-          ? stepOneUnfinished
-          : pressTemplate,
-      ]);
+        recovery.sentence,
+      ], recovery.button);
     } catch (error) {
       showMessage(failureElement(error, '終わらない繰り返しがないか確かめてください'));
     } finally {
@@ -512,37 +536,28 @@ const mount = (root: HTMLElement): void => {
       const outcome = await runtime.runCode(filesWith(), 'visits.test.ts');
       failed.replaceChildren();
       if (outcome.error !== null) {
-        summary.textContent = 'テストを実行できませんでした';
-        summary.dataset.result = 'error';
+        showSummary('テストを実行できませんでした', 'error');
         showError('コードを最後まで実行できませんでした', outcome.error);
         return null;
       }
       if (outcome.tests === null) {
-        summary.textContent = 'テストが見つかりませんでした';
-        summary.dataset.result = 'error';
+        showSummary('テストが見つかりませんでした', 'error');
         return null;
       }
       const passed = outcome.tests.filter((test) => test.status === 'pass').length;
       const failures = outcome.tests.filter((test) => test.status === 'fail');
-      summary.textContent = `pass ${passed} / fail ${failures.length}`;
-      summary.dataset.result = failures.length === 0 ? 'pass' : 'fail';
+      showSummary(`pass ${passed} / fail ${failures.length}`, failures.length === 0 ? 'pass' : 'fail');
       failed.replaceChildren(...failures.map((test) =>
         element('li', {}, [
-          element('strong', { text: [...test.path, test.name].join(' > ') }),
+          element('strong', { className: 'result--ng', text: [...test.path, test.name].join(' > ') }),
           element('span', { text: (test.message ?? '').split('\n')[0] ?? '' }),
         ])
       ));
       if (failures.length === 0) {
-        say(['すべてのテストが成功しました。', '次のページへ進みます。']);
+        setAction({ state: 'done', text: 'すべてのテストが成功しました。次のページへ進みます。', button: null });
       } else {
-        say([
-          'テストの結果に、失敗したテストの名前を出しています。',
-          hasRecordCode()
-            ? 'コードを直して、もう一度押せます。'
-            : config.step === 2 && !code().includes(oldInsert)
-            ? stepOneUnfinished
-            : pressTemplate,
-        ]);
+        const recovery = recoverFrom('コードを直して、もう一度押せます。');
+        say(['テストの結果に、失敗したテストの名前を出しています。', recovery.sentence], recovery.button);
       }
       return testReportOf(outcome.tests);
     } catch (error) {
@@ -621,31 +636,19 @@ const mount = (root: HTMLElement): void => {
   runButton.addEventListener('click', () => void run());
   testsButton.addEventListener('click', () => void runTests());
   templateButton.addEventListener('click', insertRecordTemplate);
-  const closeHint = (details: HTMLDetailsElement | null, moveFocus: boolean): void => {
-    if (details === null) {
-      return;
+  hintsOpenButton.addEventListener('click', () => hintsDialog.showModal());
+  hintsCloseButton.addEventListener('click', () => hintsDialog.close());
+  hintsDialog.addEventListener('click', (event) => {
+    if (event.target === hintsDialog) {
+      hintsDialog.close();
     }
-    details.open = false;
-    if (moveFocus) {
-      details.querySelector('summary')?.focus();
-    }
-  };
-
-  for (const button of root.querySelectorAll<HTMLElement>('[data-role="hint-close"]')) {
-    button.addEventListener('click', () => closeHint(button.closest('details'), true));
-  }
-  root.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || !(event.target instanceof Element)) {
-      return;
-    }
-    closeHint(event.target.closest<HTMLDetailsElement>('details.play-hint-step[open]'), true);
   });
 
   const load = (target: string, sentences: string[]): void => {
     workbench.open(editedFile);
     replaceWithBackup(target);
     clearMessage();
-    say(sentences);
+    say(sentences, runButton);
   };
 
   mountAgent(root, config.step, {
@@ -658,7 +661,7 @@ const mount = (root: HTMLElement): void => {
   });
 
   completeButton.addEventListener('click', () => {
-    closeHint(completeButton.closest('details'), false);
+    hintsDialog.close();
     load(
       config.complete,
       config.step === 1

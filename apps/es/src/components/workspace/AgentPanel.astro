@@ -94,7 +94,7 @@ const logView = (time: string) => {
       <p data-text></p>
     </li>
     <li class="thinking" data-part="thinking" data-thinking>
-      <span class="thinking-mark" aria-hidden="true"></span>考え中…
+      <span class="thinking-mark" aria-hidden="true"></span>処理中…
     </li>
   </template>
 
@@ -219,7 +219,7 @@ const logView = (time: string) => {
   --ag-on-accent: #ffffff;
   --ag-done: #2f7d4f;
   --ag-off: #e3e0d4;
-  --ag-off-fg: #6b685f;
+  --ag-off-fg: #5e5d59;
   --pn-bg: var(--ag-bubble);
   --pn-fg: var(--ag-fg);
   --pn-rule: var(--ag-line);
@@ -232,32 +232,33 @@ const logView = (time: string) => {
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.125rem 0.5rem;
+  gap: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--ag-line);
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8125rem;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .agent-brand,
 :global(.scene[data-scenario]) .agent-slash {
   color: var(--ag-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .agent-session {
   min-width: 0;
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .agent-status {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--space-2);
   margin-left: auto;
   color: var(--ag-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .agent-status::before {
   content: "";
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.625rem;
+  height: 0.625rem;
   border-radius: 50%;
   background: var(--ag-accent-strong);
 }
@@ -269,10 +270,10 @@ const logView = (time: string) => {
   min-height: 0;
   max-height: 22rem;
   overflow: auto;
-  padding: 0.625rem 0.75rem;
+  padding: var(--space-3) var(--space-4);
 }
 :global(.scene[data-scenario]) .turns {
-  max-width: 44rem;
+  max-width: 48rem;
   margin: 0 auto;
   padding: 0;
   list-style: none;
@@ -283,7 +284,7 @@ const logView = (time: string) => {
 :global(.scene[data-scenario]) .turn + .turn,
 :global(.scene[data-scenario]) .turn + .thinking,
 :global(.scene[data-scenario]) .thinking + .turn {
-  margin-top: 0.625rem;
+  margin-top: var(--space-3);
 }
 :global(.scene[data-scenario]) .turn.user {
   display: flex;
@@ -293,49 +294,50 @@ const logView = (time: string) => {
   width: fit-content;
   max-width: 85%;
   margin: 0;
-  border-radius: 1rem;
+  border-radius: var(--radius-xl);
   background: var(--ag-bubble);
-  padding: 0.375rem 0.875rem;
-  font-size: 0.875rem;
-  line-height: 1.6;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .turn.agent p {
   margin: 0;
   font-family: ui-serif, Georgia, "Hiragino Mincho ProN", "Yu Mincho", serif;
-  font-size: 0.9375rem;
-  line-height: 1.8;
+  font-size: var(--text-body);
+  line-height: var(--leading-loose);
 }
 :global(.scene[data-scenario]) .turn.agent p + p {
-  margin-top: 0.375rem;
+  margin-top: var(--space-2);
 }
 :global(.scene[data-scenario]) .thinking {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   margin: 0;
   color: var(--ag-muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .thinking-mark {
   flex: none;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.625rem;
+  height: 0.625rem;
   border-radius: 50%;
   background: var(--ag-accent-strong);
 }
 :global(.scene[data-scenario]) .turn.tool details {
   border: 1px solid var(--ag-line);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: var(--ag-card);
-  font-size: 0.8125rem;
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .turn.tool summary {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  border-radius: 0.5rem;
-  padding: 0.25rem 0.625rem;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  border-radius: var(--radius-lg);
+  padding: 0 var(--space-3);
   list-style: none;
   cursor: pointer;
 }
@@ -345,8 +347,8 @@ const logView = (time: string) => {
 :global(.scene[data-scenario]) .turn.tool summary::after {
   content: "";
   flex: none;
-  width: 0.4375rem;
-  height: 0.4375rem;
+  width: 0.5rem;
+  height: 0.5rem;
   margin: -0.1875rem 0.125rem 0 auto;
   transform: rotate(45deg);
   border-right: 1.5px solid var(--ag-muted);
@@ -362,7 +364,7 @@ const logView = (time: string) => {
 }
 :global(.scene[data-scenario]) .tool-state {
   flex: none;
-  width: 0.875rem;
+  width: 1rem;
   text-align: center;
 }
 :global(.scene[data-scenario])
@@ -370,22 +372,23 @@ const logView = (time: string) => {
   .tool-state::before {
   content: "✓" / "";
   color: var(--ag-done);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario])
   .turn.tool[data-state="running"]
   .tool-state::before {
   content: "";
   display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.625rem;
+  height: 0.625rem;
   border-radius: 50%;
   background: var(--ag-accent-strong);
   vertical-align: middle;
 }
 :global(.scene[data-scenario]) .tool-name {
   flex: none;
-  font-weight: 700;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .tool-target {
   min-width: 0;
@@ -393,28 +396,31 @@ const logView = (time: string) => {
   background: transparent;
   padding: 0;
   color: var(--ag-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-note);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 :global(.scene[data-scenario]) .tool-body {
   border-top: 1px solid var(--ag-line);
-  padding: 0.375rem 0.625rem;
-  font-size: 0.75rem;
+  padding: var(--space-3);
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .tool-body[hidden] {
   display: none;
 }
 :global(.scene[data-scenario]) .tool-body > button {
   position: relative;
-  margin-top: 0.375rem;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  margin-top: var(--space-3);
   border: 1px solid var(--ag-edge);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: var(--ag-card);
-  padding: 0.0625rem 0.625rem;
+  padding: 0 var(--space-4);
   color: var(--ag-fg);
   font-family: var(--font-body);
-  font-size: 0.75rem;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
   cursor: pointer;
 }
 :global(.scene[data-scenario]) .tool-body > button:hover {
@@ -424,24 +430,27 @@ const logView = (time: string) => {
   display: table;
   margin: 0;
   border-collapse: collapse;
-  font-size: 0.75rem;
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .tool-table th,
 :global(.scene[data-scenario]) .tool-table td {
   border: 1px solid var(--ag-line);
-  padding: 0.0625rem 0.5rem;
+  padding: var(--space-1) var(--space-3);
   text-align: left;
 }
 :global(.scene[data-scenario]) .tool-table th {
   background: var(--ag-bubble);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .tool-line {
-  margin: 0 0 0.25rem;
+  margin: 0 0 var(--space-2);
 }
 :global(.scene[data-scenario]) .tool-line code {
   background: transparent;
   padding: 0;
-  font-size: 0.75rem;
+  font-size: var(--text-code);
   overflow-wrap: anywhere;
 }
 :global(.scene[data-scenario]) .tool-attrs {
@@ -449,9 +458,12 @@ const logView = (time: string) => {
 }
 :global(.scene[data-scenario]) .tool-attrs > div {
   display: grid;
-  grid-template-columns: 8.5rem minmax(0, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  gap: var(--space-3);
   border-top: 1px solid var(--ag-line);
+  padding: var(--space-1) 0;
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .tool-attrs dt {
   margin: 0;
@@ -462,40 +474,41 @@ const logView = (time: string) => {
   overflow-wrap: anywhere;
 }
 :global(.scene[data-scenario]) .tool-pre {
-  max-height: 11rem;
+  max-height: 14rem;
   margin: 0;
   overflow: auto;
-  padding: 0.375rem 0.5rem;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .tool-pre code {
   background: transparent;
   padding: 0;
-  font-size: 0.75rem;
+  font-size: var(--text-code);
 }
 :global(.scene[data-scenario]) .agent-result {
   display: grid;
   grid-template-columns: repeat(2, auto);
   justify-content: start;
-  gap: 0.125rem 1.5rem;
-  margin: 0 0 0.375rem;
+  gap: var(--space-1) var(--space-5);
+  margin: 0 0 var(--space-2);
   border: 1px solid var(--ag-line);
   border-left: 3px solid var(--ag-accent-strong);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: var(--ag-card);
-  padding: 0.375rem 0.75rem;
+  padding: var(--space-2) var(--space-4);
   font-family: var(--font-body);
-  font-size: 0.875rem;
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .agent-result > div {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 :global(.scene[data-scenario]) .agent-result dt {
   margin: 0;
   color: var(--ag-muted);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   white-space: nowrap;
 }
 :global(.scene[data-scenario]) .agent-result dd {
@@ -504,19 +517,19 @@ const logView = (time: string) => {
 :global(.scene[data-scenario]) .agent-composer {
   position: relative;
   flex: none;
-  padding: 0.375rem 0.75rem 0.625rem;
+  padding: var(--space-2) var(--space-4) var(--space-3);
 }
 :global(.scene[data-scenario]) .agent-box {
   display: flex;
   align-items: flex-end;
-  gap: 0.5rem;
-  max-width: 44rem;
+  gap: var(--space-2);
+  max-width: 48rem;
   margin: 0 auto;
   border: 1px solid var(--ag-edge);
-  border-radius: 1rem;
+  border-radius: var(--radius-xl);
   background: var(--ag-card);
   box-shadow: 0 1px 3px rgb(20 20 19 / 0.08);
-  padding: 0.375rem 0.5rem 0.375rem 0.875rem;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
 }
 :global(.scene[data-scenario]) .agent-box:focus-within {
   outline: 2px solid var(--ring);
@@ -525,14 +538,15 @@ const logView = (time: string) => {
 :global(.scene[data-scenario]) .agent-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 2.75rem;
+  min-height: var(--tap-min);
+  height: 4.5rem;
   border: 0;
   background: transparent;
-  padding: 0.25rem 0;
+  padding: var(--space-1) 0;
   color: var(--ag-fg);
   font: inherit;
-  font-size: 0.875rem;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
   resize: none;
 }
 :global(.scene[data-scenario]) .agent-input::placeholder {
@@ -547,13 +561,17 @@ const logView = (time: string) => {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: var(--tap-min);
+  height: var(--tap-min);
   border: 0;
   border-radius: 50%;
   background: var(--ag-accent);
   color: var(--ag-on-accent);
   cursor: pointer;
+}
+:global(.scene[data-scenario]) .agent-send svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 :global(.scene[data-scenario]) .agent-send:hover:not(:disabled) {
   background: var(--ag-accent-strong);
@@ -592,26 +610,6 @@ const logView = (time: string) => {
 @media (min-width: 1024px) {
   :global(.scene[data-scenario]) .agent-log {
     max-height: none;
-  }
-}
-@media (prefers-color-scheme: dark) {
-  :global(.scene[data-scenario]) .panel[data-kind="agent"] {
-    --ag-bg: #262624;
-    --ag-card: #30302e;
-    --ag-fg: #f5f4ed;
-    --ag-muted: #b8b5a9;
-    --ag-line: #4a4943;
-    --ag-edge: #85827a;
-    --ag-bubble: #3a3935;
-    --ag-accent-strong: #ee9a7b;
-    --ag-done: #7fd0a0;
-    --ag-off: #3f3e3a;
-    --ag-off-fg: #a6a398;
-    --ring: #f0a284;
-  }
-  :global(.scene[data-scenario]) .agent-send:hover:not(:disabled) {
-    background: var(--ag-accent-strong);
-    color: #141413;
   }
 }
 </style>

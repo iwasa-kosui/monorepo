@@ -11,6 +11,7 @@ type Props = PanelProps;
 const { scenario, tab: definition, hidden } = Astro.props;
 const tab = expectTab(definition, 'doc');
 const config = tab.config;
+const approvable = config.approvable === true;
 ---
 
 <div
@@ -24,29 +25,54 @@ const config = tab.config;
 >
   <div class="doc">
     <div class="doc-head">
-      <p class="doc-space" aria-hidden="true">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20">
-          </path>
-        </svg>
-        <span>社内ドキュメント</span>
-      </p>
-      <p class="doc-title">{config.title}</p>
-      <p class="doc-updated">
-        <span class="doc-avatar" aria-hidden="true">{
-          [...config.updatedBy][0]
-        }</span>
-        最終更新 <time datetime={config.updatedAt}>{config.updatedAt}</time>・{
-          config.updatedBy
-        }
-      </p>
+      <div class="doc-head-text">
+        <p class="doc-space" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20">
+            </path>
+          </svg>
+          <span>社内ドキュメント</span>
+        </p>
+        <p class="doc-title">{config.title}</p>
+        <p class="doc-updated">
+          <span class="doc-avatar" aria-hidden="true">{
+            [...config.updatedBy][0]
+          }</span>
+          最終更新 <time datetime={config.updatedAt}>{
+            config.updatedAt
+          }</time>・{config.updatedBy}
+        </p>
+      </div>
+      {
+        approvable && (
+          <button
+            class="doc-approve"
+            type="button"
+            aria-pressed="false"
+            data-approve
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12.5l4.5 4.5L19 7.5"></path>
+            </svg>
+            <span data-approve-label>Approve</span>
+          </button>
+        )
+      }
     </div>
     <div
       class="doc-scroll"
@@ -74,6 +100,7 @@ const config = tab.config;
   --dc-accent-soft: #deebff;
   --dc-on-accent: #ffffff;
   --dc-sunken: #f4f5f7;
+  --dc-quote: #f1f3f6;
   --dc-code: #ebecf0;
   --dc-success: #1b6b3a;
   --dc-success-soft: #e3fcef;
@@ -88,7 +115,6 @@ const config = tab.config;
   --pn-rule: var(--dc-rule);
   --ring: #0c5fd3;
   --role-bg: var(--dc-paper);
-  --role-surface: var(--dc-paper);
   --role-sunken: var(--dc-sunken);
   --role-fg: var(--dc-fg);
   --role-muted: var(--dc-muted);
@@ -116,9 +142,18 @@ const config = tab.config;
   min-height: 0;
 }
 :global(.scene[data-scenario]) .doc-head {
+  display: flex;
   flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
   background: var(--dc-paper);
-  padding: 0.25rem max(1.25rem, calc(50% - 23.5rem)) 0.375rem;
+  padding: var(--space-3)
+    max(var(--space-5), calc(50% - 24rem + var(--space-4))) var(--space-2);
+}
+:global(.scene[data-scenario]) .doc-head-text {
+  flex: 1 1 24rem;
+  min-width: 0;
 }
 :global(.scene[data-scenario]) .doc-head p {
   margin: 0;
@@ -126,50 +161,88 @@ const config = tab.config;
 :global(.scene[data-scenario]) .doc-space {
   display: flex;
   align-items: center;
-  gap: 0.3125rem;
+  gap: var(--space-2);
   color: var(--dc-muted);
-  font-size: 0.75rem;
-  line-height: 1.5;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .doc-space svg {
   flex: none;
-  width: 0.8125rem;
-  height: 0.8125rem;
+  width: 1rem;
+  height: 1rem;
 }
 :global(.scene[data-scenario]) .doc-avatar {
   display: inline-grid;
   place-items: center;
-  width: 1rem;
-  height: 1rem;
+  width: 1.5rem;
+  height: 1.5rem;
   flex: none;
   border-radius: 50%;
   background: var(--dc-accent);
   color: var(--dc-on-accent);
-  font-size: 0.5625rem;
-  font-weight: 700;
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
   line-height: 1;
 }
 :global(.scene[data-scenario]) .doc-title {
   color: var(--dc-fg);
-  font-size: 1.125rem;
-  font-weight: 800;
-  line-height: 1.4;
-  letter-spacing: -0.01em;
+  font-size: var(--text-lead);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
 }
 :global(.scene[data-scenario]) .doc-updated {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-2);
   color: var(--dc-muted);
-  font-size: 0.75rem;
-  line-height: 1.5;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+}
+:global(.scene[data-scenario]) .doc-approve {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--dc-accent);
+  color: var(--dc-on-accent);
+  padding: 0 1.25rem;
+  min-height: var(--tap-min);
+  font: inherit;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .doc-approve svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+:global(.scene[data-scenario]) .doc-approve[aria-pressed="false"] svg {
+  display: none;
+}
+:global(.scene[data-scenario]) .doc-approve[aria-pressed="true"] {
+  background: var(--role-success);
+}
+:global(.scene[data-scenario]) .doc-approve:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-scenario]) .doc-approve {
+    transition: background-color 150ms ease;
+  }
 }
 :global(.scene[data-scenario]) .doc-scroll {
   position: relative;
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
-  padding: 0.625rem 0.75rem;
+  padding: var(--space-3) var(--space-4);
 }
 :global(.scene[data-scenario]) .doc-scroll:focus-visible {
   outline: 2px solid var(--ring);
@@ -180,9 +253,9 @@ const config = tab.config;
   margin: 0 auto;
   border-top: 1px solid var(--dc-rule);
   background: var(--dc-paper);
-  padding: 0.75rem 0.5rem 1rem;
-  font-size: 0.9375rem;
-  line-height: 1.7;
+  padding: var(--space-3) var(--space-4) var(--space-5);
+  font-size: var(--text-body);
+  line-height: var(--leading-loose);
   overflow-wrap: anywhere;
 }
 :global(.scene[data-scenario]) .doc-paper > :global(:first-child) {
@@ -191,37 +264,41 @@ const config = tab.config;
 :global(.scene[data-scenario]) .doc-paper > :global(:last-child) {
   margin-bottom: 0;
 }
-:global(.content) :global(.scene[data-scenario]) .doc-paper :global(h2) {
-  margin-block: 1rem 0.375rem;
-  font-size: 1.25rem;
-}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(h2),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(h3) {
-  margin-block: 0.875rem 0.25rem;
-  font-size: 1.0625rem;
+  margin-block: var(--space-5) var(--space-2);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
 }
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(p),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(ul),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(ol),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(table),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(details) {
-  margin-block: 0.5rem;
+  margin-block: var(--space-2);
 }
 :global(.scene[data-scenario]) .doc-paper :global(li + li) {
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
 }
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(table) {
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
 }
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(th),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(td) {
-  padding: 0.125rem 0.5rem;
+  padding: var(--space-1) var(--space-3);
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(thead th) {
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
 }
 :global(.content)
   :global(.scene[data-scenario])
   .doc-paper
   :global(:not(pre) > code) {
   background: var(--dc-code);
+  font-size: var(--text-code);
 }
 :global(.content)
   :global(.scene[data-scenario])
@@ -230,9 +307,9 @@ const config = tab.config;
   background: transparent;
 }
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(pre) {
-  margin-block: 0.5rem;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  margin-block: var(--space-2);
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
 }
 :global(.content)
   :global(.scene[data-scenario])
@@ -243,44 +320,36 @@ const config = tab.config;
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(pre code) {
   background: transparent;
   padding: 0;
+  font-size: var(--text-code);
 }
 :global(.content)
   :global(.scene[data-scenario])
   .doc-paper
   :global(.detail-row) {
-  margin-block: 0.5rem;
+  margin-block: var(--space-2);
 }
-:global(.scene[data-scenario]) .doc-paper :global(figure.quote) {
-  margin-block: 0.5rem;
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(figure.quote) {
+  margin-block: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--dc-quote);
+  padding: var(--space-4);
+  font-size: var(--text-body);
+  line-height: var(--leading-loose);
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(figure.quote figcaption) {
+  margin-top: var(--space-2);
+  border-left: 0;
+  padding-left: 0;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .doc-paper :global(.cfig) {
-  margin-block: 0.75rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  :global(.scene[data-scenario]) .panel[data-kind="doc"] {
-    --dc-bg: #14181d;
-    --dc-head: #1b2026;
-    --dc-paper: #22272e;
-    --dc-fg: #dde3ea;
-    --dc-muted: #a5b0bd;
-    --dc-rule: #39414b;
-    --dc-edge: #7d8895;
-    --dc-accent: #7db4ff;
-    --dc-accent-strong: #b3d3ff;
-    --dc-accent-soft: #1d3a5f;
-    --dc-on-accent: #06121f;
-    --dc-sunken: #1b2026;
-    --dc-code: #343c46;
-    --dc-success: #7bd9a0;
-    --dc-success-soft: #14392a;
-    --dc-success-line: #36b37e;
-    --dc-danger: #ffa59a;
-    --dc-danger-soft: #4a1f1c;
-    --dc-warning: #f2c36b;
-    --dc-warning-soft: #3d3010;
-    --dc-warning-line: #d7a23a;
-    --ring: #7db4ff;
-  }
+  margin-block: var(--space-3);
 }
 </style>

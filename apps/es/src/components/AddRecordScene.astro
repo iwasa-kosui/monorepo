@@ -51,464 +51,417 @@ const blanks = blankLabelsOf(template).map((
   data-state="loading"
   data-config={config}
 >
-  <header class="play-inquiry">
-    <span class="play-inquiry-label">問い合わせ</span>
-    <h2>この来院がキャンセルになっているのはなぜですか。</h2>
-    <span class="play-step-label">{scene.label}</span>
-    <div class="play-status" data-role="status">
-      <span data-role="status-text" role="status"
-      >実行環境を読み込んでいます</span>
-      <button type="button" data-role="retry" hidden>もう一度読み込む</button>
+  <section class="play-col play-work" aria-label="コードの編集と実行">
+    <div class="play-tabbar">
+      <div class="play-tabs" role="tablist" aria-label="ファイル">
+        <button
+          type="button"
+          role="tab"
+          data-file="visits.ts"
+          aria-selected="true"
+          tabindex="0"
+        >
+          visits.ts
+        </button>
+      </div>
+      <div class="play-editor-tools">
+        <button type="button" class="btn btn--text" data-role="reset" disabled>
+          最初のコードに戻す
+        </button>
+        <button type="button" class="btn btn--text" data-role="restore" hidden>
+          読み込む前のコードに戻す
+        </button>
+      </div>
     </div>
-    <details class="play-node">
-      <summary>手元の Node で動かすとき</summary>
-      <div class="play-node-body">
+    <div class="play-editor" data-role="editor"></div>
+    <div class="play-actions">
+      <button type="button" class="btn btn--soft" data-role="run" disabled>
+        ポチの来院をキャンセルする
+      </button>
+      <button type="button" class="btn btn--soft" data-role="template" disabled>
         {
-          step === 1 ? (
-            <p>
-              <code>chapter-1-start/visits.ts</code> の <code>cancelVisit</code>
-              を編集し、<code>node --test visits.test.ts</code>
-              を実行します。<code>pass 8</code> と <code>fail 0</code>
-              が出れば、ステップ1は完了です。解答は <code
-              >chapter-2-step-1</code> にあります。第1章と同じく、<code>ℹ
-                pass</code> と <code>ℹ fail</code>
-              の行は失敗の詳細の上に出ます。
-            </p>
-          ) : (
-            <p>
-              <code>chapter-2-step-2-start</code>
-              に移動します。このディレクトリの <code>db.ts</code>
-              とテストは、<code>business_events</code> 用です。<code
-              >visits.ts</code>
-              はステップ1の解答です。自分のコードで続けるときは、ステップ1で書いた
-              <code>visits.ts</code> で上書きします。<code>cancelVisit</code>
-              を編集し、<code>node --test visits.test.ts</code>
-              を実行します。<code>pass 8</code> と <code>fail 0</code>
-              が出れば、ステップ2は完了です。演習が終わらないうちに次の章へ進むときは、<code
-              >chapter-2-step-2</code> に移動します。<code
-              >chapter-2-step-2</code>
-              は全テストが成功する完成のスナップショットです。
-            </p>
+          step === 1
+            ? (
+            <>
+              記録の雛形を <code>UPDATE</code> の次の行に入れる
+            </>
+          )
+            : (
+            <>
+              INSERT を <code>business_events</code> 用に書き換える
+            </>
           )
         }
-      </div>
-    </details>
-  </header>
-  <div class="play-columns">
-    <section class="play-col play-work" aria-label="コードの編集と実行">
-      <div class="play-tabbar">
-        <div class="play-tabs" role="tablist" aria-label="ファイル">
-          <button
-            type="button"
-            role="tab"
-            data-file="visits.ts"
-            aria-selected="true"
-            tabindex="0"
-          >
-            visits.ts
-          </button>
-        </div>
-        <div class="play-editor-tools">
-          <button type="button" class="play-quiet" data-role="reset" disabled>
-            最初のコードに戻す
-          </button>
-          <button type="button" class="play-quiet" data-role="restore" hidden>
-            読み込む前のコードに戻す
-          </button>
-        </div>
-      </div>
-      <div class="play-editor" data-role="editor"></div>
-      <div class="play-terminal">
-        <p class="play-next">
-          <strong>次にすること</strong>
-          <span data-role="next"></span>
-        </p>
-        <div class="play-actions">
-          <button type="button" class="play-primary" data-role="run" disabled>
-            ポチの来院をキャンセルする
-          </button>
-          <button type="button" data-role="template" disabled>
-            {
-              step === 1
-                ? (
-                <>
-                  記録の雛形を <code>UPDATE</code> の次の行に入れる
-                </>
-              )
-                : (
-                <>
-                  INSERT を <code>business_events</code> 用に書き換える
-                </>
-              )
-            }
-          </button>
-        </div>
-        <div
-          class="play-message"
-          data-role="message"
-          aria-live="polite"
-          hidden
-        >
-        </div>
-      </div>
-    </section>
-    <section class="play-col play-col-db" aria-label="データベースの中身">
-      <section class="play-panel" aria-labelledby="visits-title">
-        <header class="play-panel-head">
-          <h2 id="visits-title"><code>visits</code></h2>
-          <span
-            class="play-badge"
-            data-role="visits-badge"
-            data-phase="before"
-          >実行前</span>
-        </header>
-        <table class="play-table" aria-label="visits テーブルの行">
-          <thead>
-            <tr>
-              <th>id</th>
-              <th>pet_name</th>
-              <th>status</th>
-            </tr>
-          </thead>
-          <tbody data-role="visits-body"></tbody>
-        </table>
-        <p class="play-caption" data-role="visits-caption"></p>
-      </section>
-      <section
-        class="play-panel play-panel-events"
-        aria-labelledby="events-title"
+      </button>
+    </div>
+    <div class="play-message" data-role="message" aria-live="polite" hidden>
+    </div>
+  </section>
+  <section class="play-col play-result" aria-label="実行結果">
+    <div class="play-result-head">
+      <button
+        type="button"
+        class="btn btn--text"
+        data-role="hints-open"
+        aria-haspopup="dialog"
       >
-        <header class="play-panel-head">
-          <h2 id="events-title"><code>{scene.table}</code></h2>
-          <span
-            class="play-badge"
-            data-role="events-badge"
-            data-phase="before"
-          >実行前</span>
-        </header>
-        <div class="play-events" data-role="events"></div>
-        <p class="play-caption" data-role="events-caption"></p>
-      </section>
+        ヒントと解答
+      </button>
+      <div class="play-status" data-role="status">
+        <span data-role="status-text" role="status"
+        >実行環境を読み込んでいます</span>
+        <button type="button" class="btn btn--soft" data-role="retry" hidden>
+          もう一度読み込む
+        </button>
+      </div>
+    </div>
+    <section class="play-card play-inquiry" aria-labelledby="inquiry-title">
+      <div class="play-inquiry-head">
+        <span class="note">問い合わせ</span>
+        <span class="note play-step-label">{scene.label}</span>
+      </div>
+      <h2 id="inquiry-title">
+        この来院がキャンセルになっているのはなぜですか。
+      </h2>
+      <dl class="kv play-answer" aria-label="問い合わせへの答え">
+        {
+          scene.answers.map((
+            { key, label },
+          ) => (
+            <div data-answer={key}>
+              <dt>{label}</dt>
+              <dd data-role="answer-value">まだ実行していません</dd>
+            </div>
+          ))
+        }
+      </dl>
     </section>
-    <section
-      class="play-col play-col-hints"
-      aria-label="問い合わせへの答えとテスト"
-    >
-      <div class="play-hint-area">
-        <section class="play-panel" aria-labelledby="answer-title">
-          <h2 id="answer-title">問い合わせへの答え</h2>
-          <table class="play-table play-answer" aria-label="問い合わせへの答え">
+    <section class="play-card" aria-labelledby="visits-title">
+      <header class="play-card-head">
+        <h2 id="visits-title"><code>visits</code></h2>
+        <span class="note" data-role="visits-badge" data-phase="before"
+        >実行前</span>
+      </header>
+      <table class="play-table" aria-label="visits テーブルの行">
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>pet_name</th>
+            <th>status</th>
+          </tr>
+        </thead>
+        <tbody data-role="visits-body"></tbody>
+      </table>
+      <p class="note" data-role="visits-caption"></p>
+    </section>
+    <section class="play-card" aria-labelledby="events-title">
+      <header class="play-card-head">
+        <h2 id="events-title"><code>{scene.table}</code></h2>
+        <span class="note" data-role="events-badge" data-phase="before"
+        >実行前</span>
+      </header>
+      <div class="play-events" data-role="events"></div>
+      <p class="note" data-role="events-caption"></p>
+    </section>
+    <section class="play-card play-tests" aria-labelledby="tests-title">
+      <div class="play-tests-row">
+        <h2 id="tests-title">テスト</h2>
+        <p class="play-summary" data-role="summary">まだ実行していません</p>
+        <button type="button" class="btn btn--soft" data-role="tests" disabled>
+          テストを実行する
+        </button>
+      </div>
+      <p class="note">
+        テストを実行して <code>pass 8 / fail 0</code> になれば完了です。
+      </p>
+      <ul class="play-failed" data-role="failed" aria-label="失敗したテスト">
+      </ul>
+    </section>
+  </section>
+  <dialog
+    class="play-dialog"
+    data-role="hints-dialog"
+    aria-labelledby="hints-title"
+  >
+    <section class="play-hints" aria-labelledby="hints-title">
+      <header class="play-dialog-head">
+        <h2 id="hints-title">ヒントと解答</h2>
+        <button type="button" class="btn btn--soft" data-role="hints-close">
+          閉じる
+        </button>
+      </header>
+      <p class="note play-hint">上から順に開きます。</p>
+      <details class="play-hint-step" name={`hints-step-${step}`}>
+        <summary>ヒント1 考えること</summary>
+        <div class="play-hint-body">
+          {
+            step === 1 ? (
+              <p>
+                問い合わせの「誰が」「いつ」「なぜ」に答えるには、<code
+                >visit_cancellations</code>
+                に1行を入れます。どの列がどの問いに答えるかは、前のページの図で確かめます。テーブルの定義は、エクスプローラーから
+                <code>db.ts</code>
+                を開くと読めます。呼び出し元は、理由と操作した人を
+                <code>cancelVisit</code> に渡しています。いまの <code
+                >cancelVisit</code>
+                は、その2つを受け取っていません。記録は、来院の更新と同じトランザクションの中に置きます。
+              </p>
+            ) : (
+              <p>
+                書き込み先を <code>visit_cancellations</code> から <code
+                >business_events</code>
+                に変えます。ステップ1の値がどの列に入るかは、前のページの図で確かめます。ステップ2の
+                DB に <code>visit_cancellations</code>
+                テーブルはありません。テーブルの定義は、エクスプローラーから
+                <code>db.ts</code> を開くと読めます。
+              </p>
+            )
+          }
+        </div>
+      </details>
+      <details class="play-hint-step" name={`hints-step-${step}`}>
+        <summary>ヒント2 変える場所</summary>
+        <div class="play-hint-body">
+          {
+            step === 1 ? (
+              <p>
+                変える場所は2か所です。1か所目は <code>input</code>
+                の型で、2か所目は <code>UPDATE</code>
+                の次の行です。<code>UPDATE</code> の次の行に、<code
+                >visit_cancellations</code>
+                への <code>INSERT</code> を足します。左の「記録の雛形を
+                <code>UPDATE</code>
+                の次の行に入れる」を押すと、{
+                  blanks.length
+                }つの空欄がある雛形が入ります。
+              </p>
+            ) : (
+              <p>
+                変える場所は、ステップ1で足した <code>INSERT</code>
+                です。左の「INSERT を <code>business_events</code>
+                用に書き換える」を押すと、<code>INSERT</code>
+                が{
+                  blanks.length
+                }つの空欄がある雛形に入れ替わります。雛形は、<code>UPDATE</code>
+                の後で来院の行を読みます。更新の後に置くのは、変化後の状態を
+                <code>target_state</code> に入れるためです。
+              </p>
+            )
+          }
+        </div>
+      </details>
+      <details class="play-hint-step" name={`hints-step-${step}`}>
+        <summary>ヒント3 入れる値</summary>
+        <div class="play-hint-body">
+          <table class="play-table play-blanks" aria-label="空欄に入れる値">
+            <thead>
+              <tr>
+                <th>空欄</th>
+                <th>値</th>
+              </tr>
+            </thead>
             <tbody>
               {
-                scene.answers.map((
-                  { key, label },
+                blanks.map((
+                  [blank, value],
                 ) => (
-                  <tr data-answer={key}>
-                    <th scope="row">{label}</th>
-                    <td data-role="answer-value">まだ実行していません</td>
+                  <tr>
+                    <td><code>{blank}</code></td>
+                    <td><code>{value}</code></td>
                   </tr>
                 ))
               }
             </tbody>
           </table>
-        </section>
-        <section class="play-panel play-hints" aria-labelledby="hints-title">
-          <div class="play-hints-head">
-            <h2 id="hints-title">ヒントと解答</h2>
-            <p class="play-hint">上から順に開きます。</p>
-          </div>
-          <details class="play-hint-step" name={`hints-step-${step}`}>
-            <summary>ヒント1 考えること</summary>
-            <div class="play-hint-body">
-              <div class="play-hint-head">
-                <strong>ヒント1 考えること</strong>
-                <button type="button" class="play-quiet" data-role="hint-close">
-                  閉じる
-                </button>
-              </div>
-              {
-                step === 1 ? (
-                  <p>
-                    問い合わせの「誰が」「いつ」「なぜ」に答えるには、<code
-                    >visit_cancellations</code>
-                    に1行を入れます。どの列がどの問いに答えるかは、前のページの図で確かめます。テーブルの定義は、エクスプローラーから
-                    <code>db.ts</code>
-                    を開くと読めます。呼び出し元は、理由と操作した人を
-                    <code>cancelVisit</code> に渡しています。いまの <code
-                    >cancelVisit</code>
-                    は、その2つを受け取っていません。記録は、来院の更新と同じトランザクションの中に置きます。
-                  </p>
-                ) : (
-                  <p>
-                    書き込み先を <code>visit_cancellations</code> から <code
-                    >business_events</code>
-                    に変えます。ステップ1の値がどの列に入るかは、前のページの図で確かめます。ステップ2の
-                    DB に <code>visit_cancellations</code>
-                    テーブルはありません。テーブルの定義は、エクスプローラーから
-                    <code>db.ts</code> を開くと読めます。
-                  </p>
-                )
-              }
-            </div>
-          </details>
-          <details class="play-hint-step" name={`hints-step-${step}`}>
-            <summary>ヒント2 変える場所</summary>
-            <div class="play-hint-body">
-              <div class="play-hint-head">
-                <strong>ヒント2 変える場所</strong>
-                <button type="button" class="play-quiet" data-role="hint-close">
-                  閉じる
-                </button>
-              </div>
-              {
-                step === 1 ? (
-                  <p>
-                    変える場所は2か所です。1か所目は <code>input</code>
-                    の型で、2か所目は <code>UPDATE</code>
-                    の次の行です。<code>UPDATE</code> の次の行に、<code
-                    >visit_cancellations</code>
-                    への <code>INSERT</code> を足します。左の「記録の雛形を
-                    <code>UPDATE</code>
-                    の次の行に入れる」を押すと、{
-                      blanks.length
-                    }つの空欄がある雛形が入ります。
-                  </p>
-                ) : (
-                  <p>
-                    変える場所は、ステップ1で足した <code>INSERT</code>
-                    です。左の「INSERT を <code>business_events</code>
-                    用に書き換える」を押すと、<code>INSERT</code>
-                    が{
-                      blanks.length
-                    }つの空欄がある雛形に入れ替わります。雛形は、<code
-                    >UPDATE</code>
-                    の後で来院の行を読みます。更新の後に置くのは、変化後の状態を
-                    <code>target_state</code> に入れるためです。
-                  </p>
-                )
-              }
-            </div>
-          </details>
-          <details class="play-hint-step" name={`hints-step-${step}`}>
-            <summary>ヒント3 入れる値</summary>
-            <div class="play-hint-body">
-              <div class="play-hint-head">
-                <strong>ヒント3 入れる値</strong>
-                <button type="button" class="play-quiet" data-role="hint-close">
-                  閉じる
-                </button>
-              </div>
-              <table class="play-table play-blanks" aria-label="空欄に入れる値">
-                <thead>
-                  <tr>
-                    <th>空欄</th>
-                    <th>値</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {
-                    blanks.map((
-                      [blank, value],
-                    ) => (
-                      <tr>
-                        <td><code>{blank}</code></td>
-                        <td><code>{value}</code></td>
-                      </tr>
-                    ))
-                  }
-                </tbody>
-              </table>
-              {
-                step === 1 ? (
-                  <p>
-                    <code>input</code> の型に <code>reason: string</code> と
-                    <code>operatedBy: string</code> を足します。
-                  </p>
-                ) : (
-                  <p>
-                    <code>payload</code>
-                    のキーの名前はこのとおりにします。テストと第3章の SELECT は
-                    <code>$.reason</code> と <code>$.operatedBy</code>
-                    を読みます。
-                  </p>
-                )
-              }
-            </div>
-          </details>
-          <details class="play-hint-step" name={`hints-step-${step}`}>
-            <summary>解答</summary>
-            <div class="play-hint-body">
-              <div class="play-hint-head">
-                <strong>解答</strong>
-                <button type="button" class="play-quiet" data-role="hint-close">
-                  閉じる
-                </button>
-              </div>
-              {
-                step === 1 ? (
-                  <>
-                    <p>
-                      <code>input</code>
-                      の型と{
-                        blanks.length
-                      }つの空欄の値、その値にする理由は次のとおりです。
-                    </p>
-                    <ul class="play-changes play-bullets">
-                      <li>
-                        <code>input</code> の型は <code>{
-                          '{ visitId: string; reason: string; operatedBy: string }'
-                        }</code>
-                        です。呼び出し元が渡す2つを受け取るためです。
-                      </li>
-                      <li>
-                        <code>operated_by</code> は <code
-                        >input.operatedBy</code>
-                        です。「誰が」に答えます。
-                      </li>
-                      <li>
-                        <code>reason</code> は <code>input.reason</code>
-                        です。「なぜ」に答えます。
-                      </li>
-                    </ul>
-                  </>
-                ) : (
-                  <>
-                    <p>
-                      {
-                        blanks.length
-                      }つの空欄の値と、その値にする理由は次のとおりです。
-                    </p>
-                    <ul class="play-changes play-bullets">
-                      <li>
-                        <code>event_name</code> は <code>'VisitCancelled'</code>
-                        です。起きたことの名前で、「何を」に答えます。
-                      </li>
-                      <li>
-                        <code>payload</code> は <code>JSON.stringify({
-                            '{ reason: input.reason, operatedBy: input.operatedBy }'
-                          })</code>
-                        です。テストと第3章の SELECT が、<code>$.reason</code>
-                        と
-                        <code>$.operatedBy</code> を読むためです。
-                      </li>
-                      <li>
-                        <code>target_type</code> は <code>'Visit'</code>
-                        です。来院以外の対象の記録と区別するためです。
-                      </li>
-                    </ul>
-                  </>
-                )
-              }
+          {
+            step === 1 ? (
               <p>
-                次のボタンで、解答のコードを編集欄に読み込めます。テストを実行して
-                <code>pass 8 / fail 0</code> になれば完了です。
+                <code>input</code> の型に <code>reason: string</code> と
+                <code>operatedBy: string</code> を足します。
               </p>
+            ) : (
+              <p>
+                <code>payload</code>
+                のキーの名前はこのとおりにします。テストと第3章の SELECT は
+                <code>$.reason</code> と <code>$.operatedBy</code>
+                を読みます。
+              </p>
+            )
+          }
+        </div>
+      </details>
+      <details class="play-hint-step" name={`hints-step-${step}`}>
+        <summary>解答</summary>
+        <div class="play-hint-body">
+          {
+            step === 1 ? (
+              <>
+                <p>
+                  <code>input</code>
+                  の型と{
+                    blanks.length
+                  }つの空欄の値、その値にする理由は次のとおりです。
+                </p>
+                <ul class="play-changes play-bullets">
+                  <li>
+                    <code>input</code> の型は <code>{
+                      '{ visitId: string; reason: string; operatedBy: string }'
+                    }</code>
+                    です。呼び出し元が渡す2つを受け取るためです。
+                  </li>
+                  <li>
+                    <code>operated_by</code> は <code>input.operatedBy</code>
+                    です。「誰が」に答えます。
+                  </li>
+                  <li>
+                    <code>reason</code> は <code>input.reason</code>
+                    です。「なぜ」に答えます。
+                  </li>
+                </ul>
+              </>
+            ) : (
+              <>
+                <p>
+                  {
+                    blanks.length
+                  }つの空欄の値と、その値にする理由は次のとおりです。
+                </p>
+                <ul class="play-changes play-bullets">
+                  <li>
+                    <code>event_name</code> は <code>'VisitCancelled'</code>
+                    です。起きたことの名前で、「何を」に答えます。
+                  </li>
+                  <li>
+                    <code>payload</code> は <code>JSON.stringify({
+                        '{ reason: input.reason, operatedBy: input.operatedBy }'
+                      })</code>
+                    です。テストと第3章の SELECT が、<code>$.reason</code>
+                    と
+                    <code>$.operatedBy</code> を読むためです。
+                  </li>
+                  <li>
+                    <code>target_type</code> は <code>'Visit'</code>
+                    です。来院以外の対象の記録と区別するためです。
+                  </li>
+                </ul>
+              </>
+            )
+          }
+          <p>次のボタンで、解答のコードを編集欄に読み込めます。</p>
+          <button
+            type="button"
+            class="btn btn--soft"
+            data-role={step === 1 ? 'complete' : 'complete-step-2'}
+            disabled
+          >
+            ステップ{step}の完成コードを読み込む
+          </button>
+        </div>
+      </details>
+      <details class="play-agent-step" name={`hints-step-${step}`}>
+        <summary>生成AIに依頼する</summary>
+        <div class="play-agent-body">
+          <div class="play-agent-copy">
+            <button type="button" class="btn btn--soft" data-role="agent-copy">
+              手元のコーディングエージェント用のプロンプトをコピーする
+            </button>
+            <span
+              class="play-agent-copied"
+              data-role="agent-copied"
+              aria-live="polite"
+            >
+            </span>
+          </div>
+          <textarea
+            class="play-agent-prompt"
+            data-role="agent-prompt"
+            aria-label="手元のコーディングエージェント用のプロンプト"
+            rows="6"
+            readonly
+            hidden
+          ></textarea>
+          <form class="play-agent-form" data-role="agent-login">
+            <label for="agent-password">講師が伝えるパスワード</label>
+            <div class="play-agent-row">
+              <input
+                id="agent-password"
+                type="password"
+                autocomplete="off"
+                data-role="agent-password"
+              />
+              <button type="submit" class="btn btn--soft">使い始める</button>
+            </div>
+            <p
+              class="play-agent-note"
+              data-role="agent-login-error"
+              role="alert"
+            >
+            </p>
+          </form>
+          <form class="play-agent-form" data-role="agent-form" hidden>
+            <label for="agent-request">生成AIへの依頼</label>
+            <textarea
+              id="agent-request"
+              rows="3"
+              maxlength={agentLimits.turnChars}
+              data-role="agent-request"
+            ></textarea>
+            <div class="play-agent-row">
               <button
-                type="button"
-                class="play-quiet"
-                data-role={step === 1 ? 'complete' : 'complete-step-2'}
-                disabled
+                type="submit"
+                class="btn btn--soft"
+                data-role="agent-send"
               >
-                ステップ{step}の完成コードを読み込む
+                依頼する
               </button>
             </div>
-          </details>
-          <details class="play-agent-step" name={`hints-step-${step}`}>
-            <summary>生成AIに頼む</summary>
-            <div class="play-agent-body">
-              <div class="play-agent-head">
-                <strong>生成AIに頼む</strong>
-                <button
-                  type="button"
-                  class="play-quiet"
-                  data-role="agent-close"
-                >
-                  閉じる
-                </button>
-              </div>
-              <div class="play-agent-copy">
-                <button type="button" data-role="agent-copy">
-                  手元のコーディングエージェント用のプロンプトをコピーする
-                </button>
-                <span
-                  class="play-agent-copied"
-                  data-role="agent-copied"
-                  aria-live="polite"
-                >
-                </span>
-              </div>
-              <textarea
-                class="play-agent-prompt"
-                data-role="agent-prompt"
-                aria-label="手元のコーディングエージェント用のプロンプト"
-                rows="6"
-                readonly
-                hidden
-              ></textarea>
-              <form class="play-agent-form" data-role="agent-login">
-                <label for="agent-password">講師が伝えるパスワード</label>
-                <div class="play-agent-row">
-                  <input
-                    id="agent-password"
-                    type="password"
-                    autocomplete="off"
-                    data-role="agent-password"
-                  />
-                  <button type="submit">使い始める</button>
-                </div>
-                <p
-                  class="play-agent-note"
-                  data-role="agent-login-error"
-                  role="alert"
-                >
-                </p>
-              </form>
-              <form class="play-agent-form" data-role="agent-form" hidden>
-                <label for="agent-request">生成AIへの依頼</label>
-                <textarea
-                  id="agent-request"
-                  rows="3"
-                  maxlength={agentLimits.turnChars}
-                  data-role="agent-request"
-                ></textarea>
-                <div class="play-agent-row">
-                  <button
-                    type="submit"
-                    class="play-primary"
-                    data-role="agent-send"
-                  >
-                    依頼する
-                  </button>
-                </div>
-              </form>
-              <ol
-                class="play-agent-log"
-                data-role="agent-log"
-                aria-label="経過"
-                aria-live="polite"
-              >
-              </ol>
-            </div>
-          </details>
-        </section>
-      </div>
-      <section class="play-panel play-tests" aria-labelledby="tests-title">
-        <div class="play-tests-row">
-          <h2 id="tests-title">テスト</h2>
-          <button type="button" data-role="tests" disabled>
-            テストを実行する
-          </button>
-          <p class="play-summary" data-role="summary">まだ実行していません</p>
+          </form>
+          <ol
+            class="play-agent-log"
+            data-role="agent-log"
+            aria-label="経過"
+            aria-live="polite"
+          >
+          </ol>
         </div>
-        <ul
-          class="play-failed"
-          data-role="failed"
-          aria-label="失敗したテスト"
-        >
-        </ul>
-      </section>
+      </details>
+      <details class="play-node">
+        <summary>手元の Node で動かすとき</summary>
+        <div class="play-node-body">
+          {
+            step === 1 ? (
+              <p>
+                <code>chapter-1-start/visits.ts</code> の <code
+                >cancelVisit</code>
+                を編集し、<code>node --test visits.test.ts</code>
+                を実行します。<code>pass 8</code> と <code>fail 0</code>
+                が出れば、ステップ1は完了です。解答は <code
+                >chapter-2-step-1</code>
+                にあります。第1章と同じく、<code>ℹ pass</code> と <code>ℹ
+                  fail</code>
+                の行は失敗の詳細の上に出ます。
+              </p>
+            ) : (
+              <p>
+                <code>chapter-2-step-2-start</code>
+                に移動します。このディレクトリの <code>db.ts</code>
+                とテストは、<code>business_events</code> 用です。<code
+                >visits.ts</code>
+                はステップ1の解答です。自分のコードで続けるときは、ステップ1で書いた
+                <code>visits.ts</code> で上書きします。<code>cancelVisit</code>
+                を編集し、<code>node --test visits.test.ts</code>
+                を実行します。<code>pass 8</code> と <code>fail 0</code>
+                が出れば、ステップ2は完了です。演習が終わらないうちに次の章へ進むときは、<code
+                >chapter-2-step-2</code> に移動します。<code
+                >chapter-2-step-2</code>
+                は全テストが成功する完成のスナップショットです。
+              </p>
+            )
+          }
+        </div>
+      </details>
     </section>
-  </div>
+  </dialog>
 </div>
 
 <script>

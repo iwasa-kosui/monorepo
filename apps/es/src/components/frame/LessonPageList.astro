@@ -17,52 +17,36 @@ interface Props {
   groups: readonly Group[];
   idPrefix: string;
   label: string;
-  collapsible?: boolean;
 }
 
-const { groups, idPrefix, label, collapsible = false } = Astro.props;
+const { groups, idPrefix, label } = Astro.props;
 ---
 
 <nav class="lesson-pages" aria-label={label}>
   {
     groups.map((group) => {
       const titleId = `${idPrefix}-${group.id}`;
-      const title = (
-      <>
-        <span class="lesson-pages__chapter">{group.title}</span>
-        <span class="lesson-pages__range">{group.range}</span>
-      </>
-    );
-      const list = (
-      <ol aria-labelledby={titleId}>
-        {
-          group.links.map((link) => (
-            <li>
-              <a
-                href={link.href}
-                data-route={link.route}
-                aria-current={link.route === 'current' ? 'page' : undefined}
-              >
-                {link.label}
-              </a>
-            </li>
-          ))
-        }
-      </ol>
-    );
-      return collapsible ? (
-      <details
-        class="lesson-pages__group"
-        name={`${idPrefix}-groups`}
-        open={group.hasCurrent}
-        data-has-current={group.hasCurrent ? 'true' : undefined}
-      >
-        <summary class="lesson-pages__title" id={titleId}>{title}</summary>
-        {list}
-      </details>
-    ) : (
+      return (
       <section class="lesson-pages__group">
-        <p class="lesson-pages__title" id={titleId}>{title}</p> {list}
+        <p class="lesson-pages__title" id={titleId}>
+          <span class="lesson-pages__chapter">{group.title}</span>
+          <span class="lesson-pages__range">{group.range}</span>
+        </p>
+        <ol aria-labelledby={titleId}>
+          {
+            group.links.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  data-route={link.route}
+                  aria-current={link.route === 'current' ? 'page' : undefined}
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ol>
       </section>
     );
     })

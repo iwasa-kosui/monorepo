@@ -1,17 +1,25 @@
-.content .cfig {
+.content .cfig:where(:not(.scene)) {
+  --fig-text: var(--text-body);
+  --fig-small: var(--text-code);
+  --fig-code: var(--text-code);
+  --fig-label: var(--text-note);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   min-width: 0;
-  border: 1px solid var(--role-rule);
-  border-radius: var(--radius-lg);
-  background: var(--role-sunken);
-  padding: 0.875rem 1rem;
+  max-width: 100%;
+  border-radius: var(--radius-xl);
+  background: var(--role-surface);
+  padding: var(--space-4);
+  overflow-x: auto;
   color: var(--role-fg);
+  font-size: var(--fig-small);
+  line-height: var(--leading-normal);
 }
-.content .cfig code {
-  background: var(--role-rule);
+.content .cfig:where(:not(.scene)) code {
+  background: var(--role-ground);
+  font-size: var(--fig-code);
 }
 .content .cfig .cfig-sr {
   position: absolute;
@@ -21,89 +29,39 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
-.content .cfig .cfig-controls {
+.content .cfig:where(:not(.scene)) .cfig-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
-.content .cfig .cfig-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.content .cfig .cfig-controls button {
-  border: 1px solid transparent;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
-  padding: 0.5rem 1rem;
-  color: var(--role-fg);
-  font-size: 0.9375rem;
-  cursor: pointer;
-}
-.content .cfig .cfig-controls button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--role-fg) 15%, transparent);
-}
-.content .cfig .cfig-controls button[aria-pressed="true"],
-.content .cfig .cfig-controls button[aria-pressed="true"]:hover:not(:disabled) {
-  background: var(--role-accent);
-  color: var(--role-on-accent);
-}
-.content .cfig .cfig-controls button:disabled {
-  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
-  color: var(--role-muted);
-  cursor: not-allowed;
-}
-.content .cfig .cfig-message {
+.content .cfig:where(:not(.scene)) .cfig-message {
   margin: 0;
   min-height: 4.5rem;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
 }
-.content .cfig .cfig-table {
+.content .cfig:where(:not(.scene)) .cfig-table {
   display: table;
   width: 100%;
   margin: 0;
-  border-collapse: collapse;
-  background: var(--role-surface);
-  font-size: 0.875rem;
+  border-collapse: separate;
+  border-spacing: 0.125rem;
+  font-size: var(--fig-small);
   overflow-wrap: anywhere;
 }
-.content .cfig .cfig-table caption {
-  padding-bottom: 0.25rem;
+.content .cfig:where(:not(.scene)) .cfig-table caption {
+  padding-bottom: var(--space-1);
   text-align: left;
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
-.content .cfig .cfig-table th,
-.content .cfig .cfig-table td {
-  border: 1px solid var(--role-rule);
-  padding: 0.25rem 0.5rem;
+.content .cfig:where(:not(.scene)) .cfig-table th,
+.content .cfig:where(:not(.scene)) .cfig-table td {
+  background: var(--role-ground);
+  padding: var(--space-1) var(--space-2);
   text-align: left;
 }
-.content .cfig .cfig-table th {
-  background: var(--role-sunken);
-  font-weight: 700;
-}
-
-@media (max-height: 700px) {
-  .content .cfig {
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-  }
-  .content .cfig .cfig-controls button {
-    padding: 0.25rem 0.625rem;
-    font-size: 0.8125rem;
-  }
-  .content .cfig .cfig-message {
-    min-height: 3.75rem;
-    font-size: 0.875rem;
-    line-height: 1.4;
-  }
-  .content .cfig .cfig-table {
-    font-size: 0.75rem;
-  }
-  .content .cfig .cfig-table th,
-  .content .cfig .cfig-table td {
-    padding: 0.125rem 0.375rem;
-  }
+.content .cfig:where(:not(.scene)) .cfig-table th {
+  background: var(--role-rail);
+  font-weight: var(--weight-bold);
 }

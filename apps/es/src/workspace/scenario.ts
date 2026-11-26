@@ -158,6 +158,7 @@ export type DocConfig = {
   readonly title: string;
   readonly updatedAt: string;
   readonly updatedBy: string;
+  readonly approvable?: boolean;
 };
 
 export type PrDiffConfig = {
@@ -324,6 +325,7 @@ export type WorkspaceScenario = {
   readonly interim?: InterimConfig;
   readonly reply?: ReplyConfig;
   readonly agent?: AgentConfig;
+  readonly done?: Condition;
 };
 
 export const tabOfKind = <K extends TabKind>(

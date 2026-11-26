@@ -84,6 +84,7 @@ export const evidenceScenario: WorkspaceScenario = {
         { key: 'why', label: 'なぜ', text: 'どこにも残っていない', result: 'missing', fill: bothFound },
       ],
     },
+    done: bothFound,
   }),
   startedAt,
 };

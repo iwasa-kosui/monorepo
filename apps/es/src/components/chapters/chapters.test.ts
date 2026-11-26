@@ -631,7 +631,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       if (scenario === undefined) throw new Error('筋書きがありません');
       expect(pairs({ ...scenario, timeline: [] })).toEqual([['techlead', takeHome], ['techlead', startingCodes]]);
       expect(opened(scenario)).toEqual([['techlead', goodWork], ['techlead', todayMemo]]);
-      expect(summary(scenario)).toEqual(['memo:doc:今日やったこと']);
+      expect(summary(scenario)).toEqual(['memo:doc:本日の実施内容']);
     });
 
     it('2 ページ目は、1 ページ目のテックリードの 2 件を履歴に持ち、入力欄と文書だけを持つ', () => {

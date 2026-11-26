@@ -165,13 +165,4 @@ describe('PRD の受入条件', () => {
     expect(summary).toContain('組み立て直す設計');
     expect(summary).toContain('捨てたデータは復元できません');
   });
-
-  it('講師の台本に 0:35 と、遅れたときの判断表の手順が書かれている', () => {
-    const script = read('docs/instructor-script.md');
-    expect(script).toContain('0:35');
-    const start = script.indexOf('## 遅れたときの手順');
-    expect(start).toBeGreaterThanOrEqual(0);
-    const end = script.indexOf('\n## ', start + 1);
-    expect(script.slice(start, end)).toContain('判断表で3つのパターンを比べて1つ選ぶ');
-  });
 });

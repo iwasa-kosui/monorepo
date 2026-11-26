@@ -1,10 +1,10 @@
 ---
 layout: ../layouts/BaseLayout.astro
-title: うまく動かないとき
+title: 動作しないとき
 topBar: true
 ---
 
-# うまく動かないとき
+# 動作しないとき
 
 実行結果には、複数の失敗が並ぶ場合もあります。`✖ failing tests:` の下にある最初のエラー文から項目を探して、直す操作を実行します。
 
@@ -219,7 +219,7 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 テスト「キャンセルの記録に、キャンセル後の来院の状態が残る」の失敗です。INSERT が `UPDATE visits SET status = 'cancelled'` より前にあり、更新前の状態 `reserved` が `target_state` に入っています。雛形を、`UPDATE visits SET status = 'cancelled'` の次の行へ移します。
 
-## 第3章の表がおかしいとき
+## 第3章の表が想定と異なるとき
 
 `node who-cancelled.ts` の結果で確かめます。
 
@@ -243,7 +243,7 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 この行の null は、正しい結果です。`visit-tama` は、記録を足す前にキャンセルされた来院です。記録を足す前に起きたことは `business_events` に残っていません。
 
-## 追いつけないとき
+## 演習が遅れたとき
 
 ステップ1が終わらないうちにステップ2へ進むときは、`chapter-2-step-2-start` に移動して続けます。`chapter-2-step-2-start` の `visits.ts` は、ステップ1の解答です。演習が終わらないうちに次の章へ進むときは、`chapter-2-step-2` に移動します。`chapter-2-step-2` は全テストが成功する完成のスナップショットです。第3章は自分のコードを使わなくても進められます。
 

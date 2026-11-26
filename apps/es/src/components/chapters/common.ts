@@ -103,6 +103,7 @@ type LessonOptions = Pick<WorkspaceScenario, 'id' | 'label' | 'tabs'> & {
   readonly memo?: WorkspaceScenario['memo'];
   readonly gates?: WorkspaceScenario['gates'];
   readonly reply?: WorkspaceScenario['reply'];
+  readonly done?: WorkspaceScenario['done'];
 };
 
 const docsOnly = (tabs: readonly TabDefinition[]): boolean => tabs.every((tab) => tab.kind === 'doc');
@@ -134,6 +135,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
   ...(options.memo === undefined ? {} : { memo: options.memo }),
   ...(options.gates === undefined ? {} : { gates: options.gates }),
   ...(options.reply === undefined ? {} : { reply: options.reply }),
+  ...(options.done === undefined ? {} : { done: options.done }),
 });
 
 export const opening = (...group: readonly Post[]): TimelineEvent[] =>
@@ -149,8 +151,13 @@ const documentTab = (key: string, title: string, path: string, config: DocConfig
   config,
 });
 
-export const docTab = (key: string, title: string, path: string): TabDefinition =>
-  documentTab(key, title, path, { title, updatedAt: '2026-11-09', updatedBy: 'テックリード' });
+export const docTab = (key: string, title: string, path: string, approvable = false): TabDefinition =>
+  documentTab(key, title, path, {
+    title,
+    updatedAt: '2026-11-09',
+    updatedBy: 'テックリード',
+    ...(approvable ? { approvable } : {}),
+  });
 
 export const editorTab = (
   key: string,

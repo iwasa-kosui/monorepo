@@ -119,8 +119,10 @@ const points = [
   </div>
 
   <div class="cfig-controls">
-    <button type="button" data-action="next">次へ</button>
-    <button type="button" data-action="reset" disabled>最初に戻す</button>
+    <button type="button" class="btn btn--soft" data-action="next">次へ</button>
+    <button type="button" class="btn btn--soft" data-action="reset" disabled>
+      最初に戻す
+    </button>
   </div>
 
   <p
@@ -155,8 +157,8 @@ const points = [
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  padding-inline: 0.25rem;
+  gap: var(--space-1);
+  padding-inline: var(--space-1);
   text-align: center;
 }
 .dot {
@@ -170,30 +172,30 @@ const points = [
   transition: background-color 0.4s ease, box-shadow 0.4s ease;
 }
 .point-label {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  line-height: 1.35;
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
 }
 .point[data-state="done"] .dot {
   background: var(--role-accent-strong);
 }
 .point[data-state="current"] .dot {
   background: var(--role-danger);
-  box-shadow: 0 0 0 4px var(--role-highlight);
+  box-shadow: 0 0 0 4px var(--role-marker);
 }
 .point[data-state="current"] .point-label {
   color: var(--role-accent-strong);
 }
 .point[data-state="future"] .point-label {
   color: var(--role-muted);
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 
 .tables {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .status {
   position: relative;
@@ -201,11 +203,11 @@ const points = [
 }
 .s-cancelled {
   display: none;
-  border: 2px solid var(--role-danger);
   border-radius: var(--radius-sm);
-  padding: 0 0.25rem;
+  background: var(--role-danger-soft);
+  padding: 0 var(--space-1);
   color: var(--role-danger);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 [data-tama="cancelled"] [data-row="tama"] .s-reserved,
 [data-pochi="cancelled"] [data-row="pochi"] .s-reserved {
@@ -223,25 +225,24 @@ const points = [
 }
 [data-events="row"] .row-event {
   display: table-row;
-  background: var(--role-highlight-soft);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
+}
+.cfig[data-events="row"] .cfig-table .row-event td {
+  background: var(--role-marker);
 }
 .row-empty td {
   color: var(--role-muted);
 }
 .result {
   display: none;
+  overflow-x: auto;
 }
 [data-step="4"] .result {
   display: block;
 }
 .cfig[data-before-record-figure] .result .cfig-table {
+  min-width: 48rem;
   table-layout: fixed;
-  font-size: 0.75rem;
-}
-.cfig[data-before-record-figure] .result .cfig-table th,
-.cfig[data-before-record-figure] .result .cfig-table td {
-  padding-inline: 0.25rem;
 }
 .result .cfig-table th:nth-child(1) {
   width: 15%;
@@ -261,18 +262,11 @@ const points = [
 .result .cfig-table th:nth-child(6) {
   width: 16%;
 }
-.result td.null {
+.cfig .result .cfig-table td.null {
   background: var(--role-danger-soft);
   color: var(--role-danger);
   font-style: italic;
-  font-weight: 700;
-}
-
-@media (max-height: 700px) {
-  .point-label {
-    font-size: 0.75rem;
-    line-height: 1.3;
-  }
+  font-weight: var(--weight-bold);
 }
 
 @media (prefers-reduced-motion: reduce) {
