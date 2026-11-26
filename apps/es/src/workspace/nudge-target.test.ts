@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { record } from './conditions';
 import {
+  fewLogRows,
+  type LogView,
   nextSignals,
   type NudgeContext,
   nudgeSpecOf,
@@ -135,6 +137,46 @@ describe('nudgeSpecOf', () => {
     expect(restoreSelector).toBe('[data-restore]');
   });
 
+  it('復元後の SQL の実行欄が表示されていれば、バックアップの復元を待つ sql:executed は、その実行ボタンを指す', () => {
+    expect(nudgeSpecOf({ name: 'sql:executed', key: 'restored' }, { ...context, restoreRunShown: true })).toEqual({
+      selector: '[data-backup-restore] [data-playground="sql"] [data-role="run"]',
+    });
+    expect(nudgeSpecOf({ name: 'sql:executed', key: 'restored' }, { ...context, restoreRunShown: false })).toEqual({
+      selector: restoreSelector,
+    });
+  });
+
+  it('キーなしの sql:executed は、復元後の SQL の実行欄が表示されていても、SQL の実行ボタンを指す', () => {
+    expect(nudgeSpecOf('sql:executed', { ...context, restoreRunShown: true })).toEqual({
+      selector: signalSelectors['sql:executed'],
+    });
+  });
+
+  it('直前の実行が該当の結果を表示せず、最初の SQL に戻すボタンが表示されていれば、sql:target-shown はそのボタンを指す', () => {
+    expect(nudgeSpecOf('sql:target-shown', { ...context, sqlMissed: true, resetSqlShown: true })).toEqual({
+      selector: '[data-playground="sql"] [data-role="reset-sql"]',
+    });
+  });
+
+  it('最初の SQL に戻すボタンが表示されていなければ、sql:target-shown は実行ボタンを指す', () => {
+    expect(nudgeSpecOf('sql:target-shown', { ...context, sqlMissed: true, resetSqlShown: false })).toEqual({
+      selector: signalSelectors['sql:target-shown'],
+    });
+  });
+
+  it('直前の実行が該当の結果を表示しなかった状態でなければ、sql:target-shown は実行ボタンを指す', () => {
+    expect(nudgeSpecOf('sql:target-shown', { ...context, sqlMissed: false, resetSqlShown: true })).toEqual({
+      selector: signalSelectors['sql:target-shown'],
+    });
+    expect(nudgeSpecOf('sql:target-shown', context)).toEqual({ selector: signalSelectors['sql:target-shown'] });
+  });
+
+  it('sql:executed は、直前の実行が該当の結果を表示しなかった状態でも、SQL の実行ボタンを指す', () => {
+    expect(nudgeSpecOf('sql:executed', { ...context, sqlMissed: true, resetSqlShown: true })).toEqual({
+      selector: signalSelectors['sql:executed'],
+    });
+  });
+
   it('tests:ran と tests:passed は、テストの実行ボタンを指す', () => {
     expect(nudgeSpecOf('tests:ran', context)).toEqual({ selector: '[data-role="run-tests"]' });
     expect(nudgeSpecOf('tests:passed', context)).toEqual({ selector: '[data-role="run-tests"]' });
@@ -158,8 +200,60 @@ describe('nudgeSpecOf', () => {
     expect(nudgeSpecOf('log:target-opened', context)).toEqual({ tab: 'logs' });
   });
 
-  it('ログのシグナルは、ログのタブが選択済みなら何も指さない', () => {
+  it('ログのシグナルは、ログのタブが選択済みでも、ログの状態を渡さなければ何も指さない', () => {
     expect(nudgeSpecOf('log:target-opened', { ...context, selected: 'logs' })).toBeNull();
+  });
+
+  describe('ログのタブが選択済みのとき', () => {
+    const panel = '[role="tabpanel"][data-tool="logs"]';
+    const rowSpec = {
+      selector: `${panel} tr[data-log-row][data-cancel="true"]:not([hidden])`,
+      text: 'この行を開きます',
+    };
+    const facetOf = (checked: boolean) => ({ value: 'POST', checked, name: 'POST', group: 'HTTP Method' });
+    const facetSpec = {
+      selector: `${panel} label.facet-item:has(input[type="checkbox"][data-facet="method"][value="POST"])`,
+      text: 'HTTP Method の「POST」を選びます',
+    };
+    const querySpec = { selector: `${panel} input[data-query]`, text: '検索欄を「service:clinic-api」に戻します' };
+    const viewOf = (view: Partial<LogView>): NudgeContext => ({
+      ...context,
+      selected: 'logs',
+      logs: { shownRows: 20, targetShown: true, facet: facetOf(false), initialQuery: 'service:clinic-api', ...view },
+    });
+
+    it('該当の行が表示されていて、表示中の行が少なければ、該当の行を指す', () => {
+      expect(nudgeSpecOf('log:target-opened', viewOf({ shownRows: fewLogRows }))).toEqual(rowSpec);
+      expect(nudgeSpecOf('log:detail-opened', viewOf({ shownRows: 1, facet: facetOf(true) }))).toEqual(rowSpec);
+    });
+
+    it('表示中の行が少なくなければ、該当の行の method のファセットが未選択のとき、そのファセットを指す', () => {
+      expect(nudgeSpecOf('log:target-opened', viewOf({ shownRows: fewLogRows + 1 }))).toEqual(facetSpec);
+      expect(nudgeSpecOf('log:target-opened', viewOf({}))).toEqual(facetSpec);
+    });
+
+    it('該当の行が外れていても、ファセットが未選択なら、ファセットを指す', () => {
+      expect(nudgeSpecOf('log:target-opened', viewOf({ targetShown: false, shownRows: 0 }))).toEqual(facetSpec);
+    });
+
+    it('ファセットが選択済みで、該当の行が表示されていれば、表示中の行が多くても該当の行を指す', () => {
+      expect(nudgeSpecOf('log:target-opened', viewOf({ facet: facetOf(true) }))).toEqual(rowSpec);
+    });
+
+    it('ファセットがなくても、該当の行が表示されていれば、該当の行を指す', () => {
+      expect(nudgeSpecOf('log:target-opened', viewOf({ facet: null }))).toEqual(rowSpec);
+    });
+
+    it('ファセットが選択済みで、該当の行が外れていれば、検索欄を初期値に戻すよう指す', () => {
+      expect(nudgeSpecOf('log:target-opened', viewOf({ facet: facetOf(true), targetShown: false, shownRows: 5 })))
+        .toEqual(querySpec);
+      expect(nudgeSpecOf('log:detail-opened', viewOf({ facet: null, targetShown: false, shownRows: 0 })))
+        .toEqual(querySpec);
+    });
+
+    it('ログのタブが未選択なら、ログの状態によらずタブのボタンを指す', () => {
+      expect(nudgeSpecOf('log:target-opened', { ...viewOf({}), selected: 'console' })).toEqual({ tab: 'logs' });
+    });
   });
 
   it('ログのタブがないシナリオでは、ログのシグナルは何も指さない', () => {

@@ -8,6 +8,7 @@ import {
   type NudgeKind,
   nudgeLabelOf,
   nudgeMessageOf,
+  nudgeTextAttribute,
   placeArrow,
   type Stall,
   startStall,
@@ -78,7 +79,7 @@ if (bar !== null && bar.dataset.state !== 'listen') {
       target.getAttribute('aria-label'),
       target.getAttribute('data-nudge-label'),
     );
-    return nudgeMessageOf(kindOf(target), label);
+    return nudgeMessageOf(kindOf(target), label, target.getAttribute(nudgeTextAttribute));
   };
 
   const place = (target: HTMLElement): void => {
@@ -102,11 +103,17 @@ if (bar !== null && bar.dataset.state !== 'listen') {
     outer.style.setProperty('--nudge-arrow-offset', `${placement.arrowOffset}px`);
   };
 
+  let modalWasOpen = false;
+
   const update = (): void => {
     const now = Date.now();
     const target = targetOf();
-    stall = continueStall(stall, target, stateOf(), now);
-    if (target !== null && isStalled(stall, now) && isUsable(target)) {
+    const modalOpen = document.querySelector('dialog:modal') !== null;
+    stall = modalWasOpen && !modalOpen
+      ? startStall(target, stateOf(), now)
+      : continueStall(stall, target, stateOf(), now);
+    modalWasOpen = modalOpen;
+    if (!modalOpen && target !== null && isStalled(stall, now) && isUsable(target)) {
       place(target);
       outer.dataset.visible = 'true';
     } else {
@@ -123,6 +130,12 @@ if (bar !== null && bar.dataset.state !== 'listen') {
     bubble.textContent = '';
   };
 
+  const restartOnKey = (): void => {
+    stall = startStall(stall.target, stall.state, Date.now());
+    outer.dataset.visible = 'false';
+    bubble.textContent = '';
+  };
+
   let frame = 0;
   const updateOnFrame = (): void => {
     if (frame !== 0) return;
@@ -134,6 +147,7 @@ if (bar !== null && bar.dataset.state !== 'listen') {
 
   document.addEventListener('click', restart, true);
   document.addEventListener('focusin', restart, true);
+  document.addEventListener('keydown', restartOnKey, true);
   document.addEventListener(NUDGE_EVENT, update);
   document.addEventListener(ACTION_EVENT, update);
   window.addEventListener('scroll', updateOnFrame, { capture: true, passive: true });

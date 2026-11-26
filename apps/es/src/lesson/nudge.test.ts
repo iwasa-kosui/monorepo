@@ -9,6 +9,7 @@ import {
   nudgeAttribute,
   nudgeLabelOf,
   nudgeMessageOf,
+  nudgeTextAttribute,
   placeArrow,
   stallMs,
   startStall,
@@ -28,6 +29,7 @@ const box = (left: number, top: number, width: number, height: number) => ({
 describe('停滞の判定', () => {
   it('属性名とイベント名を持つ', () => {
     expect(nudgeAttribute).toBe('data-nudge-target');
+    expect(nudgeTextAttribute).toBe('data-nudge-text');
     expect(NUDGE_EVENT).toBe('lesson:nudge');
   });
 
@@ -338,5 +340,20 @@ describe('nudgeMessageOf', () => {
   it('ラベルが空のタブとボタンは、文を返さない', () => {
     expect(nudgeMessageOf('tab', '')).toBe('');
     expect(nudgeMessageOf('press', '')).toBe('');
+  });
+
+  it('対象ごとの文があれば、種類とラベルによらずその文をそのまま返す', () => {
+    expect(nudgeMessageOf('press', '実行する', 'この行を開きます')).toBe('この行を開きます');
+    expect(nudgeMessageOf('tab', 'ログ', ' 文 ')).toBe(' 文 ');
+    expect(nudgeMessageOf('input', '', '検索欄を「service:clinic-api」に戻します')).toBe(
+      '検索欄を「service:clinic-api」に戻します',
+    );
+    expect(nudgeMessageOf('press', '', 'この行を開きます')).toBe('この行を開きます');
+  });
+
+  it('対象ごとの文が null か空なら、種類とラベルの規則に戻る', () => {
+    expect(nudgeMessageOf('press', '実行する', null)).toBe('「実行する」を押します');
+    expect(nudgeMessageOf('press', '実行する', '')).toBe('「実行する」を押します');
+    expect(nudgeMessageOf('tab', 'ログ', '')).toBe('「ログ」のタブを開きます');
   });
 });

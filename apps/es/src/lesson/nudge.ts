@@ -2,6 +2,8 @@ export const NUDGE_EVENT = 'lesson:nudge';
 
 export const nudgeAttribute = 'data-nudge-target';
 
+export const nudgeTextAttribute = 'data-nudge-text';
+
 // 動作確認のための暫定値。本番の前に 20_000 に戻す
 export const stallMs = 5_000;
 
@@ -56,7 +58,8 @@ export const nudgeLabelOf = (text: string, ariaLabel: string | null, nudgeLabel:
   return shown === '' ? normalize(ariaLabel) : shown;
 };
 
-export const nudgeMessageOf = (kind: NudgeKind, label: string): string => {
+export const nudgeMessageOf = (kind: NudgeKind, label: string, nudgeText: string | null = null): string => {
+  if (nudgeText !== null && nudgeText !== '') return nudgeText;
   if (kind === 'input') return 'この欄に入力します';
   if (label === '') return '';
   return kind === 'tab' ? `「${label}」のタブを開きます` : `「${label}」を押します`;
