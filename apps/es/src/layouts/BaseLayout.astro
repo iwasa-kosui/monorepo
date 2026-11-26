@@ -2,6 +2,11 @@
 import TopBar from '../components/frame/TopBar.astro';
 import '../styles/global.css';
 
+import {
+  TEXT_SIZE_ATTRIBUTE,
+  TEXT_SIZE_KEY,
+  TEXT_SIZES,
+} from '../lesson/text-size';
 import { chapterGoalOf } from '../lib/page-meta';
 import { siteDescription, siteName, siteTitle } from '../site';
 
@@ -40,6 +45,24 @@ const canonicalUrl = Astro.site === undefined
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script
+      is:inline
+      define:vars={{
+        textSizeKey: TEXT_SIZE_KEY,
+        textSizeAttribute: TEXT_SIZE_ATTRIBUTE,
+        textSizes: TEXT_SIZES.filter((size) => size !== 'standard'),
+      }}
+    >
+    let saved = null;
+      try {
+        saved = window.localStorage.getItem(textSizeKey);
+      } catch {
+        saved = null;
+      }
+      if (textSizes.includes(saved)) {
+        document.documentElement.setAttribute(textSizeAttribute, saved);
+      }
+    </script>
     {noindex && <meta name="robots" content="noindex" />}
     <title>{pageTitle}</title>
     <meta name="description" content={description} />

@@ -1,0 +1,35 @@
+---
+import { TEXT_SIZE_LABELS, TEXT_SIZES } from '../../lesson/text-size';
+import '../../styles/text-size.css';
+
+interface Props {
+  idPrefix: string;
+}
+
+const { idPrefix } = Astro.props;
+---
+
+<fieldset class="text-size">
+  <legend class="text-size__legend">文字サイズ</legend>
+  <div class="text-size__options">
+    {
+      TEXT_SIZES.map((size) => (
+        <label class="text-size__option">
+          <input
+            class="visually-hidden"
+            type="radio"
+            name={`${idPrefix}-text-size`}
+            value={size}
+            checked={size === 'standard'}
+            data-text-size-input
+          />
+          <span class="text-size__label">{TEXT_SIZE_LABELS[size]}</span>
+        </label>
+      ))
+    }
+  </div>
+</fieldset>
+
+<script>
+import '../../lesson/text-size-client';
+</script>

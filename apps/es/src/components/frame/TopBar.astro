@@ -1,8 +1,12 @@
 ---
 import '../../styles/top-bar.css';
+import TextSizeSwitch from './TextSizeSwitch.astro';
 ---
 
 <header class="top-bar">
   <a class="top-bar__home" href="/">トップページへ</a>
   <slot />
+  <div class="top-bar__text-size">
+    <TextSizeSwitch idPrefix="top" />
+  </div>
 </header>

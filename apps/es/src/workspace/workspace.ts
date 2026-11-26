@@ -1,7 +1,9 @@
 import { setAction } from '../lesson/action-bar';
+import { notifyNudge, nudgeAttribute, nudgeTextAttribute } from '../lesson/nudge';
 import { createChat } from './chat';
 import { clockOf, formatElapsed } from './clock';
 import { hasFired, isMet, keyOf, record } from './conditions';
+import { type LogView, nextSignals, nudgeSpecOf, resetSqlSelector, restorePlaygroundSelector } from './nudge-target';
 import { emitSignal, type PanelController } from './panel';
 import { mountPanel } from './panels';
 import { fillTemplate, interimText, type MemoOverride, memoViews, replyGate } from './rules';
@@ -18,7 +20,14 @@ import {
   type TimelineEvent,
   type WorkspaceScenario,
 } from './scenario';
-import { createScheduler, type Recurring, type ScheduledItem, tickMs, type WaitingItem } from './scheduler';
+import {
+  createScheduler,
+  type Recurring,
+  type ScheduledItem,
+  type SchedulerStatus,
+  tickMs,
+  type WaitingItem,
+} from './scheduler';
 import { createTabs } from './tabs';
 
 const typingLeadMs = 1500;
@@ -59,6 +68,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     counter: scenario.status.counter?.initial ?? 0,
     unlocked: new Set<ButtonName>(),
     memoOverrides: new Map<string, MemoOverride>(),
+    sqlMissed: false,
   };
   let intervalId: number | undefined;
 
@@ -93,6 +103,107 @@ export const mountWorkspace = (root: HTMLElement): void => {
     if (affectedText !== null) {
       affectedText.textContent = `${state.counter}${scenario.status.counter?.unit ?? ''}`;
     }
+  };
+
+  type Nudge = { readonly element: HTMLElement; readonly text: string | null };
+
+  let nudged: HTMLElement | null = null;
+  let nudgedText: string | null = null;
+
+  const squash = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+  const logViewOf = (key: string): LogView | undefined => {
+    const panel = root.querySelector<HTMLElement>(`[role="tabpanel"][data-tool="${key}"]`);
+    const query = panel?.querySelector<HTMLInputElement>('input[data-query]');
+    if (panel === null || panel === undefined || query === null || query === undefined) return undefined;
+    const rows = [...panel.querySelectorAll<HTMLElement>('tr[data-log-row]')];
+    const targets = rows.filter((row) => row.dataset.cancel === 'true');
+    const target = targets.find((row) => !row.hidden) ?? targets[0];
+    if (target === undefined) return undefined;
+    const input = [...panel.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-facet="method"]')]
+      .find((item) => item.value === target.dataset.method);
+    const group = squash(input?.closest('fieldset')?.querySelector('legend')?.textContent);
+    const name = squash(input?.closest('label')?.querySelector('.facet-name')?.textContent);
+    return {
+      shownRows: rows.filter((row) => !row.hidden).length,
+      targetShown: !target.hidden,
+      facet: input === undefined || group === '' ? null : {
+        value: input.value,
+        checked: input.checked,
+        name: name === '' ? input.value : name,
+        group,
+      },
+      initialQuery: query.dataset.initial ?? '',
+    };
+  };
+
+  const tabButtonOf = (key: string): HTMLElement | null =>
+    root.querySelector<HTMLElement>(`[role="tab"][data-tool="${key}"]`);
+
+  const foldedRailOf = (element: HTMLElement): HTMLElement | null =>
+    !compact.matches && element.closest('.win.chat[data-collapsed]:not([data-open])') !== null
+      ? root.querySelector<HTMLElement>('[data-rail]')
+      : null;
+
+  const nudgeVisible = (element: HTMLElement | null, chatFront: boolean): HTMLElement | null => {
+    if (element === null) return null;
+    const panel = element.closest<HTMLElement>('[role="tabpanel"][data-tool]');
+    const shown = panel !== null && (panel.dataset.tool !== state.selected || chatFront)
+      ? tabButtonOf(panel.dataset.tool ?? '')
+      : compact.matches && state.view === 'tools' && element.closest('.win.chat') !== null
+      ? root.querySelector<HTMLElement>('[data-chat-tab]')
+      : foldedRailOf(element) ?? element;
+    return shown === null || shown.matches(':disabled') ? null : shown;
+  };
+
+  const plainNudge = (element: HTMLElement | null): Nudge | null => element === null ? null : { element, text: null };
+
+  const nudgeElement = (status: SchedulerStatus, chatFront: boolean): Nudge | null => {
+    if (timed && status === 'idle') return plainNudge(nudgeVisible(startButton, chatFront));
+    if (status === 'paused') return null;
+    if (doneWhen !== undefined && isMet(fired, doneWhen)) return null;
+    const reply = root.querySelector<HTMLElement>('[data-action="reply"]');
+    if (reply !== null && !reply.hidden && !reply.matches(':disabled') && !state.replied) {
+      return plainNudge(nudgeVisible(reply, chatFront));
+    }
+    const selected = chatFront ? '' : state.selected;
+    const logsTab = scenario.tabs.find((tab) => tab.kind === 'logs');
+    const restorePlayground = root.querySelector<HTMLElement>(restorePlaygroundSelector);
+    const resetSql = state.sqlMissed ? root.querySelector<HTMLElement>(resetSqlSelector) : null;
+    const context = {
+      tabs: scenario.tabs,
+      selected,
+      logs: logsTab !== undefined && logsTab.key === selected ? logViewOf(logsTab.key) : undefined,
+      restoreRunShown: restorePlayground !== null && !restorePlayground.hidden,
+      sqlMissed: state.sqlMissed,
+      resetSqlShown: resetSql !== null && getComputedStyle(resetSql).display !== 'none',
+    };
+    for (const signal of nextSignals(fired, scenario.gates, doneWhen)) {
+      const spec = nudgeSpecOf(signal, context);
+      if (spec === null) continue;
+      const target = 'tab' in spec ? tabButtonOf(spec.tab) : root.querySelector<HTMLElement>(spec.selector);
+      const element = nudgeVisible(target, chatFront);
+      if (element !== null) return { element, text: element === target ? spec.text ?? null : null };
+    }
+    return null;
+  };
+
+  const updateNudge = (): void => {
+    const chatFront = compact.matches && state.view === 'chat';
+    const next = nudgeElement(scheduler.status(), chatFront);
+    const element = next?.element ?? null;
+    const text = next?.text ?? null;
+    if (element === nudged && text === nudgedText) return;
+    if (element !== nudged) {
+      nudged?.removeAttribute(nudgeAttribute);
+      nudged?.removeAttribute(nudgeTextAttribute);
+    }
+    element?.setAttribute(nudgeAttribute, '');
+    if (text === null) element?.removeAttribute(nudgeTextAttribute);
+    else element?.setAttribute(nudgeTextAttribute, text);
+    nudged = element;
+    nudgedText = text;
+    notifyNudge();
   };
 
   function render(): void {
@@ -147,6 +258,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
         setAction({ state: done ? 'done' : 'do' });
       }
     }
+    updateNudge();
   }
 
   const startInterval = (): void => {
@@ -291,6 +403,8 @@ export const mountWorkspace = (root: HTMLElement): void => {
     const key = keyOf(detail.data);
     record(fired, detail.name, key);
     if (detail.data !== undefined) latest.set(detail.name, detail.data);
+    if (detail.name === 'sql:executed' && key === '') state.sqlMissed = true;
+    if (detail.name === 'sql:target-shown') state.sqlMissed = false;
     syncOpened();
     scheduler.signal(detail.name, key);
     render();
@@ -322,6 +436,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     state.counter = scenario.status.counter?.initial ?? 0;
     state.unlocked.clear();
     state.memoOverrides.clear();
+    state.sqlMissed = false;
     chat.clear();
     chat.showHistory();
     render();
@@ -435,11 +550,24 @@ export const mountWorkspace = (root: HTMLElement): void => {
     choose(key);
     controllers.get(key)?.open?.();
   });
+  root.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element) || event.target.closest('[data-role="reset-sql"]') === null) return;
+    state.sqlMissed = false;
+    updateNudge();
+  });
+  root.addEventListener('input', updateNudge);
+  root.addEventListener('change', updateNudge);
 
   for (const tab of scenario.tabs) {
     const panel = tab.initial === false ? undefined : tabs.panelOf(tab.key);
     if (panel !== undefined) mountController(tab, panel);
   }
+  new MutationObserver(updateNudge).observe(root, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['disabled', 'hidden', 'data-open'],
+  });
   render();
   if (!timed) begin();
 };

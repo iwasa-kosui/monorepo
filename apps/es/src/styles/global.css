@@ -4,6 +4,16 @@
 @import "./components.css";
 @source not "../playground";
 
+html {
+  font-size: 90%;
+}
+html[data-text-size="small"] {
+  font-size: 80%;
+}
+html[data-text-size="large"] {
+  font-size: 110%;
+}
+
 body {
   font-family: var(--font-body);
   font-size: var(--text-body);

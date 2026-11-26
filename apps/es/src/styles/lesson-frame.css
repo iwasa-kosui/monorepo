@@ -106,6 +106,9 @@
   box-shadow: var(--shadow-raised);
   padding: var(--space-4) var(--space-5);
 }
+.lesson-menu__panel > .text-size {
+  margin-bottom: var(--space-4);
+}
 .lesson-menu__links {
   display: flex;
   flex-wrap: wrap;

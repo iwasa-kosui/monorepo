@@ -1,6 +1,7 @@
 import { EditorView } from '@codemirror/view';
 
 import { setAction } from '../lesson/action-bar.ts';
+import { notifyNudge, nudgeAttribute } from '../lesson/nudge.ts';
 import { testReportOf } from './agent-client.ts';
 import type { TestReport } from './agent-protocol.ts';
 import { createRuntime, RuntimeScriptError } from './client.ts';
@@ -189,12 +190,19 @@ const mount = (root: HTMLElement): void => {
 
   const labelOf = (button: HTMLButtonElement): string => (button.textContent ?? '').replace(/\s+/g, ' ').trim();
 
+  const nudgeHints = (on: boolean): void => {
+    if (on) hintsOpenButton.setAttribute(nudgeAttribute, '');
+    else hintsOpenButton.removeAttribute(nudgeAttribute);
+    notifyNudge();
+  };
+
   const say = (sentences: string[], button: HTMLButtonElement | null = null): void => {
     setAction({
       state: 'do',
       text: sentences.join('').replaceAll('`', ''),
       button: button === null ? null : { label: labelOf(button), onClick: () => button.click() },
     });
+    nudgeHints(button === null);
   };
 
   const showSummary = (value: string, result: 'pass' | 'fail' | 'error' | ''): void => {
@@ -555,6 +563,7 @@ const mount = (root: HTMLElement): void => {
       ));
       if (failures.length === 0) {
         setAction({ state: 'done', text: 'すべてのテストが成功しました。次のページへ進みます。', button: null });
+        nudgeHints(false);
       } else {
         const recovery = recoverFrom('コードを直して、もう一度押せます。');
         say(['テストの結果に、失敗したテストの名前を出しています。', recovery.sentence], recovery.button);

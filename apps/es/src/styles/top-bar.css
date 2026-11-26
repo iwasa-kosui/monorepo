@@ -9,6 +9,9 @@
   font-size: var(--text-note);
   line-height: var(--leading-normal);
 }
+.top-bar__text-size {
+  margin-left: auto;
+}
 .top-bar a {
   display: inline-flex;
   align-items: center;
