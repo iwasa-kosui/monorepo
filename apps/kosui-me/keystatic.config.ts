@@ -17,6 +17,10 @@ const contentComponents = {
 
 const postSchema = {
   title: fields.slug({ name: { label: 'Title' } }),
+  ogTitle: fields.text({
+    label: 'OG Title',
+    description: 'OGP 画像の中に表示するタイトル。\\n で改行位置を指定する',
+  }),
   date: fields.text({ label: 'Date' }),
   updatedDate: fields.text({
     label: 'Updated Date',
@@ -41,8 +45,6 @@ const postSchema = {
     },
   ),
   image: fields.text({ label: 'Image' }),
-  ogIcon: fields.text({ label: 'OG Icon' }),
-  ogSvg: fields.text({ label: 'OG SVG' }),
   private: fields.checkbox({ label: 'Private' }),
   content: fields.mdx({ label: 'Content', components: contentComponents }),
 } as const;

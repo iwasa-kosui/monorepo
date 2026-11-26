@@ -63,6 +63,7 @@ apps/kosui-me/src/content/reports/*-weekly-tech-digest.mdx
 ```yaml
 ---
 title: "Weekly Tech Digest: {DATE}"
+ogTitle: "Weekly Tech Digest\n{DATE}"
 date: "{DATE}T12:00:00+09:00"
 slug: "{YYYY}/{MM}/{DD}/weekly-tech-digest"
 description: "（調査内容に基づく1行要約）"
