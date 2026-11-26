@@ -109,6 +109,11 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const tabButtonOf = (key: string): HTMLElement | null =>
     root.querySelector<HTMLElement>(`[role="tab"][data-tool="${key}"]`);
 
+  const foldedRailOf = (element: HTMLElement): HTMLElement | null =>
+    !compact.matches && element.closest('.win.chat[data-collapsed]:not([data-open])') !== null
+      ? root.querySelector<HTMLElement>('[data-rail]')
+      : null;
+
   const nudgeVisible = (element: HTMLElement | null, chatFront: boolean): HTMLElement | null => {
     if (element === null) return null;
     const panel = element.closest<HTMLElement>('[role="tabpanel"][data-tool]');
@@ -116,7 +121,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
       ? tabButtonOf(panel.dataset.tool ?? '')
       : compact.matches && state.view === 'tools' && element.closest('.win.chat') !== null
       ? root.querySelector<HTMLElement>('[data-chat-tab]')
-      : element;
+      : foldedRailOf(element) ?? element;
     return shown === null || shown.matches(':disabled') ? null : shown;
   };
 
@@ -500,7 +505,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
   new MutationObserver(updateNudge).observe(root, {
     subtree: true,
     attributes: true,
-    attributeFilter: ['disabled', 'hidden'],
+    attributeFilter: ['disabled', 'hidden', 'data-open'],
   });
   render();
   if (!timed) begin();
