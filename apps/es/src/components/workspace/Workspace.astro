@@ -234,20 +234,22 @@ const hasComposer = Astro.slots.has('composer');
 
 .scene .status-bar {
   position: sticky;
-  top: 0;
+  top: calc(-1 * var(--main-pad-top, 0px));
   z-index: 20;
   display: flex;
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 var(--space-6);
+  --status-gap: var(--space-6);
   min-height: var(--tap-min);
+  margin-inline: calc(-1 * var(--main-pad-x, 0px));
+  padding-inline: var(--main-pad-x, 0px);
   background: var(--role-surface);
   font-size: var(--text-note);
   line-height: var(--leading-normal);
 }
 .scene .status-item {
-  margin: 0;
+  margin: 0 var(--status-gap) 0 0;
   font-variant-numeric: tabular-nums;
 }
 .scene .status-elapsed,
@@ -267,9 +269,9 @@ const hasComposer = Astro.slots.has('composer');
   font-weight: var(--weight-bold);
 }
 .scene .status-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
+  display: contents;
+}
+.scene .status-actions .btn:first-child {
   margin-left: auto;
 }
 .scene .status-actions .btn:disabled {
@@ -505,9 +507,9 @@ const hasComposer = Astro.slots.has('composer');
 
 @media (max-width: 639px) {
   .scene .status-bar {
-    gap: 0 var(--space-4);
+    --status-gap: var(--space-4);
   }
-  .scene .status-actions {
+  .scene .status-actions .btn:first-child {
     margin-left: 0;
   }
   .scene .start {

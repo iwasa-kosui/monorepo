@@ -23,8 +23,6 @@
 .btn--bar {
   background: var(--role-ground);
   color: var(--action-bar-bg);
-  font-size: var(--text-body);
-  min-height: 3.5rem;
 }
 .btn--soft {
   background: var(--role-accent-soft);

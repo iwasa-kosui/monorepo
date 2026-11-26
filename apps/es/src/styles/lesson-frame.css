@@ -20,7 +20,7 @@
   flex: none;
   align-items: center;
   gap: var(--space-6);
-  min-height: 4rem;
+  min-height: 3.5rem;
   background: var(--role-ground);
   padding: 0 var(--space-6);
 }
@@ -181,9 +181,9 @@
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-2) var(--space-4);
   background: var(--action-bar-bg);
-  padding: 1.25rem var(--space-6);
+  padding: var(--space-3) var(--space-6);
   color: var(--role-ink);
 }
 .action-bar[data-state="do"] {
@@ -198,6 +198,7 @@
 }
 .action-bar__chip {
   flex: none;
+  padding-block: var(--space-1);
   background: var(--role-ink);
   color: var(--role-ground);
 }
@@ -210,12 +211,12 @@
   color: var(--role-success);
 }
 .action-bar__text {
-  flex: 999 1 30rem;
+  flex: 1 1 12rem;
   min-width: 0;
   margin: 0;
-  font-size: var(--text-lead);
+  font-size: var(--text-body);
   font-weight: var(--weight-bold);
-  line-height: 1.45;
+  line-height: 1.4;
 }
 .action-bar__text code {
   font-family: var(--font-code);
@@ -243,7 +244,9 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-5) var(--space-6) var(--space-6);
+  --main-pad-top: var(--space-5);
+  --main-pad-x: var(--space-6);
+  padding: var(--main-pad-top) var(--main-pad-x) var(--space-6);
 }
 .lesson-frame .lesson-main.content > * {
   width: 100%;
@@ -260,39 +263,58 @@
 }
 .lesson-frame--immersive .lesson-main {
   background: var(--role-surface);
-  padding: var(--space-4) clamp(var(--space-4), 4vw, var(--space-6))
-    var(--space-5);
+  --main-pad-top: var(--space-4);
+  --main-pad-x: clamp(var(--space-4), 4vw, var(--space-6));
+  padding: var(--main-pad-top) var(--main-pad-x) var(--space-5);
 }
 
-@media (max-width: 899px) {
+@media (max-width: 1023px) {
   .lesson-bar {
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-4);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--space-1) var(--space-4);
     padding: var(--space-2) var(--space-4);
   }
   .lesson-bar__title {
-    flex: 1 1 0;
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .lesson-bar__steps {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .lesson-menu {
+    grid-column: 3;
+    grid-row: 1;
   }
   .lesson-bar__progress {
-    flex: 1 1 100%;
-    order: 10;
+    grid-column: 1 / 3;
+    grid-row: 2;
+    min-width: 0;
   }
   .lesson-bar__estimate {
-    order: 11;
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+  }
+  .action-bar {
+    padding-inline: var(--space-4);
+  }
+  .action-bar__text {
+    font-size: var(--text-code);
   }
 }
 
 @media (max-width: 767px) {
-  .action-bar {
-    gap: var(--space-3);
-    padding: var(--space-4);
-  }
-  .action-bar__text {
-    flex-basis: 16rem;
-    font-size: var(--text-body);
-  }
   .lesson-main {
+    --main-pad-top: var(--space-4);
+    --main-pad-x: var(--space-4);
     padding: var(--space-4);
+  }
+  .lesson-frame--immersive .lesson-main {
+    --main-pad-top: var(--space-4);
+    --main-pad-x: var(--space-4);
   }
 }
 
@@ -301,6 +323,7 @@
     padding-block: var(--space-2);
   }
   .lesson-frame--immersive .lesson-main {
+    --main-pad-top: var(--space-2);
     padding-block: var(--space-2);
   }
 }

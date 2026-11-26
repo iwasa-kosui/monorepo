@@ -1667,18 +1667,17 @@ test.describe('導入 調査の画面', () => {
         const scroller = document.scrollingElement ?? document.documentElement;
         const barTop = (): number =>
           document.querySelector('[data-investigation] .status-bar')?.getBoundingClientRect().top ?? -999;
-        const before = barTop();
         if (main !== null) main.scrollTop = main.scrollHeight;
         return {
           pageFits: scroller.scrollHeight <= scroller.clientHeight,
           moved: main?.scrollTop ?? 0,
-          before,
+          mainTop: main?.getBoundingClientRect().top ?? 999,
           after: barTop(),
         };
       });
       expect(scrolled.pageFits).toBe(true);
       expect(scrolled.moved).toBeGreaterThan(0);
-      expect(Math.abs(scrolled.after - scrolled.before)).toBeLessThanOrEqual(2);
+      expect(Math.abs(scrolled.after - scrolled.mainTop)).toBeLessThanOrEqual(1);
       await expect(scene(page).getByRole('group', { name: '対応の状況' })).toBeInViewport({ ratio: 1 });
     });
   }
