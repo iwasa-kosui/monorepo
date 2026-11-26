@@ -23,23 +23,6 @@ type PostMeta = {
   title: string;
   ogTitle?: string;
   slug: string;
-  ogIcon?: string;
-  ogSvg?: string;
-};
-
-const OG_ICONS: Record<string, { label: string; bgColor: string; textColor: string }> = {
-  typescript: { label: 'TS', bgColor: '#3178C6', textColor: '#FFFFFF' },
-  go: { label: 'Go', bgColor: '#00ADD8', textColor: '#FFFFFF' },
-  nodejs: { label: 'Node', bgColor: '#339933', textColor: '#FFFFFF' },
-  react: { label: 'React', bgColor: '#61DAFB', textColor: '#20232A' },
-  python: { label: 'Py', bgColor: '#3776AB', textColor: '#FFFFFF' },
-  rust: { label: 'Rs', bgColor: '#DEA584', textColor: '#000000' },
-  docker: { label: 'Docker', bgColor: '#2496ED', textColor: '#FFFFFF' },
-  aws: { label: 'AWS', bgColor: '#FF9900', textColor: '#232F3E' },
-  gcp: { label: 'GCP', bgColor: '#4285F4', textColor: '#FFFFFF' },
-  infra: { label: 'Infra', bgColor: '#6C757D', textColor: '#FFFFFF' },
-  math: { label: 'Math', bgColor: '#8B5CF6', textColor: '#FFFFFF' },
-  isucon: { label: 'ISUCON', bgColor: '#E8614D', textColor: '#FFFFFF' },
 };
 
 const COLORS = {
@@ -112,10 +95,8 @@ const loadMdxFiles = (dir: string): PostMeta[] => {
       ?.slice(1)
       .find((v) => v != null)
       ?.replace(/\\n/g, '\n');
-    const ogIcon = fm.match(/^ogIcon:\s*(?:"(.+)"|'(.+)'|(.+))$/m)?.slice(1).find((v) => v != null);
-    const ogSvg = fm.match(/^ogSvg:\s*(?:"(.+)"|'(.+)'|(.+))$/m)?.slice(1).find((v) => v != null);
 
-    return [{ title, ogTitle, slug, ogIcon, ogSvg }];
+    return [{ title, ogTitle, slug }];
   });
 };
 
@@ -133,63 +114,6 @@ const getTitleFontSize = (title: string): number => {
   if (len <= 35) return 58;
   if (len <= 50) return 50;
   return 44;
-};
-
-const createIconBadge = (ogIcon: string): SatoriNode | null => {
-  const icon = OG_ICONS[ogIcon];
-  if (!icon) return null;
-
-  return {
-    type: 'div',
-    props: {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: icon.bgColor,
-        color: icon.textColor,
-        fontSize: '18px',
-        fontWeight: 'bold',
-        borderRadius: '8px',
-        padding: '6px 16px',
-        fontFamily: 'Noto Sans JP',
-      },
-      children: icon.label,
-    },
-  };
-};
-
-const loadCustomSvg = (ogSvg: string, size: number): SatoriNode | null => {
-  const svgPath = path.join(process.cwd(), 'scripts', 'og-icons', `${ogSvg}.svg`);
-  if (!fs.existsSync(svgPath)) {
-    console.warn(`SVG file not found: ${svgPath}`);
-    return null;
-  }
-
-  const svgContent = fs.readFileSync(svgPath, 'utf-8');
-
-  return {
-    type: 'div',
-    props: {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: `${size}px`,
-        height: `${size}px`,
-        flexShrink: 0,
-      },
-      children: {
-        type: 'img',
-        props: {
-          src: `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`,
-          width: size,
-          height: size,
-          style: { width: `${size}px`, height: `${size}px` },
-        },
-      },
-    },
-  };
 };
 
 const loadShoreDataUrl = (): string => {
@@ -323,25 +247,18 @@ const estimateLineCount = (title: string, fontSize: number, face: FontFace): num
       return total + lines.length;
     }, 0);
 
-const getFittingFontSize = (
-  title: string,
-  face: FontFace,
-  maxHeight: number,
-  maxFontSize = Number.POSITIVE_INFINITY,
-): number => {
-  const initial = Math.min(getTitleFontSize(title), maxFontSize);
+const getFittingFontSize = (title: string, face: FontFace, maxHeight: number): number => {
+  const initial = getTitleFontSize(title);
   const candidates = [initial, ...TITLE_FONT_SIZES.filter((size) => size < initial)];
-  return candidates.find((size) => estimateLineCount(title, size, face) * size * TITLE_LINE_HEIGHT <= maxHeight)
-    ?? candidates[candidates.length - 1];
+  const specifiedLines = title.includes('\n') ? title.split('\n').length : Infinity;
+  return candidates.find((size) => {
+    const lineCount = estimateLineCount(title, size, face);
+    return lineCount * size * TITLE_LINE_HEIGHT <= maxHeight && lineCount <= specifiedLines;
+  }) ?? candidates[candidates.length - 1];
 };
 
-const createTitle = (
-  title: string,
-  face: FontFace,
-  maxHeight: number,
-  maxFontSize = Number.POSITIVE_INFINITY,
-): SatoriNode => {
-  const fontSize = getFittingFontSize(title, face, maxHeight, maxFontSize);
+const createTitle = (title: string, face: FontFace, maxHeight: number): SatoriNode => {
+  const fontSize = getFittingFontSize(title, face, maxHeight);
   return {
     type: 'div',
     props: {
@@ -359,28 +276,8 @@ const createTitle = (
   };
 };
 
-const createOgImage = (post: PostMeta, shore: string, face: FontFace): SatoriNode => {
-  const visualNode = post.ogSvg ? loadCustomSvg(post.ogSvg, 160) : null;
-  const badgeNode = post.ogIcon ? createIconBadge(post.ogIcon) : null;
-
-  const bodyChildren: SatoriNode[] = [];
-  if (visualNode) {
-    bodyChildren.push({
-      type: 'div',
-      props: { style: { display: 'flex', marginBottom: '24px' }, children: visualNode },
-    });
-  } else if (badgeNode) {
-    bodyChildren.push({
-      type: 'div',
-      props: { style: { display: 'flex', marginBottom: '20px' }, children: badgeNode },
-    });
-  }
-  bodyChildren.push(
-    createTitle(post.ogTitle ?? post.title, face, visualNode ? 252 : 376, visualNode ? 54 : undefined),
-  );
-
-  return createFrame(shore, [createBrandMark(), createBodyBlock(bodyChildren)]);
-};
+const createOgImage = (post: PostMeta, shore: string, face: FontFace): SatoriNode =>
+  createFrame(shore, [createBrandMark(), createBodyBlock([createTitle(post.ogTitle ?? post.title, face, 376)])]);
 
 const createReportOgImage = (report: PostMeta, shore: string, face: FontFace): SatoriNode =>
   createFrame(shore, [
