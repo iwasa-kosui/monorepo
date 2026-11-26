@@ -21,7 +21,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/01': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師が、医療や教育を支えるシステムの設計に関心を持ってほしい理由を話すのを聞きます。',
+    role: '講師の話を聞きます。',
   },
   'intro/02': {
     flow: 'try',
@@ -32,17 +32,17 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/03': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師が、医療のシステムに求められる品質と、記録に助けられた経験を話すのを聞きます。',
+    role: '講師の話を聞きます。',
   },
   'intro/04': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師が、イベントソーシングの見られ方と、段階的に適用する考え方を話すのを聞きます。',
+    role: '講師の話を聞きます。',
   },
   'intro/05': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師が、このハンズオンの目的を話すのを聞きます。',
+    role: '講師の話を聞きます。',
   },
   'intro/06': {
     flow: 'try',
@@ -52,7 +52,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/07': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師が、コードを見ない開発の時代の品質保証を話すのを聞きます。',
+    role: '講師の話を聞きます。',
   },
   'chapter-1/01': {
     flow: 'problem',
