@@ -69,6 +69,7 @@ apps/kosui-me/src/content/reports/*-architect-digest.mdx
 ```yaml
 ---
 title: "Architect Digest: {DATE}"
+ogTitle: "Architect Digest\n{DATE}"
 date: "{DATE}T12:00:00+09:00"
 slug: "{YYYY}/{MM}/{DD}/architect-digest"
 description: "（調査内容に基づく1行要約）"

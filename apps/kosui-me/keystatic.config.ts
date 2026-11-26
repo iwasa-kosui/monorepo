@@ -17,6 +17,10 @@ const contentComponents = {
 
 const postSchema = {
   title: fields.slug({ name: { label: 'Title' } }),
+  ogTitle: fields.text({
+    label: 'OG Title',
+    description: 'OGP 画像の中に表示するタイトル。\\n で改行位置を指定する',
+  }),
   date: fields.text({ label: 'Date' }),
   updatedDate: fields.text({
     label: 'Updated Date',

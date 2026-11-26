@@ -5,6 +5,7 @@ const posts = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/posts' }),
   schema: z.object({
     title: z.string(),
+    ogTitle: z.string().optional(),
     date: z.string(),
     updatedDate: z.string().optional(),
     slug: z.string(),
@@ -20,6 +21,7 @@ const reports = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/reports' }),
   schema: z.object({
     title: z.string(),
+    ogTitle: z.string().optional(),
     date: z.string(),
     updatedDate: z.string().optional(),
     slug: z.string(),

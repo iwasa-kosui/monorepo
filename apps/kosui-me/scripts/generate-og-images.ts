@@ -23,6 +23,7 @@ type PostMeta = {
   title: string;
   ogTitle?: string;
   slug: string;
+  date: string;
 };
 
 const COLORS = {
@@ -32,17 +33,24 @@ const COLORS = {
   accent: '#c04a40',
 } as const;
 
-const loadFont = async (): Promise<ArrayBuffer> => {
-  const localFontPath = path.join(process.cwd(), 'scripts', 'fonts', 'NotoSansJP-Bold.ttf');
+type FontWeight = 500 | 700;
+
+const FONT_FILE_NAMES: Record<FontWeight, string> = {
+  500: 'NotoSansJP-Medium.ttf',
+  700: 'NotoSansJP-Bold.ttf',
+};
+
+const loadFont = async (weight: FontWeight): Promise<ArrayBuffer> => {
+  const localFontPath = path.join(process.cwd(), 'scripts', 'fonts', FONT_FILE_NAMES[weight]);
 
   if (fs.existsSync(localFontPath)) {
-    console.log('Using local font file...');
+    console.log(`Using local font file (${weight})...`);
     const fontBuffer = fs.readFileSync(localFontPath);
     return fontBuffer.buffer.slice(fontBuffer.byteOffset, fontBuffer.byteOffset + fontBuffer.byteLength);
   }
 
-  console.log('Fetching font from Google Fonts API...');
-  const cssUrl = 'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700&display=swap';
+  console.log(`Fetching font (${weight}) from Google Fonts API...`);
+  const cssUrl = `https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@${weight}&display=swap`;
 
   const cssResponse = await fetch(cssUrl, {
     headers: {
@@ -74,7 +82,7 @@ const loadFont = async (): Promise<ArrayBuffer> => {
     fs.mkdirSync(fontsDir, { recursive: true });
   }
   fs.writeFileSync(localFontPath, Buffer.from(fontArrayBuffer));
-  console.log('Font saved to local cache.');
+  console.log(`Font (${weight}) saved to local cache.`);
 
   return fontArrayBuffer;
 };
@@ -95,8 +103,9 @@ const loadMdxFiles = (dir: string): PostMeta[] => {
       ?.slice(1)
       .find((v) => v != null)
       ?.replace(/\\n/g, '\n');
+    const date = fm.match(/^date:\s*(?:"(.+)"|'(.+)'|(.+))$/m)?.slice(1).find((v) => v != null) ?? '';
 
-    return [{ title, ogTitle, slug }];
+    return [{ title, ogTitle, slug, date }];
   });
 };
 
@@ -107,6 +116,8 @@ const loadPosts = (): PostMeta[] => {
 const loadReports = (): PostMeta[] => {
   return loadMdxFiles(path.join(process.cwd(), 'src', 'content', 'reports'));
 };
+
+const formatDate = (date: string): string => date.slice(0, 10).replaceAll('-', '.');
 
 const getTitleFontSize = (title: string): number => {
   const len = [...title].length;
@@ -147,19 +158,65 @@ const createFrame = (shore: string, children: SatoriNode[]): SatoriNode => ({
   },
 });
 
-const createBrandMark = (): SatoriNode => ({
+const createSiteName = (): SatoriNode => ({
   type: 'div',
   props: {
     style: {
       position: 'absolute',
-      top: '56px',
+      top: '60px',
       left: '64px',
       display: 'flex',
-      fontSize: '48px',
+      fontSize: '28px',
+      fontWeight: 500,
       color: COLORS.ink,
-      fontWeight: 700,
+      letterSpacing: '0.06em',
     },
     children: 'kosui.me',
+  },
+});
+
+const createMetaRow = (date: string, label?: string): SatoriNode => ({
+  type: 'div',
+  props: {
+    style: {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: '20px',
+    },
+    children: [
+      ...(label === undefined
+        ? []
+        : [
+          {
+            type: 'div',
+            props: {
+              style: {
+                display: 'flex',
+                fontSize: '22px',
+                fontWeight: 500,
+                color: COLORS.accent,
+                letterSpacing: '0.08em',
+                marginRight: '20px',
+              },
+              children: label,
+            },
+          },
+        ]),
+      {
+        type: 'div',
+        props: {
+          style: {
+            display: 'flex',
+            fontSize: '22px',
+            fontWeight: 500,
+            color: COLORS.muted,
+            letterSpacing: '0.08em',
+          },
+          children: formatDate(date),
+        },
+      },
+    ],
   },
 });
 
@@ -184,14 +241,16 @@ const graphemeSegmenter = new Intl.Segmenter('ja', { granularity: 'grapheme' });
 const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
 const WORD_JOINER = String.fromCharCode(0x2060);
 const TITLE_BLOCK_WIDTH = 620;
+const TITLE_LETTER_SPACING = 0.01;
 const LEADING_PUNCTUATION = /^[:;,.!?、。，．：；！？)）」』】]*\s*/;
 
 const estimateWidth = (text: string, fontSize: number, face: FontFace): number =>
   [...text].reduce((sum, ch) => {
-    if (ch === ZERO_WIDTH_SPACE || ch === WORD_JOINER) return sum;
+    const letterSpacing = TITLE_LETTER_SPACING * fontSize;
+    if (ch === ZERO_WIDTH_SPACE || ch === WORD_JOINER) return sum + letterSpacing;
     const glyph = face.charToGlyph(ch);
     const advance = glyph.index === 0 ? face.unitsPerEm : (glyph.advanceWidth ?? face.unitsPerEm);
-    return sum + (advance / face.unitsPerEm) * fontSize;
+    return sum + (advance / face.unitsPerEm) * fontSize + letterSpacing;
   }, 0);
 
 const joinRun = (run: string, fontSize: number, face: FontFace): string => {
@@ -235,14 +294,16 @@ const estimateLineCount = (title: string, fontSize: number, face: FontFace): num
   breakTitle(title, fontSize, face)
     .split('\n')
     .reduce((total, line) => {
-      const units = line.split(ZERO_WIDTH_SPACE).flatMap((phrase) => phrase.split(/(?<=\s)/));
+      const units = line.split(/(?<=\u200b)/).flatMap((phrase) => phrase.split(/(?<=\s)/));
       const lines = units.reduce<string[]>((acc, unit) => {
-        const text = unit.replaceAll(WORD_JOINER, '');
         const current = acc[acc.length - 1];
-        if (current !== undefined && estimateWidth((current + text).trimEnd(), fontSize, face) <= TITLE_BLOCK_WIDTH) {
-          return [...acc.slice(0, -1), current + text];
+        if (
+          current !== undefined
+          && estimateWidth((current + unit).replace(/[\s\u200b]+$/, ''), fontSize, face) <= TITLE_BLOCK_WIDTH
+        ) {
+          return [...acc.slice(0, -1), current + unit];
         }
-        return [...acc, text];
+        return [...acc, unit];
       }, []);
       return total + lines.length;
     }, 0);
@@ -268,6 +329,7 @@ const createTitle = (title: string, face: FontFace, maxHeight: number): SatoriNo
         fontWeight: 700,
         color: COLORS.ink,
         lineHeight: TITLE_LINE_HEIGHT,
+        letterSpacing: `${TITLE_LETTER_SPACING}em`,
         textAlign: 'left',
         whiteSpace: 'pre-line',
       },
@@ -277,25 +339,16 @@ const createTitle = (title: string, face: FontFace, maxHeight: number): SatoriNo
 };
 
 const createOgImage = (post: PostMeta, shore: string, face: FontFace): SatoriNode =>
-  createFrame(shore, [createBrandMark(), createBodyBlock([createTitle(post.ogTitle ?? post.title, face, 376)])]);
+  createFrame(shore, [
+    createSiteName(),
+    createBodyBlock([createMetaRow(post.date), createTitle(post.ogTitle ?? post.title, face, 376)]),
+  ]);
 
 const createReportOgImage = (report: PostMeta, shore: string, face: FontFace): SatoriNode =>
   createFrame(shore, [
-    createBrandMark(),
+    createSiteName(),
     createBodyBlock([
-      {
-        type: 'div',
-        props: {
-          style: {
-            display: 'flex',
-            fontSize: '34px',
-            fontWeight: 700,
-            color: COLORS.accent,
-            marginBottom: '12px',
-          },
-          children: '🤖 生成AIレポート:',
-        },
-      },
+      createMetaRow(report.date, '🤖 生成AIレポート'),
       createTitle(report.ogTitle ?? report.title, face, 376),
     ]),
   ]);
@@ -306,14 +359,27 @@ const createDefaultOgImage = (shore: string): SatoriNode =>
       {
         type: 'div',
         props: {
-          style: { display: 'flex', fontSize: '88px', fontWeight: 700, color: COLORS.ink },
+          style: {
+            display: 'flex',
+            fontSize: '88px',
+            fontWeight: 700,
+            color: COLORS.ink,
+            letterSpacing: '0.01em',
+          },
           children: 'kosui.me',
         },
       },
       {
         type: 'div',
         props: {
-          style: { display: 'flex', fontSize: '30px', color: COLORS.muted, marginTop: '12px' },
+          style: {
+            display: 'flex',
+            fontSize: '24px',
+            fontWeight: 500,
+            color: COLORS.muted,
+            letterSpacing: '0.06em',
+            marginTop: '16px',
+          },
           children: 'TypeScript, Node.js, Infrastructure',
         },
       },
@@ -344,18 +410,18 @@ const loadEmoji = async (segment: string): Promise<string> => {
   return '';
 };
 
-const generateImage = async (element: SatoriNode, font: ArrayBuffer): Promise<Buffer> => {
+type OgFont = { data: ArrayBuffer; weight: FontWeight };
+
+const generateImage = async (element: SatoriNode, fonts: OgFont[]): Promise<Buffer> => {
   const svg = await satori(element, {
     width: 1200,
     height: 630,
-    fonts: [
-      {
-        name: 'Noto Sans JP',
-        data: font,
-        weight: 700,
-        style: 'normal',
-      },
-    ],
+    fonts: fonts.map(({ data, weight }) => ({
+      name: 'Noto Sans JP',
+      data,
+      weight,
+      style: 'normal' as const,
+    })),
     loadAdditionalAsset: async (languageCode: string, segment: string) => {
       if (languageCode === 'emoji') {
         return loadEmoji(segment);
@@ -377,8 +443,10 @@ const slugToFileName = (slug: string): string => slug.replace(/\//g, '-');
 
 const main = async (): Promise<void> => {
   console.log('Loading font...');
-  const font = await loadFont();
-  const face = opentype.parse(font);
+  const medium = await loadFont(500);
+  const bold = await loadFont(700);
+  const fonts: OgFont[] = [{ data: medium, weight: 500 }, { data: bold, weight: 700 }];
+  const face = opentype.parse(bold);
   const shore = loadShoreDataUrl();
   const posts = loadPosts();
 
@@ -388,13 +456,13 @@ const main = async (): Promise<void> => {
   }
 
   console.log('Generating default.png...');
-  const defaultPng = await generateImage(createDefaultOgImage(shore), font);
+  const defaultPng = await generateImage(createDefaultOgImage(shore), fonts);
   fs.writeFileSync(path.join(outputDir, 'default.png'), defaultPng);
 
   for (const post of posts) {
     const fileName = `${slugToFileName(post.slug)}.png`;
     console.log(`Generating ${fileName}...`);
-    const png = await generateImage(createOgImage(post, shore, face), font);
+    const png = await generateImage(createOgImage(post, shore, face), fonts);
     fs.writeFileSync(path.join(outputDir, fileName), png);
   }
 
@@ -402,7 +470,7 @@ const main = async (): Promise<void> => {
   for (const report of reports) {
     const fileName = `${slugToFileName(report.slug)}.png`;
     console.log(`Generating report ${fileName}...`);
-    const png = await generateImage(createReportOgImage(report, shore, face), font);
+    const png = await generateImage(createReportOgImage(report, shore, face), fonts);
     fs.writeFileSync(path.join(outputDir, fileName), png);
   }
 

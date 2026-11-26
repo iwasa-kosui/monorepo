@@ -201,6 +201,7 @@ CONDITIONAL/REWORK の場合、ディレクターの指摘を**そのままユ�
 ```mdx
 ---
 title: "記事タイトル"
+ogTitle: "OGP 画像用のタイトル\n改行位置を指定する"
 date: "YYYY-MM-DDTHH:MM:SS+09:00"
 slug: "posts/YYYY/MM/DD/<slug-suffix>"
 description: "記事の要約。100〜150文字程度"
@@ -215,6 +216,10 @@ private: true
 - 保存先: `apps/kosui-me/src/content/posts/`
 - `date` は現在日時を使用（+09:00 JST）
 - `private: true` を必ず設定（公開はユーザーが手動で行う）
+- `ogTitle` は、OGP 画像の中に表示するタイトルである。ページのタイトルと `og:title` には使われない
+- `ogTitle` は、`title` の言い回しを変えずに、副題（「:」や「—」の後ろ）と繰り返しを省いて短くする
+- `ogTitle` は、`\n` で改行位置を指定する。文節の区切りで改行し、2〜4行にする
+- `ogTitle` の1行は、全角 10 文字程度までにする。英数字は、2文字を全角1文字として数える
 
 ### 文体・スタイル
 
