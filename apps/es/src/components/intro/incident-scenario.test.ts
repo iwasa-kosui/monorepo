@@ -120,6 +120,14 @@ describe('障害対応の筋書き', () => {
     ]);
   });
 
+  it('チャンネルの既定は「# 問い合わせ対応」で、一覧の末尾に「# ハンズオン」がある', () => {
+    const { chat } = incidentScenario;
+    expect(chat.channel).toBe('# 問い合わせ対応');
+    expect(chat.channels.find((channel) => channel.current === true)?.name).toBe('# 問い合わせ対応');
+    expect(chat.channels.map((channel) => channel.name).at(-1)).toBe('# ハンズオン');
+    expect(actors['kosui']).toBeUndefined();
+  });
+
   it('投稿者の名前と最終の返信の文面がある', () => {
     expect(actors['support']?.name).toBe('カスタマーサポート');
     expect(actors['you']?.name).toBe('あなた');

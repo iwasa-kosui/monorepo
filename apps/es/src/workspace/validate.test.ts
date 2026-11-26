@@ -29,4 +29,24 @@ describe('筋書きの検査', () => {
     expect(problems.join('\n')).toContain('at と when のどちらか一方');
     expect(() => assertScenario(broken)).toThrow('問題があります');
   });
+
+  it('chat.channels に無いチャンネルを指す発言を見つける', () => {
+    const broken: WorkspaceScenario = {
+      ...incidentScenario,
+      history: [{ actor: 'support', channel: '# nowhere', text: 'x' }],
+      timeline: [{ at: 1, kind: 'post', post: { actor: 'support', channel: '# elsewhere', text: 'y' } }],
+    };
+    const problems = scenarioProblems(broken).join('\n');
+    expect(problems).toContain('history[0] のチャンネル # nowhere');
+    expect(problems).toContain('timeline[0] のチャンネル # elsewhere');
+  });
+
+  it('chat.channels にあるチャンネルを指す発言は、問題にしない', () => {
+    const channel = incidentScenario.chat.channels[0]?.name ?? '';
+    const scenario: WorkspaceScenario = {
+      ...incidentScenario,
+      history: [{ actor: 'support', channel, text: 'x' }],
+    };
+    expect(scenarioProblems(scenario)).toEqual([]);
+  });
 });

@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { projectFilesOf } from '../../lib/snapshots';
-import { signalNames, type WorkspaceScenario } from '../../workspace/scenario';
+import { typingStartMs } from '../../workspace/channel';
+import { type Post, signalNames, type WorkspaceScenario } from '../../workspace/scenario';
 import { scenarioProblems } from '../../workspace/validate';
 import { incidentScenario } from '../intro/incident-scenario';
 import { lessonScenarios } from './index';
@@ -47,7 +48,7 @@ const textsOf = (scenario: WorkspaceScenario): string[] => [
   ),
 ];
 
-const postsOf = (scenario: WorkspaceScenario): { readonly actor: string; readonly text: string }[] => [
+const postsOf = (scenario: WorkspaceScenario): Post[] => [
   ...scenario.history,
   ...scenario.timeline.flatMap((event) => (event.kind === 'post' ? [event.post] : [])),
 ];
@@ -76,8 +77,8 @@ const tamaAsked = 'あと、タマちゃん（visit-tama）の方もキャンセ
 const tamaAnswer = 'タマの方は、記録を足す前のキャンセルなので、理由は残ってないです…';
 const tamaAcknowledged = 'そうなんですね…了解です';
 const otherTeams = '記録の話、ほかのチームからも相談が来てます';
-const threeConsultations =
-  '3つあるので順番に見ていきましょう。自分が挙げた質問に近いのはどれか、考えながら見てもらえると';
+const threeConsultations = '3つあるので順番に見ていきましょう';
+const closestQuestion = '自分が挙げた質問に近いのはどれか、考えながら見てもらえると';
 const financeGreeting = 'お疲れ様です。昨日のキャンセル件数の件で質問です';
 const financeAsked = '集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？';
 const financeAnswer = '記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです';
@@ -112,7 +113,7 @@ const earlier: readonly (readonly [string, string])[] = [
   ['support', inquiry],
   ['support', whyNotRecorded],
   ['techlead', afterIncident],
-  ['techlead', ownQuestion],
+  ['kosui', ownQuestion],
   ['techlead', wantRecord],
   ['techlead', runTests],
   ['techlead', failedFour],
@@ -121,6 +122,7 @@ const earlier: readonly (readonly [string, string])[] = [
 const chapter4Texts = [
   otherTeams,
   threeConsultations,
+  closestQuestion,
   financeGreeting,
   financeAsked,
   financeAnswer,
@@ -153,6 +155,13 @@ const opened = (scenario: WorkspaceScenario): (readonly [string, string])[] =>
 
 const openedAt = (scenario: WorkspaceScenario): (number | undefined)[] =>
   scenario.timeline.flatMap((event) => (event.at !== undefined && event.kind === 'post' ? [event.at] : []));
+
+const timedPostsOf = (scenario: WorkspaceScenario): { readonly at: number; readonly channel: string }[] =>
+  scenario.timeline.flatMap((event) =>
+    event.at !== undefined && event.kind === 'post'
+      ? [{ at: event.at, channel: event.post.channel ?? scenario.chat.channel }]
+      : []
+  );
 
 describe('第1章から第4章とまとめの筋書き', () => {
   it('19 ページ分あり、章のページと同じ ID を持つ', () => {
@@ -190,7 +199,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(slots.filter((slot) => slot !== 'composer').sort()).toEqual(slotted.sort());
   });
 
-  it('発言者は、カスタマーサポート、あなた、テックリード、経理、情シスの 5 人で、頭文字と色が異なる', () => {
+  it('発言者は、カスタマーサポート、あなた、テックリード、経理、情シス、kosui の 6 人で、頭文字と色が異なる', () => {
     for (const [, scenario] of entries) {
       const actors = Object.values(scenario.actors);
       expect(actors.map((actor) => [actor.name, actor.avatar, actor.tone])).toEqual([
@@ -199,9 +208,10 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['テックリード', 'テ', 'violet'],
         ['経理', '経', 'green'],
         ['情シス', '情', 'amber'],
+        ['kosui', 'k', 'slate'],
       ]);
-      expect(new Set(actors.map((actor) => actor.avatar)).size).toBe(5);
-      expect(new Set(actors.map((actor) => actor.tone)).size).toBe(5);
+      expect(new Set(actors.map((actor) => actor.avatar)).size).toBe(6);
+      expect(new Set(actors.map((actor) => actor.tone)).size).toBe(6);
       expect(Object.values(scenario.actors).filter((actor) => actor.self === true).map((actor) => actor.name)).toEqual([
         'あなた',
       ]);
@@ -214,11 +224,32 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(first?.actors['you']).toEqual(incidentScenario.actors['you']);
   });
 
-  it('チャンネルは「# 問い合わせ対応」', () => {
+  it('既定のチャンネルは「# 問い合わせ対応」で、一覧の末尾に「# ハンズオン」がある', () => {
     for (const [, scenario] of entries) {
       expect(scenario.chat.channel).toBe('# 問い合わせ対応');
       expect(scenario.chat.channels.find((channel) => channel.current === true)?.name).toBe('# 問い合わせ対応');
+      expect(scenario.chat.channels.map((channel) => channel.name).at(-1)).toBe('# ハンズオン');
     }
+  });
+
+  it('kosui の発言はすべて「# ハンズオン」に属し、他の発言者の発言はチャンネルを指定しない', () => {
+    for (const [id, scenario] of entries) {
+      for (const post of postsOf(scenario)) {
+        expect(post.channel, `${id}: ${post.text}`).toBe(post.actor === 'kosui' ? '# ハンズオン' : undefined);
+      }
+    }
+  });
+
+  it('参加者への問いかけ 5 件だけが kosui の発言である', () => {
+    const asked = new Set([ownQuestion, closestQuestion, chooseOne, decideLast, skipIfNone]);
+    const found = new Set<string>();
+    for (const [, scenario] of entries) {
+      for (const post of postsOf(scenario)) {
+        if (asked.has(post.text)) found.add(post.text);
+        expect(post.actor === 'kosui', post.text).toBe(asked.has(post.text));
+      }
+    }
+    expect(found).toEqual(asked);
   });
 
   it('折りたたむのは、演習の 2 ページと、タブが文書だけのページ', () => {
@@ -295,15 +326,32 @@ describe('第1章から第4章とまとめの筋書き', () => {
     }
   });
 
-  it('開いた時点の投稿は、2 秒おきに 1 件ずつ届く', () => {
+  it('開いた時点の投稿は、同じチャンネルでは 2 秒おき、チャンネルが変わるときは 4.5 秒おきに 1 件ずつ届く', () => {
     for (const [id, scenario] of entries) {
-      const times = openedAt(scenario);
-      expect(times, id).toEqual(times.map((_, index) => index * 2));
+      const timed = timedPostsOf(scenario);
+      const expected = timed.reduce<number[]>((times, item, index) => {
+        const previous = index === 0 ? scenario.chat.channel : timed[index - 1]?.channel;
+        const gap = item.channel === previous ? 2 : 4.5;
+        const last = times[index - 1];
+        return [...times, last === undefined ? (gap === 2 ? 0 : gap) : last + gap];
+      }, []);
+      expect(openedAt(scenario), id).toEqual(expected);
+    }
+  });
+
+  it('チャンネルが切り替わる前の発言は、表示されてから 3 秒以上見える', () => {
+    for (const [id, scenario] of entries) {
+      const timed = timedPostsOf(scenario);
+      timed.forEach((item, index) => {
+        const previous = timed[index - 1];
+        if (previous === undefined || previous.channel === item.channel) return;
+        expect(typingStartMs(item.at) - previous.at * 1000, `${id}[${index}]`).toBeGreaterThanOrEqual(3000);
+      });
     }
   });
 
   describe('第1章', () => {
-    it('1 ページ目は、導入のやり取りを履歴に持ち、開いた時点でテックリードが 2 件投稿する', () => {
+    it('1 ページ目は、導入のやり取りを履歴に持ち、開いた時点でテックリードと kosui が 1 件ずつ投稿する', () => {
       const scenario = lessonScenarios['chapter-1/01'];
       expect(scenario).toBeDefined();
       if (scenario === undefined) return;
@@ -311,7 +359,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['support', inquiry],
         ['support', whyNotRecorded],
       ]);
-      expect(opened(scenario)).toEqual([['techlead', afterIncident], ['techlead', ownQuestion]]);
+      expect(opened(scenario)).toEqual([['techlead', afterIncident], ['kosui', ownQuestion]]);
       expect(summary(scenario)).toEqual(['memo:doc:データ変更の記録について']);
     });
 
@@ -322,7 +370,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['support', inquiry],
         ['support', whyNotRecorded],
         ['techlead', afterIncident],
-        ['techlead', ownQuestion],
+        ['kosui', ownQuestion],
       ]);
       expect(opened(scenario)).toEqual([['techlead', wantRecord], ['techlead', runTests]]);
       const waiting = scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]));
@@ -489,7 +537,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       return scenario.history.map((post) => [post.actor, post.text] as const);
     };
 
-    it('1 ページ目は、第3章 4 ページ目の最後のやり取りを履歴に持ち、開いた時点でテックリードが 2 件投稿する', () => {
+    it('1 ページ目は、第3章 4 ページ目の最後のやり取りを履歴に持ち、開いた時点でテックリードが 2 件、kosui が 1 件投稿する', () => {
       const scenario = lessonScenarios['chapter-4/01'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       expect(history('chapter-4/01')).toEqual([
@@ -497,7 +545,11 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['you', tamaAnswer],
         ['support', tamaAcknowledged],
       ]);
-      expect(opened(scenario)).toEqual([['techlead', otherTeams], ['techlead', threeConsultations]]);
+      expect(opened(scenario)).toEqual([
+        ['techlead', otherTeams],
+        ['techlead', threeConsultations],
+        ['kosui', closestQuestion],
+      ]);
       expect(summary(scenario)).toEqual(['memo:doc:相談の一覧']);
       expect(scenario.chat.buttons).toEqual([]);
       expect(scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]))).toEqual([]);
@@ -506,7 +558,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     const consultations = [
       {
         id: 'chapter-4/02',
-        history: [['techlead', otherTeams], ['techlead', threeConsultations]],
+        history: [['techlead', otherTeams], ['techlead', threeConsultations], ['kosui', closestQuestion]],
         opened: [['finance', financeGreeting], ['finance', financeAsked]],
         answer: financeAnswer,
         follow: ['finance', financeThanks],
@@ -597,7 +649,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       },
     );
 
-    it('5 ページ目は、情シスとのやり取りを履歴に持ち、テックリードが 2 件投稿する', () => {
+    it('5 ページ目は、情シスとのやり取りを履歴に持ち、開いた時点でテックリードと kosui が 1 件ずつ投稿する', () => {
       const scenario = lessonScenarios['chapter-4/05'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       expect(history('chapter-4/05')).toEqual([
@@ -606,14 +658,14 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['you', auditAnswer],
         ['it', auditThanks],
       ]);
-      expect(opened(scenario)).toEqual([['techlead', comparisonMade], ['techlead', chooseOne]]);
+      expect(opened(scenario)).toEqual([['techlead', comparisonMade], ['kosui', chooseOne]]);
       expect(summary(scenario)).toEqual(['memo:doc:3つのパターンの比較']);
     });
 
     it('6 ページ目は、文書を最初のタブにし、3 つの開始コードを別々のエディタのタブにする', () => {
       const scenario = lessonScenarios['chapter-4/06'];
       if (scenario === undefined) throw new Error('筋書きがありません');
-      expect(history('chapter-4/06')).toEqual([['techlead', comparisonMade], ['techlead', chooseOne]]);
+      expect(history('chapter-4/06')).toEqual([['techlead', comparisonMade], ['kosui', chooseOne]]);
       expect(opened(scenario)).toEqual([['techlead', takeHome], ['techlead', startingCodes]]);
       expect(summary(scenario)).toEqual([
         'guide:doc:持ち帰りの演習',
@@ -634,11 +686,11 @@ describe('第1章から第4章とまとめの筋書き', () => {
       expect(summary(scenario)).toEqual(['memo:doc:本日の実施内容']);
     });
 
-    it('2 ページ目は、1 ページ目のテックリードの 2 件を履歴に持ち、入力欄と文書だけを持つ', () => {
+    it('2 ページ目は、1 ページ目のテックリードの 2 件を履歴に持ち、開いた時点で kosui が 2 件投稿し、入力欄と文書だけを持つ', () => {
       const scenario = lessonScenarios['summary/02'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       expect(pairs({ ...scenario, timeline: [] })).toEqual([['techlead', goodWork], ['techlead', todayMemo]]);
-      expect(opened(scenario)).toEqual([['techlead', decideLast], ['techlead', skipIfNone]]);
+      expect(opened(scenario)).toEqual([['kosui', decideLast], ['kosui', skipIfNone]]);
       expect(summary(scenario)).toEqual(['memo:doc:持ち帰る手順']);
       expect(scenario.chat.buttons).toEqual([]);
       expect(mdxOf('summary/02')).toMatch(/<Fragment slot="composer">\n<OwnQuestion id="summary-update" /);

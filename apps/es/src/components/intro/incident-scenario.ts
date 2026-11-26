@@ -1,4 +1,5 @@
 import type { Condition, EarlierLog, SignalRef, WorkspaceScenario } from '../../workspace/scenario';
+import { handsOnChannel } from '../chapters/common';
 
 export const startedAt = Date.UTC(2026, 10, 6, 18, 20, 0);
 
@@ -156,6 +157,7 @@ export const incidentScenario: WorkspaceScenario = {
       { name: '# dev' },
       { name: '# 問い合わせ対応', current: true },
       { name: '# 障害対応' },
+      { name: handsOnChannel },
     ],
     channel: '# 問い合わせ対応',
     placeholder: '# 問い合わせ対応 へのメッセージ',

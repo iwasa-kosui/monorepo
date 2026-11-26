@@ -1,5 +1,6 @@
 import { setAction } from '../lesson/action-bar';
 import { notifyNudge, nudgeAttribute, nudgeTextAttribute } from '../lesson/nudge';
+import { typingLeadMs, typingStartMs } from './channel';
 import { createChat } from './chat';
 import { clockOf, formatElapsed } from './clock';
 import { hasFired, isMet, keyOf, record } from './conditions';
@@ -30,7 +31,6 @@ import {
 } from './scheduler';
 import { createTabs } from './tabs';
 
-const typingLeadMs = 1500;
 const signalDelayMs = 1200;
 
 export const mountWorkspace = (root: HTMLElement): void => {
@@ -338,7 +338,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
         }
         if (event.when !== undefined && !reducedMotion()) {
           const due = atMs + signalDelayMs;
-          chat.setTyping(event.post.actor);
+          chat.setTyping(event.post);
           scheduler.schedule([{ at: due, run: () => chat.addPost(event.post, due) }]);
           return;
         }
@@ -372,12 +372,12 @@ export const mountWorkspace = (root: HTMLElement): void => {
       const at = event.at;
       if (at === undefined) return [];
       const items: ScheduledItem[] = [{ at: at * 1000, run: () => perform(event, at * 1000) }];
-      const typingFrom = at * 1000 - typingLeadMs;
+      const typingFrom = typingStartMs(at);
       if (event.kind === 'post' && typingFrom > 0 && !reducedMotion()) {
         items.push({
           at: typingFrom,
           run: () => {
-            if (event.unlessReplied !== true || !state.replied) chat.setTyping(event.post.actor);
+            if (event.unlessReplied !== true || !state.replied) chat.setTyping(event.post);
           },
         });
       }
@@ -483,7 +483,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
         const typingFrom = Math.max(previous, due - typingLeadMs);
         previous = due;
         const last = index === reply.followUps.length - 1;
-        const typing = (): void => chat.setTyping(item.actor);
+        const typing = (): void => chat.setTyping({ actor: item.actor });
         if (!reducedMotion() && typingFrom <= at) typing();
         return [
           ...(!reducedMotion() && typingFrom > at ? [{ at: typingFrom, run: typing }] : []),
@@ -538,7 +538,6 @@ export const mountWorkspace = (root: HTMLElement): void => {
   });
   const questionInput = root.querySelector<HTMLTextAreaElement>('[data-own-question] textarea');
   if (questionInput !== null) {
-    questionInput.placeholder = scenario.chat.placeholder;
     questionInput.addEventListener('input', () => {
       if (questionInput.value.trim() !== '') emit('question:written');
     });

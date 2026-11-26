@@ -1,3 +1,4 @@
+import { channelOfPost, placeholderOf, postsInChannel } from './channel';
 import { minuteOf } from './clock';
 import { cloneFirst, fillText, must } from './dom';
 import type { MemoView } from './rules';
@@ -19,7 +20,7 @@ export type Chat = {
   readonly addPost: (post: Post, atMs: number) => void;
   readonly showHistory: () => void;
   readonly clear: () => void;
-  readonly setTyping: (actor: string) => void;
+  readonly setTyping: (post: Pick<Post, 'actor' | 'channel'>) => void;
   readonly clearTyping: () => void;
   readonly isOpen: () => boolean;
   readonly closeRail: () => boolean;
@@ -43,6 +44,13 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const tabBadgeLabel = root.querySelector<HTMLElement>('[data-chat-unread-label]');
   const typing = root.querySelector<HTMLElement>('[data-typing]');
   const typingText = root.querySelector<HTMLElement>('[data-typing-text]');
+  const channelTitle = root.querySelector<HTMLElement>('[data-channel-title]');
+  const channelItems = [...root.querySelectorAll<HTMLElement>('[data-channel]')];
+  const placeholder = root.querySelector<HTMLElement>('[data-placeholder]');
+  const questionInput = root.querySelector<HTMLTextAreaElement>('[data-own-question] textarea');
+  const defaultChannel = scenario.chat.channel;
+  const entries: { readonly post: Post; readonly element: HTMLElement }[] = [];
+  let channel = defaultChannel;
   let typingActor: string | null = null;
   let unread = 0;
   let open = false;
@@ -51,9 +59,39 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
 
   const visible = (): boolean => (tabbed ? front : rail === null || open);
 
-  const setTyping = (actor: string): void => {
-    typingActor = actor;
-    if (typingText !== null) typingText.textContent = `${scenario.actors[actor]?.name ?? actor} が入力中…`;
+  const layoutFeed = (): void => {
+    const shown = new Set(postsInChannel(entries.map((entry) => entry.post), channel, defaultChannel));
+    let previous: string | null = null;
+    const elements: HTMLElement[] = [];
+    for (const entry of entries) {
+      if (!shown.has(entry.post)) continue;
+      entry.element.classList.toggle('is-continued', previous === entry.post.actor);
+      previous = entry.post.actor;
+      elements.push(entry.element);
+    }
+    feed.replaceChildren(...elements);
+    feed.scrollTop = feed.scrollHeight;
+  };
+
+  const renderPlaceholder = (): void => {
+    const text = placeholderOf(channel, defaultChannel, scenario.chat.placeholder);
+    if (placeholder !== null) placeholder.textContent = text;
+    if (questionInput !== null) questionInput.placeholder = text;
+  };
+
+  const showChannel = (next: string): void => {
+    if (next === channel) return;
+    channel = next;
+    if (channelTitle !== null) channelTitle.textContent = channel;
+    for (const item of channelItems) item.classList.toggle('on', item.dataset.channel === channel);
+    renderPlaceholder();
+    layoutFeed();
+  };
+
+  const setTyping = (post: Pick<Post, 'actor' | 'channel'>): void => {
+    showChannel(channelOfPost(post, defaultChannel));
+    typingActor = post.actor;
+    if (typingText !== null) typingText.textContent = `${scenario.actors[post.actor]?.name ?? post.actor} が入力中…`;
     typing?.setAttribute('data-active', '');
   };
 
@@ -100,6 +138,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const append = (post: Post, atMs: number, counted: boolean): void => {
     const copy = cloneFirst(postTemplate, 'li');
     const actor = scenario.actors[post.actor];
+    const shown = channelOfPost(post, defaultChannel) === channel;
     copy.classList.toggle('is-continued', (feed.lastElementChild as HTMLElement | null)?.dataset.actor === post.actor);
     copy.dataset.actor = post.actor;
     copy.classList.toggle('is-you', actor?.self === true);
@@ -108,16 +147,22 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     fillText(copy, '[data-name]', actor?.name ?? post.actor);
     fillText(copy, '[data-time]', post.time ?? minuteOf(scenario.startedAt + atMs));
     fillText(copy, '[data-text]', post.text);
-    feed.append(copy);
-    feed.scrollTop = feed.scrollHeight;
+    entries.push({ post, element: copy });
+    if (shown) {
+      feed.append(copy);
+      feed.scrollTop = feed.scrollHeight;
+    }
     if (typingActor === post.actor) clearTyping();
-    if (counted && !visible() && actor?.self !== true) {
+    if (counted && shown && !visible() && actor?.self !== true) {
       unread += 1;
       renderRail();
     }
   };
 
-  const addPost = (post: Post, atMs: number): void => append(post, atMs, true);
+  const addPost = (post: Post, atMs: number): void => {
+    showChannel(channelOfPost(post, defaultChannel));
+    append(post, atMs, true);
+  };
 
   const showHistory = (): void => {
     for (const post of scenario.history) append(post, 0, false);
@@ -157,12 +202,15 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     }
   };
 
+  renderPlaceholder();
   showHistory();
 
   return {
     addPost,
     showHistory,
     clear: () => {
+      entries.splice(0);
+      showChannel(defaultChannel);
       feed.replaceChildren();
       clearTyping();
       unread = 0;
