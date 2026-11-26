@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
+import { loadDefaultJapaneseParser } from 'budoux';
 import satori from 'satori';
+import sharp from 'sharp';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SatoriNode = any;
@@ -30,11 +32,10 @@ const OG_ICONS: Record<string, { label: string; bgColor: string; textColor: stri
 };
 
 const COLORS = {
-  background: '#FFF5F3',
-  accent: '#E8614D',
-  card: '#FFFFFF',
-  title: '#1A1A1A',
-  subtitle: '#888888',
+  sand: '#f3e4da',
+  ink: '#1f2740',
+  muted: '#4b526d',
+  accent: '#c04a40',
 } as const;
 
 const loadFont = async (): Promise<ArrayBuffer> => {
@@ -116,83 +117,11 @@ const loadReports = (): PostMeta[] => {
 };
 
 const getTitleFontSize = (title: string): number => {
-  const len = title.length;
-  if (len <= 20) return 64;
-  if (len <= 35) return 56;
-  if (len <= 50) return 48;
-  return 42;
-};
-
-const createCornerSwirl = (position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'): SatoriNode => {
-  const rotations: Record<string, string> = {
-    'top-left': '0deg',
-    'top-right': '90deg',
-    'bottom-right': '180deg',
-    'bottom-left': '270deg',
-  };
-
-  const positions: Record<string, Record<string, string | number>> = {
-    'top-left': { top: 0, left: 0 },
-    'top-right': { top: 0, right: 0 },
-    'bottom-left': { bottom: 0, left: 0 },
-    'bottom-right': { bottom: 0, right: 0 },
-  };
-
-  return {
-    type: 'div',
-    props: {
-      style: {
-        position: 'absolute',
-        width: '120px',
-        height: '120px',
-        display: 'flex',
-        ...positions[position],
-      },
-      children: {
-        type: 'svg',
-        props: {
-          width: '120',
-          height: '120',
-          viewBox: '0 0 120 120',
-          style: {
-            transform: `rotate(${rotations[position]})`,
-          },
-          children: [
-            {
-              type: 'path',
-              props: {
-                d: 'M0,0 Q60,10 40,60 Q30,80 0,80',
-                fill: 'none',
-                stroke: COLORS.accent,
-                strokeWidth: '2',
-                opacity: '0.3',
-              },
-            },
-            {
-              type: 'path',
-              props: {
-                d: 'M0,0 Q40,20 30,50 Q20,70 0,60',
-                fill: 'none',
-                stroke: COLORS.accent,
-                strokeWidth: '2',
-                opacity: '0.2',
-              },
-            },
-            {
-              type: 'circle',
-              props: {
-                cx: '8',
-                cy: '8',
-                r: '3',
-                fill: COLORS.accent,
-                opacity: '0.4',
-              },
-            },
-          ],
-        },
-      },
-    },
-  };
+  const len = [...title].length;
+  if (len <= 20) return 60;
+  if (len <= 35) return 50;
+  if (len <= 50) return 44;
+  return 38;
 };
 
 const createIconBadge = (ogIcon: string): SatoriNode | null => {
@@ -215,96 +144,6 @@ const createIconBadge = (ogIcon: string): SatoriNode | null => {
         fontFamily: 'Noto Sans JP',
       },
       children: icon.label,
-    },
-  };
-};
-
-const createShrimpIcon = (size: number): SatoriNode => {
-  // Pixel art shrimp - extracted from reference image (17x14 grid)
-  const body: [number, number][] = [
-    [4, 0],
-    [5, 0],
-    [6, 0],
-    [3, 1],
-    [7, 1],
-    [8, 1],
-    [9, 1],
-    [3, 2],
-    [10, 2],
-    [3, 3],
-    [5, 3],
-    [11, 3],
-    [4, 4],
-    [5, 4],
-    [6, 4],
-    [12, 4],
-    [5, 5],
-    [7, 5],
-    [13, 5],
-    [5, 6],
-    [6, 6],
-    [7, 6],
-    [8, 6],
-    [14, 6],
-    [6, 7],
-    [7, 7],
-    [8, 7],
-    [9, 7],
-    [15, 7],
-    [3, 8],
-    [4, 8],
-    [7, 8],
-    [8, 8],
-    [9, 8],
-    [15, 8],
-    [5, 9],
-    [6, 9],
-    [7, 9],
-    [8, 9],
-    [9, 9],
-    [15, 9],
-    [4, 10],
-    [6, 10],
-    [7, 10],
-    [8, 10],
-    [9, 10],
-    [16, 10],
-    [0, 11],
-    [1, 11],
-    [5, 11],
-    [6, 11],
-    [7, 11],
-    [8, 11],
-    [16, 11],
-    [1, 12],
-    [2, 12],
-    [3, 12],
-    [4, 12],
-    [5, 12],
-    [6, 12],
-    [16, 12],
-    [0, 13],
-    [1, 13],
-    [2, 13],
-  ];
-  const eye: [number, number] = [6, 5];
-
-  const children: SatoriNode[] = body.map(([x, y]) => ({
-    type: 'rect',
-    props: { x: String(x), y: String(y), width: '1', height: '1', fill: '#EE7B6F' },
-  }));
-  children.push({
-    type: 'rect',
-    props: { x: String(eye[0]), y: String(eye[1]), width: '1', height: '1', fill: '#3750B1' },
-  });
-
-  return {
-    type: 'svg',
-    props: {
-      width: String(size),
-      height: String(Math.round((size * 14) / 17)),
-      viewBox: '0 0 17 14',
-      children,
     },
   };
 };
@@ -342,400 +181,193 @@ const loadCustomSvg = (ogSvg: string, size: number): SatoriNode | null => {
   };
 };
 
-const createOgImage = (post: PostMeta): SatoriNode => {
-  const hasVisual = !!post.ogSvg;
-  const visualNode = post.ogSvg ? loadCustomSvg(post.ogSvg, 280) : null;
-  const badgeNode = post.ogIcon ? createIconBadge(post.ogIcon) : null;
-  const displayTitle = post.ogTitle ?? post.title;
-  const fontSize = hasVisual ? Math.min(getTitleFontSize(post.title), 48) : getTitleFontSize(post.title);
-
-  let cardChildren: SatoriNode[];
-
-  if (visualNode) {
-    // Side-by-side layout: title left + visual right
-    cardChildren = [
-      {
-        type: 'div',
-        props: {
-          style: {
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: '40px',
-            width: '100%',
-          },
-          children: [
-            {
-              type: 'div',
-              props: {
-                style: {
-                  display: 'flex',
-                  fontSize: `${fontSize}px`,
-                  fontWeight: 'bold',
-                  color: COLORS.title,
-                  lineHeight: 1.4,
-                  whiteSpace: 'pre-line',
-                  flex: 1,
-                },
-                children: displayTitle,
-              },
-            },
-            visualNode,
-          ],
-        },
-      },
-    ];
-  } else {
-    // Default centered layout
-    cardChildren = [
-      {
-        type: 'div',
-        props: {
-          style: {
-            display: 'flex',
-            fontSize: `${fontSize}px`,
-            fontWeight: 'bold',
-            color: COLORS.title,
-            lineHeight: 1.4,
-            textAlign: 'center',
-            justifyContent: 'center',
-            flex: 1,
-            alignItems: 'center',
-            padding: '0 20px',
-          },
-          children: post.title,
-        },
-      },
-    ];
-
-    if (badgeNode) {
-      cardChildren.push({
-        type: 'div',
-        props: {
-          style: {
-            display: 'flex',
-            justifyContent: 'flex-end',
-            marginTop: '12px',
-          },
-          children: badgeNode,
-        },
-      });
-    }
-  }
-
-  return {
-    type: 'div',
-    props: {
-      style: {
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: COLORS.background,
-        fontFamily: 'Noto Sans JP',
-        position: 'relative',
-      },
-      children: [
-        createCornerSwirl('top-right'),
-        createCornerSwirl('bottom-left'),
-        createCornerSwirl('bottom-right'),
-        {
-          type: 'div',
-          props: {
-            style: {
-              position: 'absolute',
-              top: '28px',
-              left: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-            },
-            children: [
-              createShrimpIcon(64),
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    fontSize: '48px',
-                    fontWeight: 'bold',
-                    color: COLORS.accent,
-                  },
-                  children: 'kosui.me',
-                },
-              },
-            ],
-          },
-        },
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              flexDirection: 'column',
-              backgroundColor: COLORS.card,
-              borderRadius: '16px',
-              padding: '40px 50px',
-              margin: '80px 60px 0 60px',
-              width: '1080px',
-              // 新しい satori は width を content-box として扱う。padding 込みで 1080px に収める。
-              boxSizing: 'border-box',
-              minHeight: '360px',
-              maxHeight: '420px',
-              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
-              justifyContent: 'center',
-            },
-            children: cardChildren,
-          },
-        },
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              justifyContent: 'flex-end',
-              width: '1080px',
-              boxSizing: 'border-box',
-              marginTop: '16px',
-              paddingRight: '8px',
-            },
-            children: {
-              type: 'div',
-              props: {
-                style: {
-                  fontSize: '18px',
-                  color: COLORS.subtitle,
-                },
-                children: 'by kosui',
-              },
-            },
-          },
-        },
-      ],
-    },
-  };
+const loadShoreDataUrl = (): string => {
+  const png = fs.readFileSync(path.join(process.cwd(), 'scripts', 'og-assets', 'shore.png'));
+  return `data:image/png;base64,${png.toString('base64')}`;
 };
 
-const createReportOgImage = (report: PostMeta): SatoriNode => {
-  const displayTitle = report.ogTitle ?? report.title;
-  const fontSize = getTitleFontSize(displayTitle);
-
-  return {
-    type: 'div',
-    props: {
-      style: {
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: COLORS.background,
-        fontFamily: 'Noto Sans JP',
-        position: 'relative',
-      },
-      children: [
-        createCornerSwirl('top-right'),
-        createCornerSwirl('bottom-left'),
-        createCornerSwirl('bottom-right'),
-        {
-          type: 'div',
-          props: {
-            style: {
-              position: 'absolute',
-              top: '28px',
-              left: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-            },
-            children: [
-              createShrimpIcon(64),
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    fontSize: '48px',
-                    fontWeight: 'bold',
-                    color: COLORS.accent,
-                  },
-                  children: 'kosui.me',
-                },
-              },
-            ],
-          },
-        },
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              flexDirection: 'column',
-              backgroundColor: COLORS.card,
-              borderRadius: '16px',
-              padding: '40px 50px',
-              margin: '80px 60px 0 60px',
-              width: '1080px',
-              // 新しい satori は width を content-box として扱う。padding 込みで 1080px に収める。
-              boxSizing: 'border-box',
-              minHeight: '360px',
-              maxHeight: '420px',
-              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
-              justifyContent: 'center',
-            },
-            children: [
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: '24px',
-                    width: '100%',
-                  },
-                  children: [
-                    {
-                      type: 'div',
-                      props: {
-                        style: {
-                          display: 'flex',
-                          flexDirection: 'column',
-                          width: '100%',
-                        },
-                        children: [
-                          {
-                            type: 'div',
-                            props: {
-                              style: {
-                                fontSize: '36px',
-                                fontWeight: 'bold',
-                                color: COLORS.accent,
-                                marginBottom: '16px',
-                              },
-                              children: '🤖 生成AIレポート:',
-                            },
-                          },
-                          {
-                            type: 'div',
-                            props: {
-                              style: {
-                                fontSize: `${fontSize}px`,
-                                fontWeight: 'bold',
-                                color: COLORS.title,
-                                lineHeight: 1.4,
-                              },
-                              children: displayTitle,
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          },
-        },
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              justifyContent: 'flex-end',
-              width: '1080px',
-              boxSizing: 'border-box',
-              marginTop: '16px',
-              paddingRight: '8px',
-            },
-            children: {
-              type: 'div',
-              props: {
-                style: {
-                  fontSize: '18px',
-                  color: COLORS.subtitle,
-                },
-                children: 'by kosui',
-              },
-            },
-          },
-        },
-      ],
-    },
-  };
-};
-
-const createDefaultOgImage = (): SatoriNode => ({
+const createFrame = (shore: string, children: SatoriNode[]): SatoriNode => ({
   type: 'div',
   props: {
     style: {
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: COLORS.background,
-      fontFamily: 'Noto Sans JP',
+      width: '1200px',
+      height: '630px',
       position: 'relative',
+      display: 'flex',
+      backgroundColor: COLORS.sand,
+      fontFamily: 'Noto Sans JP',
     },
     children: [
-      createCornerSwirl('top-right'),
-      createCornerSwirl('bottom-left'),
-      createCornerSwirl('bottom-right'),
+      {
+        type: 'img',
+        props: {
+          src: shore,
+          width: 1200,
+          height: 630,
+          style: { position: 'absolute', top: 0, left: 0, width: '1200px', height: '630px' },
+        },
+      },
+      ...children,
+    ],
+  },
+});
+
+const createBrandMark = (): SatoriNode => ({
+  type: 'div',
+  props: {
+    style: {
+      position: 'absolute',
+      top: '56px',
+      left: '64px',
+      display: 'flex',
+      fontSize: '36px',
+      color: COLORS.ink,
+      fontWeight: 700,
+    },
+    children: 'kosui.me',
+  },
+});
+
+const createBodyBlock = (children: SatoriNode[]): SatoriNode => ({
+  type: 'div',
+  props: {
+    style: {
+      position: 'absolute',
+      left: '64px',
+      bottom: '64px',
+      width: '620px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+    },
+    children,
+  },
+});
+
+const budouxParser = loadDefaultJapaneseParser();
+const graphemeSegmenter = new Intl.Segmenter('ja', { granularity: 'grapheme' });
+const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
+const WORD_JOINER = String.fromCharCode(0x2060);
+const TITLE_BLOCK_WIDTH = 620;
+const LEADING_PUNCTUATION = /^[:;,.!?、。，．：；！？)）」』】]*\s*/;
+
+const estimateWidth = (text: string, fontSize: number): number =>
+  [...text].reduce((sum, ch) => sum + (/[\x21-\x7e]/.test(ch) ? 0.62 : 1) * fontSize, 0);
+
+const joinRun = (run: string, fontSize: number): string => {
+  const graphemes = [...graphemeSegmenter.segment(run)].map((s) => s.segment);
+  const overlong = estimateWidth(run, fontSize) > TITLE_BLOCK_WIDTH;
+  const glue = overlong ? ZERO_WIDTH_SPACE : WORD_JOINER;
+  return graphemes.reduce((acc, g, i) => {
+    if (i === 0) return g;
+    const sticky = !overlong && /^[A-Za-z0-9]$/.test(graphemes[i - 1]) && /^[A-Za-z0-9]$/.test(g);
+    return acc + (sticky ? '' : glue) + g;
+  }, '');
+};
+
+const splitPhrases = (line: string): string[] =>
+  budouxParser.parse(line).reduce<string[]>((phrases, phrase) => {
+    const lead = phrase.match(LEADING_PUNCTUATION)?.[0] ?? '';
+    if (lead === '' || phrases.length === 0) return [...phrases, phrase];
+    const rest = phrase.slice(lead.length);
+    return [...phrases.slice(0, -1), phrases[phrases.length - 1] + lead, ...(rest === '' ? [] : [rest])];
+  }, []);
+
+const breakTitle = (title: string, fontSize: number): string =>
+  title
+    .split('\n')
+    .map((line) =>
+      splitPhrases(line)
+        .map((phrase) =>
+          phrase
+            .split(/(\s+)/)
+            .map((part, i) => (i % 2 === 1 ? part : joinRun(part, fontSize)))
+            .join('')
+        )
+        .join(ZERO_WIDTH_SPACE)
+    )
+    .join('\n');
+
+const createTitle = (title: string, maxFontSize = Number.POSITIVE_INFINITY): SatoriNode => {
+  const fontSize = Math.min(getTitleFontSize(title), maxFontSize);
+  return {
+    type: 'div',
+    props: {
+      style: {
+        display: 'flex',
+        fontSize: `${fontSize}px`,
+        fontWeight: 700,
+        color: COLORS.ink,
+        lineHeight: 1.4,
+        textAlign: 'left',
+        whiteSpace: 'pre-line',
+      },
+      children: breakTitle(title, fontSize),
+    },
+  };
+};
+
+const createOgImage = (post: PostMeta, shore: string): SatoriNode => {
+  const visualNode = post.ogSvg ? loadCustomSvg(post.ogSvg, 160) : null;
+  const badgeNode = post.ogIcon ? createIconBadge(post.ogIcon) : null;
+
+  const bodyChildren: SatoriNode[] = [];
+  if (visualNode) {
+    bodyChildren.push({
+      type: 'div',
+      props: { style: { display: 'flex', marginBottom: '24px' }, children: visualNode },
+    });
+  } else if (badgeNode) {
+    bodyChildren.push({
+      type: 'div',
+      props: { style: { display: 'flex', marginBottom: '20px' }, children: badgeNode },
+    });
+  }
+  bodyChildren.push(createTitle(post.ogTitle ?? post.title, visualNode ? 48 : undefined));
+
+  return createFrame(shore, [createBrandMark(), createBodyBlock(bodyChildren)]);
+};
+
+const createReportOgImage = (report: PostMeta, shore: string): SatoriNode =>
+  createFrame(shore, [
+    createBrandMark(),
+    createBodyBlock([
       {
         type: 'div',
         props: {
           style: {
             display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: COLORS.card,
-            borderRadius: '16px',
-            padding: '50px 60px',
-            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
+            fontSize: '30px',
+            fontWeight: 700,
+            color: COLORS.accent,
+            marginBottom: '12px',
           },
-          children: [
-            {
-              type: 'div',
-              props: {
-                style: {
-                  display: 'flex',
-                  marginBottom: '12px',
-                },
-                children: createShrimpIcon(36),
-              },
-            },
-            {
-              type: 'div',
-              props: {
-                style: {
-                  fontSize: '64px',
-                  fontWeight: 'bold',
-                  color: COLORS.accent,
-                  marginBottom: '12px',
-                },
-                children: 'kosui.me',
-              },
-            },
-            {
-              type: 'div',
-              props: {
-                style: {
-                  fontSize: '22px',
-                  color: COLORS.subtitle,
-                },
-                children: 'TypeScript, Node.js, Infrastructure',
-              },
-            },
-          ],
+          children: '🤖 生成AIレポート:',
         },
       },
-    ],
-  },
-});
+      createTitle(report.ogTitle ?? report.title),
+    ]),
+  ]);
+
+const createDefaultOgImage = (shore: string): SatoriNode =>
+  createFrame(shore, [
+    createBodyBlock([
+      {
+        type: 'div',
+        props: {
+          style: { display: 'flex', fontSize: '72px', fontWeight: 700, color: COLORS.ink },
+          children: 'kosui.me',
+        },
+      },
+      {
+        type: 'div',
+        props: {
+          style: { display: 'flex', fontSize: '26px', color: COLORS.muted, marginTop: '12px' },
+          children: 'TypeScript, Node.js, Infrastructure',
+        },
+      },
+    ]),
+  ]);
 
 const loadEmoji = async (segment: string): Promise<string> => {
   const codePoints = [...segment]
@@ -787,7 +419,7 @@ const generateImage = async (element: SatoriNode, font: ArrayBuffer): Promise<Bu
   });
 
   const pngData = resvg.render();
-  return pngData.asPng();
+  return sharp(pngData.asPng()).png({ palette: true, quality: 90, colors: 256, dither: 1.0, effort: 10 }).toBuffer();
 };
 
 const slugToFileName = (slug: string): string => slug.replace(/\//g, '-');
@@ -795,6 +427,7 @@ const slugToFileName = (slug: string): string => slug.replace(/\//g, '-');
 const main = async (): Promise<void> => {
   console.log('Loading font...');
   const font = await loadFont();
+  const shore = loadShoreDataUrl();
   const posts = loadPosts();
 
   const outputDir = path.join(process.cwd(), 'public', 'og');
@@ -803,13 +436,13 @@ const main = async (): Promise<void> => {
   }
 
   console.log('Generating default.png...');
-  const defaultPng = await generateImage(createDefaultOgImage(), font);
+  const defaultPng = await generateImage(createDefaultOgImage(shore), font);
   fs.writeFileSync(path.join(outputDir, 'default.png'), defaultPng);
 
   for (const post of posts) {
     const fileName = `${slugToFileName(post.slug)}.png`;
     console.log(`Generating ${fileName}...`);
-    const png = await generateImage(createOgImage(post), font);
+    const png = await generateImage(createOgImage(post, shore), font);
     fs.writeFileSync(path.join(outputDir, fileName), png);
   }
 
@@ -817,7 +450,7 @@ const main = async (): Promise<void> => {
   for (const report of reports) {
     const fileName = `${slugToFileName(report.slug)}.png`;
     console.log(`Generating report ${fileName}...`);
-    const png = await generateImage(createReportOgImage(report), font);
+    const png = await generateImage(createReportOgImage(report, shore), font);
     fs.writeFileSync(path.join(outputDir, fileName), png);
   }
 
