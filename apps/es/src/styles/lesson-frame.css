@@ -256,9 +256,6 @@
   max-width: var(--lesson-width);
   margin-inline: auto;
 }
-.lesson-frame .lesson-main.content > .chapter-goal {
-  max-width: 65rem;
-}
 
 .lesson-frame--immersive .content .chapter-body {
   gap: 0;
