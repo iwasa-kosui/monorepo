@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import { loadDefaultJapaneseParser } from 'budoux';
@@ -7,6 +8,16 @@ import sharp from 'sharp';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SatoriNode = any;
+
+type FontFace = {
+  unitsPerEm: number;
+  charToGlyph: (ch: string) => { index: number; advanceWidth?: number };
+};
+
+const require = createRequire(import.meta.url);
+const opentype = createRequire(require.resolve('satori/package.json'))('@shuding/opentype.js') as {
+  parse: (buffer: ArrayBuffer) => FontFace;
+};
 
 type PostMeta = {
   title: string;
@@ -118,10 +129,10 @@ const loadReports = (): PostMeta[] => {
 
 const getTitleFontSize = (title: string): number => {
   const len = [...title].length;
-  if (len <= 20) return 60;
-  if (len <= 35) return 50;
-  if (len <= 50) return 44;
-  return 38;
+  if (len <= 20) return 68;
+  if (len <= 35) return 58;
+  if (len <= 50) return 50;
+  return 44;
 };
 
 const createIconBadge = (ogIcon: string): SatoriNode | null => {
@@ -220,7 +231,7 @@ const createBrandMark = (): SatoriNode => ({
       top: '56px',
       left: '64px',
       display: 'flex',
-      fontSize: '36px',
+      fontSize: '48px',
       color: COLORS.ink,
       fontWeight: 700,
     },
@@ -251,12 +262,17 @@ const WORD_JOINER = String.fromCharCode(0x2060);
 const TITLE_BLOCK_WIDTH = 620;
 const LEADING_PUNCTUATION = /^[:;,.!?、。，．：；！？)）」』】]*\s*/;
 
-const estimateWidth = (text: string, fontSize: number): number =>
-  [...text].reduce((sum, ch) => sum + (/[\x21-\x7e]/.test(ch) ? 0.62 : 1) * fontSize, 0);
+const estimateWidth = (text: string, fontSize: number, face: FontFace): number =>
+  [...text].reduce((sum, ch) => {
+    if (ch === ZERO_WIDTH_SPACE || ch === WORD_JOINER) return sum;
+    const glyph = face.charToGlyph(ch);
+    const advance = glyph.index === 0 ? face.unitsPerEm : (glyph.advanceWidth ?? face.unitsPerEm);
+    return sum + (advance / face.unitsPerEm) * fontSize;
+  }, 0);
 
-const joinRun = (run: string, fontSize: number): string => {
+const joinRun = (run: string, fontSize: number, face: FontFace): string => {
   const graphemes = [...graphemeSegmenter.segment(run)].map((s) => s.segment);
-  const overlong = estimateWidth(run, fontSize) > TITLE_BLOCK_WIDTH;
+  const overlong = estimateWidth(run, fontSize, face) > TITLE_BLOCK_WIDTH;
   const glue = overlong ? ZERO_WIDTH_SPACE : WORD_JOINER;
   return graphemes.reduce((acc, g, i) => {
     if (i === 0) return g;
@@ -273,7 +289,7 @@ const splitPhrases = (line: string): string[] =>
     return [...phrases.slice(0, -1), phrases[phrases.length - 1] + lead, ...(rest === '' ? [] : [rest])];
   }, []);
 
-const breakTitle = (title: string, fontSize: number): string =>
+const breakTitle = (title: string, fontSize: number, face: FontFace): string =>
   title
     .split('\n')
     .map((line) =>
@@ -281,15 +297,51 @@ const breakTitle = (title: string, fontSize: number): string =>
         .map((phrase) =>
           phrase
             .split(/(\s+)/)
-            .map((part, i) => (i % 2 === 1 ? part : joinRun(part, fontSize)))
+            .map((part, i) => (i % 2 === 1 ? part : joinRun(part, fontSize, face)))
             .join('')
         )
         .join(ZERO_WIDTH_SPACE)
     )
     .join('\n');
 
-const createTitle = (title: string, maxFontSize = Number.POSITIVE_INFINITY): SatoriNode => {
-  const fontSize = Math.min(getTitleFontSize(title), maxFontSize);
+const TITLE_FONT_SIZES = [68, 58, 50, 44, 38];
+const TITLE_LINE_HEIGHT = 1.4;
+
+const estimateLineCount = (title: string, fontSize: number, face: FontFace): number =>
+  breakTitle(title, fontSize, face)
+    .split('\n')
+    .reduce((total, line) => {
+      const units = line.split(ZERO_WIDTH_SPACE).flatMap((phrase) => phrase.split(/(?<=\s)/));
+      const lines = units.reduce<string[]>((acc, unit) => {
+        const text = unit.replaceAll(WORD_JOINER, '');
+        const current = acc[acc.length - 1];
+        if (current !== undefined && estimateWidth((current + text).trimEnd(), fontSize, face) <= TITLE_BLOCK_WIDTH) {
+          return [...acc.slice(0, -1), current + text];
+        }
+        return [...acc, text];
+      }, []);
+      return total + lines.length;
+    }, 0);
+
+const getFittingFontSize = (
+  title: string,
+  face: FontFace,
+  maxHeight: number,
+  maxFontSize = Number.POSITIVE_INFINITY,
+): number => {
+  const initial = Math.min(getTitleFontSize(title), maxFontSize);
+  const candidates = [initial, ...TITLE_FONT_SIZES.filter((size) => size < initial)];
+  return candidates.find((size) => estimateLineCount(title, size, face) * size * TITLE_LINE_HEIGHT <= maxHeight)
+    ?? candidates[candidates.length - 1];
+};
+
+const createTitle = (
+  title: string,
+  face: FontFace,
+  maxHeight: number,
+  maxFontSize = Number.POSITIVE_INFINITY,
+): SatoriNode => {
+  const fontSize = getFittingFontSize(title, face, maxHeight, maxFontSize);
   return {
     type: 'div',
     props: {
@@ -298,16 +350,16 @@ const createTitle = (title: string, maxFontSize = Number.POSITIVE_INFINITY): Sat
         fontSize: `${fontSize}px`,
         fontWeight: 700,
         color: COLORS.ink,
-        lineHeight: 1.4,
+        lineHeight: TITLE_LINE_HEIGHT,
         textAlign: 'left',
         whiteSpace: 'pre-line',
       },
-      children: breakTitle(title, fontSize),
+      children: breakTitle(title, fontSize, face),
     },
   };
 };
 
-const createOgImage = (post: PostMeta, shore: string): SatoriNode => {
+const createOgImage = (post: PostMeta, shore: string, face: FontFace): SatoriNode => {
   const visualNode = post.ogSvg ? loadCustomSvg(post.ogSvg, 160) : null;
   const badgeNode = post.ogIcon ? createIconBadge(post.ogIcon) : null;
 
@@ -323,12 +375,14 @@ const createOgImage = (post: PostMeta, shore: string): SatoriNode => {
       props: { style: { display: 'flex', marginBottom: '20px' }, children: badgeNode },
     });
   }
-  bodyChildren.push(createTitle(post.ogTitle ?? post.title, visualNode ? 48 : undefined));
+  bodyChildren.push(
+    createTitle(post.ogTitle ?? post.title, face, visualNode ? 252 : 376, visualNode ? 54 : undefined),
+  );
 
   return createFrame(shore, [createBrandMark(), createBodyBlock(bodyChildren)]);
 };
 
-const createReportOgImage = (report: PostMeta, shore: string): SatoriNode =>
+const createReportOgImage = (report: PostMeta, shore: string, face: FontFace): SatoriNode =>
   createFrame(shore, [
     createBrandMark(),
     createBodyBlock([
@@ -337,7 +391,7 @@ const createReportOgImage = (report: PostMeta, shore: string): SatoriNode =>
         props: {
           style: {
             display: 'flex',
-            fontSize: '30px',
+            fontSize: '34px',
             fontWeight: 700,
             color: COLORS.accent,
             marginBottom: '12px',
@@ -345,7 +399,7 @@ const createReportOgImage = (report: PostMeta, shore: string): SatoriNode =>
           children: '🤖 生成AIレポート:',
         },
       },
-      createTitle(report.ogTitle ?? report.title),
+      createTitle(report.ogTitle ?? report.title, face, 376),
     ]),
   ]);
 
@@ -355,14 +409,14 @@ const createDefaultOgImage = (shore: string): SatoriNode =>
       {
         type: 'div',
         props: {
-          style: { display: 'flex', fontSize: '72px', fontWeight: 700, color: COLORS.ink },
+          style: { display: 'flex', fontSize: '88px', fontWeight: 700, color: COLORS.ink },
           children: 'kosui.me',
         },
       },
       {
         type: 'div',
         props: {
-          style: { display: 'flex', fontSize: '26px', color: COLORS.muted, marginTop: '12px' },
+          style: { display: 'flex', fontSize: '30px', color: COLORS.muted, marginTop: '12px' },
           children: 'TypeScript, Node.js, Infrastructure',
         },
       },
@@ -427,6 +481,7 @@ const slugToFileName = (slug: string): string => slug.replace(/\//g, '-');
 const main = async (): Promise<void> => {
   console.log('Loading font...');
   const font = await loadFont();
+  const face = opentype.parse(font);
   const shore = loadShoreDataUrl();
   const posts = loadPosts();
 
@@ -442,7 +497,7 @@ const main = async (): Promise<void> => {
   for (const post of posts) {
     const fileName = `${slugToFileName(post.slug)}.png`;
     console.log(`Generating ${fileName}...`);
-    const png = await generateImage(createOgImage(post, shore), font);
+    const png = await generateImage(createOgImage(post, shore, face), font);
     fs.writeFileSync(path.join(outputDir, fileName), png);
   }
 
@@ -450,7 +505,7 @@ const main = async (): Promise<void> => {
   for (const report of reports) {
     const fileName = `${slugToFileName(report.slug)}.png`;
     console.log(`Generating report ${fileName}...`);
-    const png = await generateImage(createReportOgImage(report, shore), font);
+    const png = await generateImage(createReportOgImage(report, shore, face), font);
     fs.writeFileSync(path.join(outputDir, fileName), png);
   }
 
