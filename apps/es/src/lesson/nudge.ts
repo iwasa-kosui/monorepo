@@ -2,7 +2,7 @@ export const NUDGE_EVENT = 'lesson:nudge';
 
 export const nudgeAttribute = 'data-nudge-target';
 
-export const stallMs = 60_000;
+export const stallMs = 20_000;
 
 export type Stall<T> = {
   readonly target: T | null;

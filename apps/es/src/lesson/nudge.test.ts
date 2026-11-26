@@ -21,13 +21,13 @@ const box = (left: number, top: number, width: number, height: number) => ({
 });
 
 describe('停滞の判定', () => {
-  it('停滞までの時間は 60 秒で、属性名とイベント名を持つ', () => {
-    expect(stallMs).toBe(60_000);
+  it('停滞までの時間は 20 秒で、属性名とイベント名を持つ', () => {
+    expect(stallMs).toBe(20_000);
     expect(nudgeAttribute).toBe('data-nudge-target');
     expect(NUDGE_EVENT).toBe('lesson:nudge');
   });
 
-  it('ステップの開始から 60 秒たつまでは、停滞とみなさない', () => {
+  it('ステップの開始から 20 秒たつまでは、停滞とみなさない', () => {
     const stall = startStall('button', 'do', 1_000);
     expect(isStalled(stall, 1_000)).toBe(false);
     expect(isStalled(stall, 1_000 + stallMs - 1)).toBe(false);
