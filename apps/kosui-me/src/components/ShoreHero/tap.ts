@@ -1,7 +1,7 @@
-import { cyclePalette } from './paletteSwitch';
+import { shufflePalette } from './paletteSwitch';
 
 /**
- * 海を押したら、配色を切り替える。トップページのヒーロー、記事のタイトルの帯、記事の背景で共有する。
+ * 海を押したら、海と浜の配色をでたらめに切り替える。トップページのヒーロー、記事のタイトルの帯、記事の背景で共有する。
  */
 
 /** 押したときに、それぞれの働きをするもの。海の上にあっても、配色は切り替えない */
@@ -42,7 +42,7 @@ export const watchSeaTaps = (
       && !isClear(element)
     );
     if (covered) return;
-    cyclePalette();
+    shufflePalette();
   };
   document.addEventListener('click', onClick);
   return () => document.removeEventListener('click', onClick);

@@ -3,7 +3,7 @@
  * トップページのヒーロー。
  * 砂浜に打ち上げられたドット絵のエビへ、右上の海から波が寄せては引く。
  * エビは波を重ねるごとに少しずつ沖へ攫われ、最後は海に消える。
- * 海を押すと、海の配色が切り替わる（palette.ts）。
+ * 海を押すと、海と浜の配色がでたらめに切り替わる（tone.ts）。
  *
  * 海は WebGL で描く（mount.ts）。WebGL が使えない環境では、静止したドット絵だけを見せる。
  */
@@ -19,7 +19,7 @@ const { themes } = Astro.props;
 ---
 
 <section
-  class="shore shore-palette"
+  class="shore"
   data-shore-hero
   aria-labelledby="shore-name"
 >
@@ -87,7 +87,7 @@ const { themes } = Astro.props;
 </section>
 
 <style>
-/* 海と砂の配色は global.css の .shore-palette にある（記事の背景と共有する） */
+/* 海と砂の配色は global.css の :root にある（記事の背景と共有する） */
 .shore {
   --shore-ink: #1f2740;
   --shore-muted: #4b526d;

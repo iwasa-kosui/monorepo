@@ -70,7 +70,7 @@ export type ShoreElements = Readonly<{
 
 /**
  * 海辺の描画を始める。戻り値の関数で止めて後片付けをする。
- * 海を押すと、配色が次のものへ切り替わる。
+ * 海を押すと、海と浜の配色がでたらめに切り替わる。
  * WebGL が使えない環境では何もせず、静止したドット絵（SVG）がそのまま見える。
  */
 export const mountShore = (elements: ShoreElements): () => void => {

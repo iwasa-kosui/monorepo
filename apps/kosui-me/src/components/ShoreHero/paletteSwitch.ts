@@ -1,28 +1,45 @@
-import { INITIAL_PALETTE, nextPalette, type ShorePaletteName } from './palette';
+import { INITIAL_SEA_HUE, randomTone, type ShoreTone, toneColors } from './tone';
 
 /**
  * いまの配色を覚えて、ページに反映する。
- * 配色は <html> の data-shore-palette に書き、global.css がそれを見て色を決める。
- * ページを行き来しても同じ配色のままで、ページを読み込み直すとはじめの配色に戻る。
+ * 色は <html> のカスタムプロパティに書き、global.css の値を上書きする。
+ * ページを行き来しても同じ配色のままで、ページを読み込み直すとはじめの配色（珊瑚色の海）に戻る。
  */
 
-/** 配色を切り替えたとき、document へ送るイベント */
+/** 配色が変わったとき、document へ送るイベント */
 export const PALETTE_EVENT = 'shore:palette';
 
-let current: ShorePaletteName = INITIAL_PALETTE;
+const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+
+/** でたらめに決めた配色のもと。まだ海を押していなければ undefined */
+let tone: ShoreTone | undefined;
 
 const apply = (): void => {
-  const root = document.documentElement;
-  if (current === INITIAL_PALETTE) delete root.dataset.shorePalette;
-  else root.dataset.shorePalette = current;
+  if (tone === undefined) return;
+  const colors = toneColors(tone, colorScheme.matches);
+  const { style } = document.documentElement;
+  // 浜の色は、サイト全体の地の色
+  style.setProperty('--color-bg', colors.sand);
+  style.setProperty('--shore-sea-shallow', colors.seaShallow);
+  style.setProperty('--shore-sea-deep', colors.seaDeep);
+  style.setProperty('--shore-foam', colors.foam);
+  style.setProperty('--shore-light', colors.light);
+  style.setProperty('--shore-wet-tint', colors.wetTint);
 };
 
-/** 次の配色へ切り替える */
-export const cyclePalette = (): void => {
-  current = nextPalette(current);
+/** 海の色も浜の色も、でたらめな配色へ切り替える */
+export const shufflePalette = (): void => {
+  tone = randomTone(Math.random, tone?.seaHue ?? INITIAL_SEA_HUE);
   apply();
   document.dispatchEvent(new Event(PALETTE_EVENT));
 };
 
-// ページを行き来すると、<html> の属性は新しいページのものに置き換わるので、付け直す
+// ページを行き来すると、<html> の属性は新しいページのものに置き換わるので、書き直す
 document.addEventListener('astro:after-swap', apply);
+
+// 昼と夜が入れ替わったら、同じもとから、その時間の色を作り直す
+colorScheme.addEventListener('change', () => {
+  if (tone === undefined) return;
+  apply();
+  document.dispatchEvent(new Event(PALETTE_EVENT));
+});

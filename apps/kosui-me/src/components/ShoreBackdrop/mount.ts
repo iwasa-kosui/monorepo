@@ -19,7 +19,7 @@ export type BackdropElements = Readonly<{
 
 /**
  * 記事の背景に、波打ち際を描き始める。戻り値の関数で止めて後片付けをする。
- * 海を押すと、配色が次のものへ切り替わる。
+ * 海を押すと、海と浜の配色がでたらめに切り替わる。
  * WebGL が使えない環境では何もせず、砂の地だけが見える。
  */
 export const mountBackdrop = (elements: BackdropElements): () => void => {

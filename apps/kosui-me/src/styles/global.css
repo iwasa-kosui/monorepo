@@ -69,7 +69,7 @@ body {
   background-color: var(--color-bg);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
   background-repeat: repeat;
-  /* 海の配色が変わると、砂の色も変わることがある。海と同じ速さで移り変える（ShoreHero/palette.ts の PALETTE_FADE） */
+  /* 海を押すと、砂の色も変わる。海と同じ速さで移り変える（ShoreHero/palette.ts の PALETTE_FADE） */
   transition: background-color 0.9s ease;
 }
 
@@ -86,9 +86,8 @@ body {
 }
 
 /* 海辺の配色。シェーダーがこの値を読むので、色は 16 進 6 桁で書く。砂はサイト全体の地の色と同じ。
-   海を押すと、<html> の data-shore-palette が切り替わる（ShoreHero/palette.ts）。
-   はじめは珊瑚色の海（sango）。配色を足すときは、palette.ts の名前の並びにも足す */
-.shore-palette {
+   はじめは珊瑚色の海。海を押すと、海と砂の色を <html> に書いて上書きする（ShoreHero/paletteSwitch.ts） */
+:root {
   --shore-sand: var(--color-bg);
   --shore-sea-shallow: #f0998d;
   --shore-sea-deep: #b3324b;
@@ -104,60 +103,9 @@ body {
   --shore-froth: 1;
 }
 
-/* 夏の青: 空色の浅瀬からコバルトの沖へ。青い海では、濡れた砂と影を冷たい色に寄せる */
-:root[data-shore-palette="natsu"] .shore-palette {
-  --shore-sea-shallow: #5cbdf0;
-  --shore-sea-deep: #1257c4;
-  --shore-foam: #ffffff;
-  --shore-eye: #23366f;
-  --shore-wet-tint: #cdd2d4;
-  --shore-shadow-tint: #787b90;
-}
-
-/* 礁湖: ターコイズの浅瀬が、白い砂に透ける */
-:root[data-shore-palette="shoko"] .shore-palette {
-  --shore-sea-shallow: #7fd6cf;
-  --shore-sea-deep: #1487b4;
-  --shore-foam: #ffffff;
-  --shore-light: #fffdf2;
-  --shore-eye: #1d4a78;
-  --shore-wet-tint: #d4d2ca;
-  --shore-shadow-tint: #7a8088;
-}
-
-/* 紺碧: 沖を深い紺に沈める */
-:root[data-shore-palette="konpeki"] .shore-palette {
-  --shore-sea-shallow: #4c97d4;
-  --shore-sea-deep: #0c2a6b;
-  --shore-foam: #fbfdff;
-  --shore-light: #f2f8ff;
-  --shore-eye: #1f2f6b;
-  --shore-wet-tint: #cbcfd2;
-  --shore-shadow-tint: #72748c;
-}
-
-/* 朝凪: 灰みを帯びた淡い青 */
-:root[data-shore-palette="asanagi"] .shore-palette {
-  --shore-sea-shallow: #93c6de;
-  --shore-sea-deep: #4682ad;
-  --shore-foam: #ffffff;
-  --shore-eye: #2d477f;
-  --shore-wet-tint: #d2d4d3;
-  --shore-shadow-tint: #84869a;
-  --shore-froth: 0.9;
-}
-
-/* 礁湖は砂も白い。砂はサイト全体の地の色なので、地の色ごと変える */
-@media (prefers-color-scheme: light) {
-  :root[data-shore-palette="shoko"] {
-    --color-bg: #f5ecdd;
-  }
-}
-
-/* 夜の浜: 暗い砂に青黒い海。どの配色でも、砂と、砂の粒や照り返しの強さは変えない */
+/* 夜の浜: 暗い砂に青黒い海 */
 @media (prefers-color-scheme: dark) {
-  .shore-palette,
-  :root[data-shore-palette] .shore-palette {
+  :root {
     --shore-sea-shallow: #3b6c98;
     --shore-sea-deep: #050d1c;
     --shore-foam: #dbe7f8;
@@ -170,36 +118,6 @@ body {
     --shore-grain: 2.2;
     --shore-sheen: 2;
     --shore-froth: 0.65;
-  }
-
-  :root[data-shore-palette="natsu"] .shore-palette {
-    --shore-sea-shallow: #3f78b8;
-    --shore-sea-deep: #04102a;
-    --shore-foam: #dce8f8;
-  }
-
-  :root[data-shore-palette="shoko"] .shore-palette {
-    --shore-sea-shallow: #2f8f9c;
-    --shore-sea-deep: #03161f;
-    --shore-foam: #d9f0ee;
-    --shore-light: #a6e6e0;
-    --shore-wet-tint: #a4b2c6;
-    --shore-shadow-tint: #2a3040;
-  }
-
-  :root[data-shore-palette="konpeki"] .shore-palette {
-    --shore-sea-shallow: #33598f;
-    --shore-sea-deep: #030818;
-    --shore-foam: #d5e0f5;
-    --shore-light: #9fbcf2;
-  }
-
-  :root[data-shore-palette="asanagi"] .shore-palette {
-    --shore-sea-shallow: #4f7391;
-    --shore-sea-deep: #0b1826;
-    --shore-foam: #d8e2ee;
-    --shore-light: #b4c8e0;
-    --shore-gain: 0.75;
   }
 }
 

@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  createPaletteFade,
-  INITIAL_PALETTE,
-  mixPalette,
-  nextPalette,
-  PALETTE_FADE,
-  SHORE_PALETTES,
-  type ShorePaletteName,
-} from './palette';
+import { createPaletteFade, mixPalette, PALETTE_FADE } from './palette';
 import type { Palette } from './renderer';
 
 const flat = (value: number): Palette => ({
@@ -25,19 +17,6 @@ const flat = (value: number): Palette => ({
   grain: value,
   sheen: value,
   froth: value,
-});
-
-describe('nextPalette', () => {
-  it('はじめの配色から押していくと、すべての配色を 1 度ずつ通って、はじめに戻る', () => {
-    const visited: ShorePaletteName[] = [];
-    let name: ShorePaletteName = INITIAL_PALETTE;
-    for (const _ of SHORE_PALETTES) {
-      visited.push(name);
-      name = nextPalette(name);
-    }
-    expect(visited).toEqual(SHORE_PALETTES);
-    expect(name).toBe(INITIAL_PALETTE);
-  });
 });
 
 describe('mixPalette', () => {

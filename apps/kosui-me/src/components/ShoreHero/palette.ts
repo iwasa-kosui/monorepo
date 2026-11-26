@@ -1,30 +1,8 @@
 import type { Palette } from './renderer';
 
 /**
- * 海辺の配色の切り替え。海を押すたびに、次の配色へ変わる。
- * 色の値は global.css の .shore-palette にある。ここでは、名前の順番と、色の移り変わりだけを扱う。
+ * 海辺の配色の移り変わり。海を押すと配色が変わり（tone.ts）、色は少しずつ移り変わる。
  */
-
-/**
- * 配色の名前。海を押すたびに、この順に切り替わる。先頭が、はじめの配色。
- * 珊瑚（珊瑚色の海）、夏の青、礁湖、紺碧、朝凪
- */
-export const SHORE_PALETTES = [
-  'sango',
-  'natsu',
-  'shoko',
-  'konpeki',
-  'asanagi',
-] as const;
-
-export type ShorePaletteName = (typeof SHORE_PALETTES)[number];
-
-export const INITIAL_PALETTE: ShorePaletteName = SHORE_PALETTES[0];
-
-/** `current` の次の配色。最後まで行くと、はじめに戻る */
-export const nextPalette = (current: ShorePaletteName): ShorePaletteName =>
-  SHORE_PALETTES[(SHORE_PALETTES.indexOf(current) + 1) % SHORE_PALETTES.length]
-    ?? INITIAL_PALETTE;
 
 /** 配色が移り変わるのにかける時間（ミリ秒） */
 export const PALETTE_FADE = 900;
