@@ -92,12 +92,22 @@ const hasComposer = Astro.slots.has('composer');
         <div class="status-actions">
           {
             timed && (
-              <button type="button" data-action="pause" disabled>
+              <button
+                type="button"
+                class="btn btn--text"
+                data-action="pause"
+                disabled
+              >
                 一時停止
               </button>
             )
           }
-          <button type="button" data-action="reset" disabled={timed}>
+          <button
+            type="button"
+            class="btn btn--text"
+            data-action="reset"
+            disabled={timed}
+          >
             最初からやり直す
           </button>
         </div>
@@ -131,7 +141,6 @@ const hasComposer = Astro.slots.has('composer');
       <div class="win-bar tab-strip">
         <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <div class="tabs" role="tablist" aria-label="開くツール">
-          <span class="tab-glider" aria-hidden="true" data-glider></span>
           <TabButton scenario={scenario} chat={true} />
           {
             scenario.tabs.map((tab) =>
@@ -199,7 +208,7 @@ const hasComposer = Astro.slots.has('composer');
             <p class="start-text" id={`${scenario.id}-start`}>
               {scenario.startGuide.join('')}
             </p>
-            <button type="button" class="primary" data-action="start">
+            <button type="button" class="btn" data-action="start">
               {status.start}
             </button>
           </div>
@@ -211,14 +220,10 @@ const hasComposer = Astro.slots.has('composer');
 
 <style>
 :global(.content) :global(.cfig).scene {
-  --icon-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='14' y='4' width='4' height='16' rx='1'/%3E%3Crect x='6' y='4' width='4' height='16' rx='1'/%3E%3C/svg%3E");
-  --icon-play: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='6 3 20 12 6 21 6 3'/%3E%3C/svg%3E");
-  --icon-rotate: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3C/svg%3E");
-  --icon-timer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='10' x2='14' y1='2' y2='2'/%3E%3Cline x1='12' x2='15' y1='14' y2='11'/%3E%3Ccircle cx='12' cy='14' r='8'/%3E%3C/svg%3E");
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 0.375rem;
+  gap: var(--space-2);
   border: 0;
   background: transparent;
   padding: 0;
@@ -235,87 +240,48 @@ const hasComposer = Astro.slots.has('composer');
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.125rem 1.25rem;
-  border-radius: 999px;
+  gap: 0 var(--space-6);
+  min-height: var(--tap-min);
   background: var(--role-surface);
-  padding: 0.25rem 0.3125rem 0.25rem 0.875rem;
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 .scene .status-item {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
-.scene .status-elapsed span {
-  font-weight: 700;
+.scene .status-elapsed,
+.scene .status-affected {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
 }
+.scene .status-elapsed [data-elapsed],
 .scene .status-clock time {
   font-family: var(--font-code);
-  font-weight: 700;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
 }
-.scene .status-affected strong {
+.scene .status-affected {
   color: var(--role-danger);
+  font-weight: var(--weight-bold);
 }
 .scene .status-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: var(--space-1);
   margin-left: auto;
 }
-.scene .status-actions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3125rem;
-  min-height: 1.75rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--role-sunken);
-  padding: 0 0.75rem 0 0.5625rem;
-  color: var(--role-fg);
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.scene .status-actions button::before {
-  content: "";
-  flex: none;
-  width: 0.875rem;
-  height: 0.875rem;
-  background: currentColor;
-  -webkit-mask: var(--icon-pause) center / contain no-repeat;
-  mask: var(--icon-pause) center / contain no-repeat;
-}
-.scene .status-actions button[data-action="reset"]::before {
-  -webkit-mask-image: var(--icon-rotate);
-  mask-image: var(--icon-rotate);
-}
-.scene[data-phase="paused"]
-  .status-actions
-  button[data-action="pause"]::before {
-  -webkit-mask-image: var(--icon-play);
-  mask-image: var(--icon-play);
-}
-.scene .status-actions button:hover:not(:disabled) {
-  background: var(--role-rule);
-}
-.scene .status-actions button:disabled {
-  color: var(--role-faint);
+.scene .status-actions .btn:disabled {
+  background: none;
   cursor: not-allowed;
-}
-.scene .status-affected {
-  border-radius: 999px;
-  background: var(--role-danger-soft);
-  padding: 0 0.625rem;
-  color: var(--role-danger);
-  font-size: 0.75rem;
-  font-weight: 600;
 }
 
 .scene .workspace {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 0.375rem;
+  gap: var(--space-4);
   min-width: 0;
   min-height: 0;
 }
@@ -326,39 +292,36 @@ const hasComposer = Astro.slots.has('composer');
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--role-bg) 80%, transparent);
-  padding: 1.5rem 0.75rem;
+  overflow: auto;
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--role-surface) 80%, transparent);
+  padding: var(--space-5) var(--space-3);
   backdrop-filter: blur(2px);
 }
 .scene .start-card {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 1rem;
-  max-width: 28rem;
-  border-radius: 1.25rem;
-  background: var(--role-surface);
+  gap: var(--space-4);
+  max-width: 36rem;
+  border-radius: var(--radius-xl);
+  background: var(--role-ground);
   box-shadow: var(--shadow-raised);
-  padding: 1.25rem;
+  padding: var(--space-5);
 }
 .scene .start-text {
   margin: 0;
-  font-size: 0.9375rem;
-  line-height: 1.7;
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
 }
-.scene .start button {
-  min-height: 2.75rem;
-  border: 0;
-  border-radius: 999px;
+.scene .start .btn {
+  height: var(--space-7);
   background: var(--role-accent);
-  padding: 0 1.25rem;
   color: var(--role-on-accent);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  cursor: pointer;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
 }
-.scene .start button:hover {
+.scene .start .btn:hover {
   opacity: 0.9;
 }
 .scene :global([hidden]:not(.playground *)) {
@@ -370,30 +333,29 @@ const hasComposer = Astro.slots.has('composer');
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border: 1px solid var(--role-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: var(--role-surface);
   overflow: hidden;
 }
 .scene .win-bar {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: var(--space-3);
   background: var(--role-sunken);
-  padding: 0.25rem 0.625rem;
+  padding: var(--space-1) var(--space-3);
 }
 .scene :global(.dots) {
   display: inline-flex;
   flex: none;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 .scene :global(.dots i) {
-  width: 0.625rem;
-  height: 0.625rem;
+  width: 0.75rem;
+  height: 0.75rem;
   border-radius: 50%;
-  background: var(--dot, var(--role-faint));
+  background: var(--dot, var(--role-ink-sub));
 }
-.scene :global(button:not(.playground *)) {
+:global(:where(.scene) :where(button:not(.playground *))) {
   font: inherit;
 }
 .scene :global(button:not(.playground *):focus-visible),
@@ -411,11 +373,10 @@ const hasComposer = Astro.slots.has('composer');
   --br-tab-hover: #eceff3;
   --br-nav: #5f6368;
   --br-rule: #dadce0;
-  --br-dot: #8a8f96;
+  --br-dot: #9aa0ab;
   --br-unseen-bg: #fff1c2;
   --br-unseen: #6b4300;
   --br-unseen-line: #b7791f;
-  --br-unseen-dot: #b45309;
   --br-fav-teal: #0e8f8a;
   --br-fav-violet: #632ca6;
   --br-fav-ink: #1f2328;
@@ -423,13 +384,6 @@ const hasComposer = Astro.slots.has('composer');
   --br-fav-blue: #2f6fed;
   --br-fav-azure: #007acc;
   --br-fav-plum: #4a154b;
-  --dock-bg: rgb(244 245 247 / 0.8);
-  --dock-line: rgb(0 0 0 / 0.08);
-  --dock-pill: #ffffff;
-  --dock-pill-shadow:
-    0 1px 3px rgb(0 0 0 / 0.14), 0 0 0 0.5px rgb(0 0 0 / 0.05);
-  --dock-fg: #6b7078;
-  --dock-on: #1a5fc8;
   --ring: #1a5fc8;
   --dot: var(--br-dot);
   background: var(--br-chrome);
@@ -437,42 +391,37 @@ const hasComposer = Astro.slots.has('composer');
 }
 .scene .tab-strip {
   align-items: flex-end;
-  gap: 0.625rem;
+  gap: var(--space-2);
   border-bottom: 0;
   background: var(--br-strip);
-  padding: 0.375rem 0.625rem 0;
+  padding: var(--space-2) var(--space-2) 0;
 }
 .scene .tab-strip .dots {
   align-self: center;
-  margin-bottom: 0.25rem;
 }
 .scene .tabs {
   display: flex;
   flex: 1 1 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-end;
-  gap: 0 0.125rem;
+  gap: 0 var(--space-1);
   min-width: 0;
-}
-.scene .tab-glider {
-  display: none;
 }
 .scene .address {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: var(--space-3);
   margin: 0;
-  border-bottom: 1px solid var(--br-rule);
   background: var(--br-chrome);
-  padding: 0.25rem 0.625rem;
+  padding: var(--space-2) var(--space-3);
 }
 .scene .nav {
   display: inline-flex;
   flex: none;
-  gap: 0.625rem;
+  gap: var(--space-3);
   color: var(--br-nav);
-  font-size: 0.875rem;
-  line-height: 1.6;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 .scene .nav i {
   font-style: normal;
@@ -481,12 +430,12 @@ const hasComposer = Astro.slots.has('composer');
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 0.4375rem;
+  gap: var(--space-2);
   min-width: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--br-pill);
-  padding: 0 0.75rem;
-  color: var(--br-text);
+  padding: 0 var(--space-4);
+  color: var(--role-ink-sub);
 }
 .scene .lock {
   position: relative;
@@ -513,8 +462,9 @@ const hasComposer = Astro.slots.has('composer');
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  font-size: 0.8125rem;
-  line-height: 1.6;
+  font-family: var(--font-code);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -536,14 +486,16 @@ const hasComposer = Astro.slots.has('composer');
   display: none;
 }
 .scene :global(.panel-note) {
+  position: relative;
+  z-index: 1;
   flex: none;
   margin: 0;
   border-top: 1px solid var(--pn-rule);
   background: var(--pn-bg);
-  padding: 0.25rem 0.625rem;
+  padding: var(--space-1) var(--space-3);
   color: var(--pn-fg);
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 
 .scene .workspace[data-chat-hidden] :global(.win.chat),
@@ -552,151 +504,42 @@ const hasComposer = Astro.slots.has('composer');
 }
 
 @media (max-width: 639px) {
-  :global(.content) :global(.cfig).scene {
-    gap: 0;
-    margin-inline: -1rem;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    padding: 0;
-  }
-  :global(.lesson-frame--immersive) :global(.content) :global(.cfig).scene {
-    margin-inline: -0.5rem;
-  }
   .scene .status-bar {
-    flex-wrap: nowrap;
-    gap: 0.625rem;
-    border-radius: 0;
-    padding: 0.375rem 0.625rem 0.375rem 0.875rem;
-  }
-  .scene .status-elapsed {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3125rem;
-    font-size: 0.9375rem;
-  }
-  .scene .status-elapsed::before {
-    content: "";
-    width: 1rem;
-    height: 1rem;
-    background: var(--role-muted);
-    -webkit-mask: var(--icon-timer) center / contain no-repeat;
-    mask: var(--icon-timer) center / contain no-repeat;
-  }
-  .scene .status-elapsed .status-label,
-  .scene .status-affected .status-label[data-short] {
-    font-size: 0;
-  }
-  .scene .status-clock {
-    display: none;
-  }
-  .scene .status-affected {
-    padding: 0.125rem 0.625rem;
-    white-space: nowrap;
-  }
-  .scene .status-affected .status-label[data-short]::before {
-    content: attr(data-short);
-    font-size: 0.75rem;
+    gap: 0 var(--space-4);
   }
   .scene .status-actions {
-    flex-wrap: nowrap;
-    gap: 0.375rem;
-  }
-  .scene .status-actions button {
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    padding: 0;
-    font-size: 0;
-  }
-  .scene .status-actions button::before {
-    width: 1rem;
-    height: 1rem;
+    margin-left: 0;
   }
   .scene .start {
-    padding: 1.25rem 1rem;
-  }
-  .scene :global(.win[data-window]) {
-    border-inline: 0;
-    border-radius: 0;
+    padding: var(--space-4) var(--space-3);
   }
   .scene .workspace {
-    gap: 0;
-  }
-  .scene .browser {
-    overflow: clip;
-  }
-  .scene .pages {
-    height: max(
-      20rem,
-      calc(
-        100dvh - var(--ws-top, 0px) - var(--ws-bottom, 3.5rem) -
-          var(--ws-strip, 3.8125rem)
-      )
-    );
-  }
-  .scene .workspace {
+    gap: var(--space-2);
     overflow-x: clip;
   }
-  .scene .address {
-    display: none;
-  }
   .scene .browser {
-    background: transparent;
-  }
-  .scene .tab-strip {
-    position: sticky;
-    bottom: var(--ws-bottom, 3.5rem);
-    z-index: 5;
-    order: 1;
-    background: transparent;
-    padding: 0.375rem 0.75rem 0.5rem;
+    order: -1;
   }
   .scene .tab-strip .dots {
     display: none;
   }
   .scene .tabs {
-    position: relative;
     flex-wrap: nowrap;
-    align-items: stretch;
-    gap: 0;
-    border: 1px solid var(--dock-line);
-    border-radius: 999px;
-    background: var(--dock-bg);
-    box-shadow: 0 6px 16px -8px rgb(0 0 0 / 0.28), 0 1px 2px rgb(0 0 0 / 0.06);
-    padding: 0.25rem;
     overflow-x: auto;
     overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    -webkit-backdrop-filter: saturate(1.8) blur(20px);
-    backdrop-filter: saturate(1.8) blur(20px);
   }
-  .scene .tab-glider {
-    position: absolute;
-    top: 0.25rem;
-    bottom: 0.25rem;
-    left: 0;
-    display: block;
-    width: var(--glide-w, 0px);
-    transform: translateX(var(--glide-x, 0px));
-    border-radius: 999px;
-    background: var(--dock-pill);
-    box-shadow: var(--dock-pill-shadow);
-    opacity: 0;
-    pointer-events: none;
-  }
-  .scene .tabs[data-glide] .tab-glider {
-    opacity: 1;
-  }
-  .scene .tabs::-webkit-scrollbar {
+  .scene .address {
     display: none;
   }
-  .scene[data-view="chat"] .browser {
-    position: sticky;
-    bottom: var(--ws-bottom, 3.5rem);
-    z-index: 5;
-    border-top: 0;
-    background: transparent;
+  .scene .pages {
+    height: max(
+      20rem,
+      calc(
+        var(--ws-height, 100dvh) - var(--ws-top, 0px) -
+          var(--ws-strip, 3.75rem) -
+          var(--space-2)
+      )
+    );
   }
   .scene[data-view="chat"] .pages {
     display: none;
@@ -705,22 +548,14 @@ const hasComposer = Astro.slots.has('composer');
     min-height: max(
       20rem,
       calc(
-        100dvh - var(--ws-top, 0px) - var(--ws-bottom, 3.5rem) -
-          var(--ws-strip, 3.8125rem)
+        var(--ws-height, 100dvh) - var(--ws-top, 0px) -
+          var(--ws-strip, 3.75rem) -
+          var(--space-2)
       )
     );
-    border-bottom: 0;
   }
   .scene[data-view="tools"] :global(.win.chat) {
     display: none;
-  }
-}
-
-@media (max-width: 639px) and (prefers-reduced-motion: no-preference) {
-  .scene .tabs[data-glide="live"] .tab-glider {
-    transition:
-      transform 0.42s cubic-bezier(0.3, 1.28, 0.5, 1),
-      width 0.42s cubic-bezier(0.3, 1.28, 0.5, 1);
   }
 }
 
@@ -729,9 +564,12 @@ const hasComposer = Astro.slots.has('composer');
     flex: 1 1 0;
     min-height: 26rem;
   }
+  :global(.content .chapter-body > .scene:has(.memo-list)) {
+    min-height: 32rem;
+  }
   .scene .workspace {
     flex: 1 1 0;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     grid-template-rows: minmax(0, 1fr);
   }
   .scene .workspace[data-chat-collapsed] {
@@ -749,33 +587,9 @@ const hasComposer = Astro.slots.has('composer');
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .scene .browser {
-    --br-strip: #202124;
-    --br-chrome: #35363a;
-    --br-pill: #202124;
-    --br-text: #e8eaed;
-    --br-tab: #bdc1c6;
-    --br-tab-hover: #2b2c2f;
-    --br-nav: #bdc1c6;
-    --br-rule: #4a4c50;
-    --br-dot: #6b6f75;
-    --br-unseen-bg: #4b3a0b;
-    --br-unseen: #ffd971;
-    --br-unseen-line: #b88a1a;
-    --br-unseen-dot: #ffc83d;
-    --br-fav-violet: #a98be0;
-    --br-fav-ink: #ffffff;
-    --br-fav-blue: #6e9bff;
-    --br-fav-azure: #3aa0e8;
-    --br-fav-plum: #c58ac8;
-    --dock-bg: rgb(44 48 56 / 0.76);
-    --dock-line: rgb(255 255 255 / 0.1);
-    --dock-pill: rgb(255 255 255 / 0.13);
-    --dock-pill-shadow: inset 0 0.5px 0 rgb(255 255 255 / 0.14);
-    --dock-fg: #a3a9b2;
-    --dock-on: #9cc2ff;
-    --ring: #8ab4f8;
+@media (max-height: 720px) {
+  .scene .address {
+    padding-block: var(--space-1);
   }
 }
 </style>

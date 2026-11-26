@@ -330,22 +330,40 @@ const showDocument = async (page: Page): Promise<void> => {
 test.describe('第2章の図は、ボタンを押さずに全体を読める', () => {
   for (const size of desktopSizes) {
     for (const item of staticFigures) {
-      test(`${item.name} ${size.width}x${size.height} で、図の高さが文書の表示域に収まる`, async ({ page }) => {
+      test(`${item.name} ${size.width}x${size.height} で、ページ全体は縦にスクロールせず、図の全体は文書の領域の中で読める`, async ({ page }) => {
         await page.setViewportSize(size);
         await page.goto(item.path);
-        const heights = await page.locator(item.selector).evaluate((figure) => ({
-          figure: figure.getBoundingClientRect().height,
-          view: figure.closest('.doc-scroll')?.clientHeight ?? 0,
+        const pageSize = await page.evaluate(() => ({
+          scrollHeight: document.scrollingElement?.scrollHeight ?? 0,
+          clientHeight: document.scrollingElement?.clientHeight ?? 0,
         }));
-        expect(heights.view).toBeGreaterThan(0);
-        expect(heights.figure).toBeLessThanOrEqual(heights.view);
+        expect(pageSize.scrollHeight).toBeLessThanOrEqual(pageSize.clientHeight);
+        const result = await page.locator(item.selector).evaluate((figure) => {
+          const area = figure.closest('.doc-scroll');
+          if (!(area instanceof HTMLElement)) return undefined;
+          const overflowY = getComputedStyle(area).overflowY;
+          area.scrollTop = area.scrollHeight;
+          const figureBottom = figure.getBoundingClientRect().bottom;
+          const areaBottom = area.getBoundingClientRect().bottom;
+          return {
+            scrolls: overflowY === 'auto' || overflowY === 'scroll',
+            canScroll: area.scrollHeight > area.clientHeight,
+            scrolled: area.scrollTop > 0,
+            reachesBottom: figureBottom <= areaBottom + 1,
+          };
+        });
+        expect(result).toBeDefined();
+        expect(result?.scrolls).toBe(true);
+        expect(result?.canScroll).toBe(true);
+        expect(result?.scrolled).toBe(true);
+        expect(result?.reachesBottom).toBe(true);
       });
     }
   }
 
   for (const size of [...desktopSizes, ...narrowSizes]) {
     for (const item of staticFigures) {
-      test(`${item.name} ${size.width}x${size.height} で、図の中身が図の幅からはみ出さない`, async ({ page }) => {
+      test(`${item.name} ${size.width}x${size.height} で、図の中身は図の幅に収まるか図の中で横にスクロールでき、ページ全体は横にスクロールしない`, async ({ page }) => {
         await page.setViewportSize(size);
         await page.goto(item.path);
         await showDocument(page);
@@ -359,10 +377,17 @@ test.describe('第2章の図は、ボタンを押さずに全体を読める', (
               outside.push(`${element.tagName.toLowerCase()}.${[...element.classList].join('.')}`);
             }
           }
-          return { width: box.width, outside };
+          const overflowX = getComputedStyle(figure).overflowX;
+          return {
+            width: box.width,
+            outside,
+            scrollsInside: (overflowX === 'auto' || overflowX === 'scroll') && figure.scrollWidth > figure.clientWidth,
+            pageOverflows: document.documentElement.scrollWidth > window.innerWidth,
+          };
         });
         expect(result.width).toBeGreaterThan(0);
-        expect(result.outside).toEqual([]);
+        expect(result.pageOverflows).toBe(false);
+        if (result.outside.length > 0) expect(result.scrollsInside).toBe(true);
       });
     }
   }

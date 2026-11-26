@@ -30,19 +30,6 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
   let shown = '';
   let shownTab: HTMLButtonElement | null = null;
 
-  const placeGlider = (): void => {
-    if (shownTab === null || shownTab.getClientRects().length === 0) return;
-    tabList.style.setProperty('--glide-x', `${shownTab.offsetLeft}px`);
-    tabList.style.setProperty('--glide-w', `${shownTab.offsetWidth}px`);
-    if (tabList.dataset.glide === undefined) {
-      tabList.dataset.glide = 'set';
-      requestAnimationFrame(() => {
-        tabList.dataset.glide = 'live';
-      });
-    }
-  };
-  new ResizeObserver(placeGlider).observe(tabList);
-
   const slideIn = (target: HTMLElement | null | undefined, direction: 1 | -1): void => {
     if (target === null || target === undefined) return;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -156,7 +143,6 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
         if (box.width > 0 && box.left < strip.left) tabList.scrollLeft -= strip.left - box.left + stripEdge;
         else if (box.width > 0 && box.right > strip.right) tabList.scrollLeft += box.right - strip.right + stripEdge;
       }
-      placeGlider();
       address.textContent = tabs.find((tab) => tab.dataset.tool === selected)?.dataset.url ?? '';
     },
   };

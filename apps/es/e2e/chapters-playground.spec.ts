@@ -30,6 +30,7 @@ const openScene = async (page: Page, path: string): Promise<Locator> => {
 };
 
 const loadAnswer = async (play: Locator, name: string): Promise<void> => {
+  await play.getByRole('button', { name: 'ヒントと解答' }).click();
   const answerStep = play.locator('details.play-hint-step').last();
   if (!(await answerStep.evaluate((element) => (element as HTMLDetailsElement).open))) {
     await answerStep.locator('summary').click();
@@ -38,6 +39,15 @@ const loadAnswer = async (play: Locator, name: string): Promise<void> => {
 };
 
 const summary = (playground: Locator): Locator => playground.locator('[data-role="summary"]');
+
+const expectEditorToContain = async (play: Locator, text: string): Promise<void> => {
+  await expect.poll(async () => {
+    await play.locator('.cm-scroller').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    return play.locator('.cm-content').innerText();
+  }).toContain(text);
+};
 
 const runTests = async (playground: Locator): Promise<void> => {
   await playground.getByRole('button', { name: 'テストを実行する' }).click();
@@ -81,13 +91,14 @@ test.describe('第2章', () => {
     await runTests(stepOne);
     await expect(summary(stepOne)).toHaveText('pass 8 / fail 0');
 
-    await page.getByRole('link', { name: /次へ/ }).click();
+    await page.getByRole('button', { name: '次のページへ' }).click();
     await expect(page).toHaveURL(/\/chapters\/chapter-2\/3\/$/);
-    await page.getByRole('link', { name: /次へ/ }).click();
+    await page.waitForLoadState('load');
+    await page.getByRole('button', { name: '次のページへ' }).click();
     await expect(page).toHaveURL(/\/chapters\/chapter-2\/4\/$/);
     const stepTwo = scene(page);
     await expect(stepTwo).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(stepTwo.locator('.cm-content')).toContainText('INSERT INTO visit_cancellations');
+    await expectEditorToContain(stepTwo, 'INSERT INTO visit_cancellations');
     await runTests(stepTwo);
     await expect(summary(stepTwo)).toHaveText('pass 3 / fail 5');
 
@@ -95,11 +106,13 @@ test.describe('第2章', () => {
     await runTests(stepTwo);
     await expect(summary(stepTwo)).toHaveText('pass 8 / fail 0');
 
-    await page.getByRole('link', { name: /前へ/ }).click();
-    await page.getByRole('link', { name: /前へ/ }).click();
+    await page.getByRole('button', { name: '前のページへ' }).click();
+    await expect(page).toHaveURL(/\/chapters\/chapter-2\/3\/$/);
+    await page.waitForLoadState('load');
+    await page.getByRole('button', { name: '前のページへ' }).click();
     await expect(page).toHaveURL(/\/chapters\/chapter-2\/2\/$/);
     await expect(scene(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(scene(page).locator('.cm-content')).toContainText('INSERT INTO visit_cancellations');
+    await expectEditorToContain(scene(page), 'INSERT INTO visit_cancellations');
     await runTests(scene(page));
     await expect(summary(scene(page))).toHaveText('pass 8 / fail 0');
   });
@@ -111,7 +124,7 @@ test.describe('第2章', () => {
     await expect(summary(stepOne)).toHaveText('pass 8 / fail 0');
 
     const stepTwo = await openScene(page, stepTwoPath);
-    await expect(stepTwo.locator('.cm-content')).toContainText('INSERT INTO visit_cancellations');
+    await expectEditorToContain(stepTwo, 'INSERT INTO visit_cancellations');
     await loadAnswer(stepTwo, 'ステップ2の完成コードを読み込む');
     await runTests(stepTwo);
     await expect(summary(stepTwo)).toHaveText('pass 8 / fail 0');
@@ -157,8 +170,8 @@ test.describe('第2章', () => {
 
   test('ステップ1を書いていないとき、ステップ2はステップ1の解答から始まる', async ({ page }) => {
     const stepTwo = await openScene(page, stepTwoPath);
-    await expect(stepTwo.locator('.cm-content')).toContainText('INSERT INTO visit_cancellations');
-    await expect(stepTwo.locator('.cm-content')).toContainText('input.operatedBy');
+    await expectEditorToContain(stepTwo, 'INSERT INTO visit_cancellations');
+    await expectEditorToContain(stepTwo, 'input.operatedBy');
     await expect(stepTwo.getByRole('button', { name: '読み込む前のコードに戻す' })).toBeHidden();
   });
 });

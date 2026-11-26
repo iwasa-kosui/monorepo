@@ -1,11 +1,12 @@
 .playground {
   min-width: 0;
   max-width: 100%;
-  margin-block: 1rem;
-  border: 1px solid var(--role-rule);
+  margin-block: var(--space-4);
   border-radius: var(--radius-lg);
-  background: var(--role-sunken);
-  padding: 0.75rem;
+  background: var(--role-surface);
+  padding: var(--space-3);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 .playground [hidden] {
   display: none;
@@ -13,72 +14,38 @@
 .playground-switch {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
-.content .playground-switch button {
-  border: 1px solid transparent;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
-  padding: 0.3rem 0.8rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.content .playground-switch button[aria-pressed="true"] {
-  background: var(--role-accent);
-  color: var(--role-on-accent);
+.playground-switch .btn[aria-pressed="true"] {
+  background: var(--role-ink);
+  color: var(--role-ground);
 }
 .playground-status {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-note);
 }
 .playground-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
-.playground button {
-  border: 1px solid transparent;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
-  padding: 0.3rem 0.8rem;
-  color: var(--role-fg);
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.playground button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--role-fg) 15%, transparent);
-}
-.playground button:disabled {
-  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
-  color: var(--role-muted);
-  cursor: not-allowed;
-}
-.playground button[data-role="run"],
-.playground button[data-run-file],
-.playground button[data-role="run"]:hover:not(:disabled),
-.playground button[data-run-file]:hover:not(:disabled) {
-  background: var(--role-accent);
-  color: var(--role-on-accent);
-}
-.playground button[data-role="run"]:disabled,
-.playground button[data-run-file]:disabled {
-  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
-  color: var(--role-muted);
+.playground .btn {
+  flex: none;
 }
 .playground-hint {
   align-self: center;
   margin-left: auto;
-  font-size: 0.8rem;
-  color: var(--role-muted);
+  color: var(--role-ink-sub);
+  font-size: var(--text-note);
 }
 .content .playground .playground-origin {
-  margin-block: 0 0.5rem;
-  font-size: 0.85rem;
+  margin-block: 0 var(--space-2);
+  font-size: var(--text-note);
 }
 .playground-panes {
   display: flex;
@@ -91,23 +58,32 @@
 .playground-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 .playground-tabs button {
   flex: none;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  border: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  padding: 0 var(--space-4);
+  color: var(--role-ink-sub);
   font-family: var(--font-code);
-  font-size: 0.8rem;
+  font-size: var(--text-note);
+  cursor: pointer;
 }
 .playground-tabs button[aria-selected="true"] {
-  border-bottom-color: var(--role-surface);
-  background: var(--role-surface);
-  font-weight: 700;
+  background: var(--role-ground);
+  color: var(--role-ink);
+  font-weight: var(--weight-bold);
+}
+.playground-tabs button:focus-visible {
+  outline: 3px solid var(--role-ink);
+  outline-offset: -3px;
 }
 .playground-editor {
   min-width: 0;
-  border: 1px solid var(--role-border);
 }
 .playground-editor .cm-editor {
   max-width: 100%;
@@ -115,7 +91,7 @@
 .playground-results {
   min-width: 0;
   max-height: 22rem;
-  margin-top: 0.75rem;
+  margin-top: var(--space-3);
   overflow: auto;
 }
 .playground-results:empty {
@@ -126,11 +102,11 @@
   width: max-content;
   min-width: 100%;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-code);
 }
 .content .playground th,
 .content .playground td {
-  padding: 0.25rem 0.5rem;
+  padding: var(--space-1) var(--space-3);
 }
 .content .playground th {
   position: sticky;
@@ -138,58 +114,55 @@
 }
 .content .playground p,
 .content .playground pre {
-  margin-block: 0.25rem;
+  margin-block: var(--space-1);
 }
 .playground-statement code {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.8rem;
+  font-size: var(--text-code);
 }
 .playground-result {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 .playground-note,
 .playground-label {
-  font-size: 0.85rem;
-  color: var(--role-fg);
+  color: var(--role-ink);
+  font-size: var(--text-note);
 }
 .playground-label {
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 .playground-null {
-  color: var(--role-muted);
+  color: var(--role-ink-sub);
   font-style: italic;
 }
 .playground-summary {
   font-family: var(--font-code);
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--role-success);
-}
-.content .playground .playground-summary-failed {
-  color: var(--role-danger);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
 }
 .content .playground .playground-failures {
-  margin: 0.25rem 0;
-  padding-left: 1.25rem;
+  margin: var(--space-1) 0;
+  padding-left: var(--space-5);
 }
 .playground pre {
   overflow-x: auto;
-  font-size: 0.8rem;
+  font-size: var(--text-code);
+  font-weight: var(--weight-regular);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .playground-error {
-  border-left: 4px solid var(--role-danger);
+  border-radius: var(--radius-sm);
   background: var(--role-danger-soft);
-  padding: 0.25rem 0.75rem;
+  padding: var(--space-1) var(--space-3);
 }
 .playground-log {
   border-radius: var(--radius-sm);
   background: var(--role-console);
-  padding: 0.5rem;
+  padding: var(--space-2);
   color: var(--role-on-console);
   white-space: pre;
 }
@@ -200,31 +173,15 @@
     flex: 1 1 auto;
     flex-shrink: 1;
     flex-direction: column;
-    min-height: 14rem;
-    max-height: 28rem;
+    min-height: 22rem;
     margin-block: 0;
-    padding: 0.5rem;
-  }
-  /* 第4章の02〜04は問いと説明が長く、14rem では1280x640に収まらない */
-  .content
-    .chapter-body
-    > .playground-switch[aria-label="実行欄"]
-    ~ .playground {
-    min-height: 12.5rem;
-  }
-  .chapter-body .playground-status,
-  .chapter-body .playground-toolbar {
-    margin-bottom: 0.25rem;
-  }
-  .chapter-body .playground-tabs button {
-    padding-block: 0.15rem;
   }
   .chapter-body .playground-panes {
     display: grid;
     flex: 1 1 0;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
-    gap: 0.75rem;
+    gap: var(--space-3);
     min-height: 0;
   }
   .chapter-body [data-playground="sql"] .playground-panes {
@@ -251,9 +208,9 @@
     max-height: none;
     min-height: 0;
     margin-top: 0;
-    border: 1px solid var(--role-rule);
-    background: var(--role-surface);
-    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    background: var(--role-ground);
+    padding: var(--space-2);
   }
 }
 

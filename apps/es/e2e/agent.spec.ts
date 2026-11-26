@@ -39,13 +39,26 @@ const summary = (page: Page): Locator => page.locator('[data-role="summary"]');
 const storedCode = (page: Page, key: string): Promise<string | null> =>
   page.evaluate((name) => window.localStorage.getItem(name), key);
 
+const hintsDialog = (page: Page): Locator => page.locator('[data-role="hints-dialog"]');
+
 const open = async (page: Page, path: string = stepOnePath): Promise<void> => {
   await page.goto(path);
   await expect(root(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-  await expect(page.getByRole('button', { name: 'ポチの来院をキャンセルする' })).toBeEnabled();
+  await expect(root(page).getByRole('button', { name: 'ポチの来院をキャンセルする' })).toBeEnabled();
+};
+
+const openHints = async (page: Page): Promise<void> => {
+  await root(page).getByRole('button', { name: 'ヒントと解答' }).click();
+  await expect(hintsDialog(page)).toHaveJSProperty('open', true);
+};
+
+const closeHints = async (page: Page): Promise<void> => {
+  await hintsDialog(page).getByRole('button', { name: '閉じる' }).click();
+  await expect(hintsDialog(page)).toHaveJSProperty('open', false);
 };
 
 const openAgent = async (page: Page): Promise<void> => {
+  await openHints(page);
   await agentSummary(page).click();
   await expect(agent(page)).toHaveJSProperty('open', true);
 };
@@ -144,10 +157,12 @@ test.describe('手元のコーディングエージェント用のプロンプ�
 test.describe('生成AIに頼む', () => {
   test('ヒントと同じグループの details として並び、開くと他のヒントが閉じる', async ({ page }) => {
     await open(page);
+    await openHints(page);
     await expect(agentSummary(page)).toHaveText('生成AIに頼む');
     await expect(agent(page)).toHaveAttribute('name', 'hints-step-1');
     await page.locator('details.play-hint-step summary').first().click();
-    await openAgent(page);
+    await agentSummary(page).click();
+    await expect(agent(page)).toHaveJSProperty('open', true);
     await expect(page.locator('details.play-hint-step').first()).toHaveJSProperty('open', false);
     await expect(passwordField(page)).toBeVisible();
     await expect(startButton(page)).toBeVisible();
@@ -197,6 +212,7 @@ test.describe('生成AIに頼む', () => {
 
     await expect(requestField(page)).toBeEnabled();
     await expect(sendButton(page)).toBeEnabled();
+    await closeHints(page);
     await restoreButton(page).click();
     expect(await storedCode(page, 'es:code:step-1')).toBe(JSON.stringify({ 'visits.ts': edited }));
   });
@@ -258,7 +274,7 @@ test.describe('生成AIに頼む', () => {
     await expect(requestField(page)).toBeDisabled();
     await expect(page.locator('[data-role="editor"] .cm-content')).toBeVisible();
     await expect(summary(page)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'テストを実行する' })).toBeVisible();
+    await expect(root(page).getByRole('button', { name: 'テストを実行する' })).toBeVisible();
     release();
     await expect(logEntries(page)).toHaveText(['答えです。']);
   });
@@ -316,9 +332,10 @@ test.describe('生成AIに頼む', () => {
     await expect(logEntries(page)).toHaveText([unavailable]);
     await expect(requestField(page)).toBeEnabled();
     await expect(requestField(page)).toHaveValue('テストを通してください');
-    await page.getByRole('button', { name: 'テストを実行する' }).click();
+    await closeHints(page);
+    await root(page).getByRole('button', { name: 'テストを実行する' }).click();
     await expect(summary(page)).toHaveText('pass 4 / fail 4', { timeout: 30_000 });
-    await page.getByRole('button', { name: 'ポチの来院をキャンセルする' }).click();
+    await root(page).getByRole('button', { name: 'ポチの来院をキャンセルする' }).click();
     await expect(page.locator('[data-role="visits-body"] td').nth(2)).toHaveText('cancelled', { timeout: 30_000 });
   });
 

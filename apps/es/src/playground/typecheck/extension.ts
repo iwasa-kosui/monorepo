@@ -24,7 +24,7 @@ const theme = EditorView.theme({
     padding: '0.25rem 0.5rem',
     maxWidth: '36rem',
     whiteSpace: 'pre-wrap',
-    fontSize: '0.8125rem',
+    fontSize: 'var(--text-note)',
   },
 });
 

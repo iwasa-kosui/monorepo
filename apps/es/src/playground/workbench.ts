@@ -14,6 +14,7 @@ export type WorkbenchOptions = {
   readonly active: string;
   readonly wrap?: boolean;
   readonly typecheck?: boolean;
+  readonly foldExcept?: { readonly file: string; readonly name: string };
   readonly onChange?: (file: string) => void;
   readonly onSelect?: (file: string) => void;
 };
@@ -63,6 +64,7 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
       label: `${file} のコード`,
       readOnly: !isEditable(file),
       ...(options.wrap === true ? { wrap: true } : {}),
+      ...(options.foldExcept?.file === file ? { foldExportsExcept: options.foldExcept.name } : {}),
       ...(options.typecheck === true && isEditable(file)
         ? { typecheck: typecheckSlot.of(typecheckExtensions.get(file) ?? []) }
         : {}),
@@ -114,7 +116,7 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
     ]);
   };
 
-  const syncTabs = (): void => {
+  const markTabs = (): void => {
     const tabs = tabsOf();
     for (const tab of tabs) {
       const selected = tab.dataset.file === active;
@@ -123,6 +125,10 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
       tab.closest<HTMLElement>('.wb-tab')?.toggleAttribute('data-active', selected);
     }
     tabList.toggleAttribute('data-single', tabs.length <= 1);
+  };
+
+  const syncTabs = (): void => {
+    markTabs();
     if (shell === null) return;
     for (const item of shell.querySelectorAll<HTMLElement>('[data-ide-file]')) {
       if (item.dataset.ideFile === active) item.setAttribute('aria-current', 'true');
@@ -178,7 +184,7 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
   const close = (file: string): void => {
     const tabs = tabsOf();
     const index = tabs.findIndex((tab) => tab.dataset.file === file);
-    if (shell === null || index === -1 || tabs.length <= 1) return;
+    if (shell === null || shell.dataset.sidebar === 'closed' || index === -1 || tabs.length <= 1) return;
     const wasActive = file === active;
     const hadFocus = tabList.contains(document.activeElement);
     tabs[index]?.closest('.wb-tab')?.remove();
@@ -196,6 +202,18 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
       const item = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-ide-file]') : null;
       if (item !== null) open(item.dataset.ideFile ?? '');
     });
+  }
+
+  if (shell !== null) {
+    const showAllTabs = (): void => {
+      if (shell.dataset.sidebar !== 'closed') return;
+      for (const file of names) {
+        if (tabOf(file) === undefined) tabList.append(buildTab(file));
+      }
+      markTabs();
+    };
+    new MutationObserver(showAllTabs).observe(shell, { attributes: true, attributeFilter: ['data-sidebar'] });
+    showAllTabs();
   }
 
   tabList.addEventListener('click', (event) => {

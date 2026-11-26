@@ -4,7 +4,6 @@ import {
   chatPanelIdOf,
   chatTabIdOf,
   panelIdOf,
-  shortTitleOf,
   tabIdOf,
 } from '../../workspace/panel-props';
 
@@ -13,26 +12,6 @@ type Props =
   | (Pick<PanelProps, 'scenario'> & { chat: true });
 
 const props = Astro.props;
-
-// アイコンの形は Lucide（ISC License）のものを使う
-const icons = {
-  chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
-  console:
-    '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
-  logs: '<path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"/>',
-  repo: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
-  agent:
-    '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4"/>',
-  slot:
-    '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4M2 8h20M6 4v4"/>',
-  editor:
-    '<path d="M10 12.5 8 15l2 2.5M14 12.5l2 2.5-2 2.5M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>',
-  doc:
-    '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/>',
-  pr:
-    '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7M6 9v12"/>',
-} as const;
-const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
 ---
 
 {
@@ -54,17 +33,6 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
         data-tone="plum"
         data-shape="rounded"
       ></span>
-      <svg
-        class="tab-icon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.75"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        set:html={icon}
-      />
       <span class="tab-title">チャット</span>
       <span class="cfig-sr" data-chat-unread-label></span>
       <span class="chat-unread" data-chat-unread hidden aria-hidden="true"
@@ -82,6 +50,7 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
       aria-selected={props.selected ? 'true' : 'false'}
       aria-controls={panelIdOf(props.scenario, props.tab.key)}
       tabindex={props.selected ? 0 : -1}
+      style={`--title-chars: ${props.tab.title.length}`}
     >
       <span
         class="fav"
@@ -89,21 +58,7 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
         data-tone={props.tab.favicon.tone}
         data-shape={props.tab.favicon.shape}
       ></span>
-      <svg
-        class="tab-icon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.75"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        set:html={icon}
-      />
       <span class="tab-title">{props.tab.title}</span>
-      <span class="tab-short" aria-hidden="true">{
-        shortTitleOf(props.tab)
-      }</span>
       <span class="cfig-sr">（{props.tab.label}）</span>
       <span class="unseen" data-unseen hidden={props.tab.seen === undefined}
       >未確認</span>
@@ -116,16 +71,19 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.4375rem;
+  flex: 0 clamp(0, calc(var(--title-chars, 0) - 14), 1) auto;
+  gap: var(--space-2);
   min-width: 0;
   max-width: 100%;
+  min-height: var(--tap-min);
   margin: 0;
   border: 0;
-  border-radius: 0.5rem 0.5rem 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: transparent;
-  padding: 0.375rem 0.75rem;
+  padding: 0 var(--space-3);
   color: var(--br-tab);
-  font-size: 0.8125rem;
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
   cursor: pointer;
 }
 :global(.scene[data-scenario]) .tab:hover:not([aria-selected="true"]) {
@@ -134,6 +92,7 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
 :global(.scene[data-scenario]) .tab[aria-selected="true"] {
   background: var(--br-chrome);
   color: var(--br-text);
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .tab[aria-selected="true"]::before,
 :global(.scene[data-scenario]) .tab[aria-selected="true"]::after {
@@ -171,13 +130,13 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
 :global(.scene[data-scenario]) .unseen {
   flex: none;
   border: 1px solid var(--br-unseen-line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--br-unseen-bg);
-  padding: 0 0.375rem;
+  padding: 0 var(--space-2);
   color: var(--br-unseen);
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1.4;
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .fav {
   flex: none;
@@ -186,10 +145,10 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
   border-radius: 50%;
 }
 :global(.scene[data-scenario]) .fav[data-shape="square"] {
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
 }
 :global(.scene[data-scenario]) .fav[data-shape="rounded"] {
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
 }
 :global(.scene[data-scenario]) .fav[data-tone="teal"] {
   background: var(--br-fav-teal);
@@ -220,23 +179,17 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
   flex: none;
   align-items: center;
   justify-content: center;
-  min-width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 999px;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-pill);
   background: #e01e5a;
-  padding: 0 0.3125rem;
+  padding: 0 var(--space-1);
   color: #ffffff;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
   line-height: 1;
 }
 :global(.scene[data-scenario]) .chat-unread[hidden] {
-  display: none;
-}
-:global(.scene[data-scenario]) .tab-short {
-  display: none;
-}
-:global(.scene[data-scenario]) .tab-icon {
   display: none;
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -248,103 +201,8 @@ const icon = 'chat' in props ? icons.chat : icons[props.tab.kind];
   :global(.scene[data-scenario]) .chat-tab {
     display: inline-flex;
   }
-  :global(.scene[data-scenario]) .tab-short {
-    display: inline;
-    white-space: nowrap;
-  }
-  :global(.scene[data-scenario]) .tab[data-tool] .tab-title {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    clip-path: inset(50%);
-  }
-  :global(.scene[data-scenario]) .tab,
-  :global(.scene[data-scenario]) .tab:hover:not([aria-selected="true"]),
-  :global(.scene[data-scenario]) .tab[aria-selected="true"] {
-    background: transparent;
-  }
   :global(.scene[data-scenario]) .tab {
-    z-index: 1;
-    flex: 1 1 0;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.0625rem;
-    min-width: 3.25rem;
-    min-height: 2.875rem;
-    max-width: none;
-    border-radius: 999px;
-    padding: 0.25rem 0.25rem 0.1875rem;
-    color: var(--dock-fg);
-    font-size: 0.625rem;
-    font-weight: 600;
-    line-height: 1.2;
-    letter-spacing: 0.02em;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-  }
-  :global(.scene[data-scenario]) .tab[aria-selected="true"] {
-    color: var(--dock-on);
-    font-weight: 700;
-  }
-  :global(.scene[data-scenario]) .tab .fav {
-    display: none;
-  }
-  :global(.scene[data-scenario]) .tab-icon {
-    display: block;
-    width: 1.25rem;
-    height: 1.25rem;
-  }
-  :global(.scene[data-scenario]) .unseen {
-    position: absolute;
-    top: 0.3125rem;
-    left: calc(50% + 0.5rem);
-    width: 0.375rem;
-    height: 0.375rem;
-    border: 0;
-    background: var(--br-unseen-dot);
-    padding: 0;
-    overflow: hidden;
-    color: transparent;
-    font-size: 0;
-  }
-  :global(.scene[data-scenario]) .chat-unread {
-    position: absolute;
-    top: 0.125rem;
-    left: calc(50% + 0.3125rem);
-    min-width: 0.9375rem;
-    height: 0.9375rem;
-    padding: 0 0.25rem;
-    font-size: 0.625rem;
-    letter-spacing: 0;
-  }
-  :global(.scene[data-scenario]) .tab[aria-selected="true"]::before,
-  :global(.scene[data-scenario]) .tab[aria-selected="true"]::after {
-    display: none;
-  }
-}
-@media (max-width: 639px) and (prefers-reduced-motion: no-preference) {
-  :global(.scene[data-scenario]) .tab {
-    transition: color 0.2s;
-  }
-  :global(.scene[data-scenario]) .tab-icon {
-    transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-  :global(.scene[data-scenario]) .tab[aria-selected="true"] .tab-icon {
-    animation: tab-pop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1);
-  }
-  :global(.scene[data-scenario]) .tab:active .tab-icon {
-    transform: scale(0.84);
-  }
-}
-@keyframes tab-pop {
-  0% {
-    transform: scale(0.82);
-  }
-  55% {
-    transform: scale(1.12);
-  }
-  100% {
-    transform: scale(1);
+    flex: none;
   }
 }
 </style>

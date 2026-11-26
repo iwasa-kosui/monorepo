@@ -51,7 +51,7 @@ const renderTests = (tests: NonNullable<RunOutcome['tests']>, cutMessages: numbe
   const skipped = tests.filter((test) => test.status === 'skipped').length;
   const elements: HTMLElement[] = [
     element('p', {
-      className: failed.length === 0 ? 'playground-summary' : 'playground-summary playground-summary-failed',
+      className: failed.length === 0 ? 'playground-summary result--ok' : 'playground-summary result--ng',
       text: `pass ${passed} / fail ${failed.length}`,
       attributes: { 'data-role': 'summary' },
     }),

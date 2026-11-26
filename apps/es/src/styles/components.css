@@ -1,0 +1,103 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  border: 0;
+  border-radius: 0.625rem;
+  background: var(--role-surface);
+  padding: 0 1.25rem;
+  color: var(--role-ink);
+  font-family: inherit;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:focus-visible {
+  outline: 3px solid var(--btn-ring, var(--role-ink));
+  outline-offset: 2px;
+}
+.btn--bar {
+  background: var(--role-ground);
+  color: var(--action-bar-bg);
+  font-size: var(--text-body);
+  min-height: 3.5rem;
+}
+.btn--soft {
+  background: var(--role-accent-soft);
+  color: var(--role-accent);
+}
+.btn--text {
+  background: none;
+  padding: 0 var(--space-2);
+  color: var(--role-accent);
+}
+.btn--outline {
+  border: 2px solid currentColor;
+  background: none;
+  color: inherit;
+}
+.btn:disabled {
+  background: var(--role-rail);
+  color: var(--role-ink-sub);
+  cursor: not-allowed;
+}
+
+.pane {
+  border-radius: var(--radius-xl);
+  background: var(--role-ground);
+  padding: var(--space-5);
+}
+.pane--sunken {
+  border-radius: 0.75rem;
+  background: var(--role-surface);
+  padding: var(--space-4);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--role-surface);
+  padding: 0.375rem 1rem;
+  color: var(--role-ink);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+
+.marker {
+  border-radius: 0.375rem;
+  background: var(--role-marker);
+  padding-inline: 0.25rem;
+}
+
+.note {
+  color: var(--role-ink-sub);
+  font-size: var(--text-note);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+.kv dt {
+  font-weight: var(--weight-bold);
+}
+.kv dd {
+  margin: 0;
+}
+
+.result--ok {
+  color: var(--role-success);
+  font-weight: var(--weight-bold);
+}
+.result--ng {
+  color: var(--role-danger);
+  font-weight: var(--weight-bold);
+}

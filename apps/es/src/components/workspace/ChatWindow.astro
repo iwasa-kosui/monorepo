@@ -80,7 +80,11 @@ const railActors = railActorIds.flatMap((id) => {
       <p class="channel">{chat.channel}</p>
       {
         !timed && (
-          <button type="button" class="chat-reset" data-action="reset">
+          <button
+            type="button"
+            class="chat-reset btn btn--text"
+            data-action="reset"
+          >
             最初からやり直す
           </button>
         )
@@ -116,24 +120,6 @@ const railActors = railActorIds.flatMap((id) => {
 
     <div class="composer">
       <div class="compose-box">
-        <p class="fmt" aria-hidden="true">
-          <b>B</b>
-          <i>I</i>
-          <s>S</s>
-          <svg
-            viewBox="0 0 16 16"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
-            <rect x="1" y="5.5" width="8" height="5" rx="2.5"></rect>
-            <rect x="7" y="5.5" width="8" height="5" rx="2.5"></rect>
-          </svg>
-          <span>&lt;/&gt;</span>
-          <span>≡</span>
-        </p>
         {
           hasComposerSlot
             ? (
@@ -216,14 +202,13 @@ const railActors = railActorIds.flatMap((id) => {
 <style>
 :global(.scene[data-scenario]) .win.chat {
   --c-side: #3f0e40;
-  --c-side-text: #d9c8da;
+  --c-side-text: #e3d3e4;
   --c-side-sel: #1164a3;
   --c-bg: #ffffff;
-  --c-fg: #1d1c1d;
-  --c-muted: #616061;
-  --c-rule: #dddddd;
+  --c-fg: var(--role-ink);
+  --c-muted: var(--role-ink-sub);
+  --c-rule: var(--role-rail);
   --c-edge: #868686;
-  --c-toolbar: #f8f8f8;
   --c-btn: #ffffff;
   --c-btn-hover: #f4f4f4;
   --c-btn-off: #f4f4f4;
@@ -233,7 +218,7 @@ const railActors = railActorIds.flatMap((id) => {
   --c-found: #0b5d44;
   --c-missing-bg: #fde8ea;
   --c-missing: #a31621;
-  --c-av-rose: #b03060;
+  --c-av-rose: #c2344d;
   --c-av-blue: #1264a3;
   --c-av-green: #2e7d32;
   --c-av-amber: #8a5a00;
@@ -251,28 +236,27 @@ const railActors = railActorIds.flatMap((id) => {
   flex-direction: column;
   width: 9rem;
   background: var(--c-side);
-  padding: 0.5rem 0;
+  padding: var(--space-3) 0 var(--space-4);
   color: var(--c-side-text);
   --dot: rgb(255 255 255 / 0.55);
 }
 :global(.scene[data-scenario]) .chat-side .dots {
-  padding: 0 0.75rem 0.5rem;
+  padding: 0 var(--space-3) var(--space-2);
 }
 :global(.scene[data-scenario]) .ws {
   margin: 0;
-  border-bottom: 1px solid rgb(255 255 255 / 0.2);
-  padding: 0.125rem 0.75rem 0.5rem;
+  padding: var(--space-1) var(--space-3) var(--space-2);
   color: #ffffff;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1.4;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
 }
 :global(.scene[data-scenario]) .ws::after {
   content: "";
   display: inline-block;
   width: 0.75rem;
   height: 0.75rem;
-  margin-left: 0.25rem;
+  margin-left: var(--space-1);
   background: currentColor;
   opacity: 0.7;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
@@ -283,22 +267,20 @@ const railActors = railActorIds.flatMap((id) => {
 :global(.scene[data-scenario]) .chs::before {
   content: "チャンネル";
   display: block;
-  padding: 0 1rem 0.1875rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  opacity: 0.7;
+  padding: 0 var(--space-3) var(--space-1);
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .chs {
-  margin: 0.5rem 0 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
-  font-size: 0.8125rem;
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .chs li {
-  margin: 0 0.5rem;
+  margin: 0 var(--space-2);
   border-radius: var(--radius-md);
-  padding: 0.125rem 0.5rem;
-  line-height: 1.5;
+  padding: var(--space-1) var(--space-2);
+  line-height: var(--leading-normal);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -306,7 +288,7 @@ const railActors = railActorIds.flatMap((id) => {
 :global(.scene[data-scenario]) .chs li.on {
   background: var(--c-side-sel);
   color: #ffffff;
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 @container (min-width: 26rem) {
   :global(.scene[data-scenario]) .chat-side {
@@ -321,35 +303,47 @@ const railActors = railActorIds.flatMap((id) => {
   min-height: 0;
 }
 :global(.scene[data-scenario]) .chat-head {
+  display: flex;
   flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   border-bottom: 1px solid var(--c-rule);
-  padding: 0.375rem 0.75rem;
+  padding: var(--space-1) var(--space-4);
 }
 :global(.scene[data-scenario]) .channel {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+:global(.scene[data-scenario]) .chat-reset {
+  flex: none;
 }
 
 :global(.scene[data-scenario]) .feed {
-  flex: 0 0 auto;
-  max-height: 14rem;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 24rem;
   margin: 0;
   overflow-y: auto;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-3) var(--space-4);
   list-style: none;
+}
+:global(.scene[data-scenario]) .feed:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 :global(.scene[data-scenario]) .post {
   display: flex;
-  gap: 0.625rem;
+  gap: var(--space-3);
   margin: 0;
 }
 :global(.scene[data-scenario]) .post + .post {
-  margin-top: 0.625rem;
+  margin-top: var(--space-3);
 }
 :global(.scene[data-scenario]) .post + .post.is-continued {
-  margin-top: 0.125rem;
+  margin-top: var(--space-1);
 }
 :global(.scene[data-scenario]) .post.is-continued .avatar {
   height: 0;
@@ -370,12 +364,12 @@ const railActors = railActorIds.flatMap((id) => {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 0.375rem;
-  min-height: 1.5rem;
+  gap: var(--space-2);
+  min-height: var(--space-5);
   margin: 0;
-  padding: 0 0.75rem;
+  padding: 0 var(--space-4);
   color: var(--c-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-note);
   visibility: hidden;
 }
 :global(.scene[data-scenario]) .typing[data-active] {
@@ -417,13 +411,13 @@ const railActors = railActorIds.flatMap((id) => {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-lg);
   background: var(--c-av-slate);
   color: #ffffff;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .post[data-tone="rose"] .avatar {
   background: var(--c-av-rose);
@@ -444,93 +438,108 @@ const railActors = railActorIds.flatMap((id) => {
   min-width: 0;
 }
 :global(.scene[data-scenario]) .post-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
   margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.4;
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .post-head strong {
-  font-weight: 900;
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .post-head time {
-  margin-left: 0.375rem;
   color: var(--c-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .post-text {
   margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
   white-space: pre-line;
 }
 
 :global(.scene[data-scenario]) .composer {
   flex: none;
-  padding: 0.25rem 0.75rem 0.625rem;
+  padding: var(--space-1) var(--space-4) var(--space-3);
 }
 :global(.scene[data-scenario]) .compose-box {
-  border: 1px solid var(--c-edge);
-  border-radius: 0.5rem;
-  background: var(--c-bg);
-}
-:global(.scene[data-scenario]) .fmt {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0;
-  border-bottom: 1px solid var(--c-rule);
-  border-radius: 0.4375rem 0.4375rem 0 0;
-  background: var(--c-toolbar);
-  padding: 0.125rem 0.625rem;
-  color: var(--c-muted);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-:global(.scene[data-scenario]) .fmt b {
-  font-weight: 900;
-}
-:global(.scene[data-scenario]) .fmt i {
-  font-family: serif;
-  font-weight: 700;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: 2px solid var(--c-rule);
+  border-radius: var(--radius-lg);
+  background: var(--c-bg);
+  padding: var(--space-2) var(--space-3);
 }
 :global(.scene[data-scenario]) .ph {
   margin: 0;
-  padding: 0.25rem 0.625rem 0;
   color: var(--c-muted);
-  font-size: 0.8125rem;
-  line-height: 1.4;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+}
+:global(.scene[data-scenario]) .compose-slot {
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+}
+:global(.scene[data-scenario]) .compose-slot :global(ul) {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-5);
+}
+:global(.scene[data-scenario]) .compose-slot :global(label) {
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+}
+:global(.scene[data-scenario]) .compose-slot :global(textarea) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--c-fg);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  resize: none;
+}
+:global(.scene[data-scenario]) .compose-slot :global(textarea:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+:global(.scene[data-scenario]) .compose-slot :global([data-saved]) {
+  min-height: var(--space-5);
+  color: var(--c-muted);
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .memo-title {
-  margin: 0.25rem 0.625rem 0.125rem;
-  font-size: 0.75rem;
-  font-weight: 700;
+  margin: 0;
+  color: var(--c-muted);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .memo-list {
   display: grid;
-  gap: 0.125rem;
-  margin: 0 0.625rem;
+  margin: 0;
 }
 :global(.scene[data-scenario]) .memo-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
   align-items: baseline;
-  gap: 0.5rem;
+  gap: var(--space-3);
 }
 :global(.scene[data-scenario]) .memo-row dt {
-  flex: none;
-  width: 2.25rem;
   margin: 0;
-  color: var(--c-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
 }
 :global(.scene[data-scenario]) .memo-row dd {
   margin: 0;
   border-radius: var(--radius-sm);
-  padding: 0 0.375rem;
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  padding: 0 var(--space-2);
+  font-size: var(--text-body);
+  line-height: var(--leading-tight);
 }
 :global(.scene[data-scenario]) .memo-row dd::before {
-  margin-right: 0.25rem;
+  margin-right: var(--space-1);
 }
 :global(.scene[data-scenario]) .memo-row dd[data-state="unknown"] {
   color: var(--c-muted);
@@ -541,7 +550,7 @@ const railActors = railActorIds.flatMap((id) => {
 :global(.scene[data-scenario]) .memo-row dd[data-state="found"] {
   background: var(--c-found-bg);
   color: var(--c-found);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .memo-row dd[data-state="found"]::before {
   content: "✓" / "";
@@ -549,37 +558,39 @@ const railActors = railActorIds.flatMap((id) => {
 :global(.scene[data-scenario]) .memo-row dd[data-state="missing"] {
   background: var(--c-missing-bg);
   color: var(--c-missing);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .memo-row dd[data-state="missing"]::before {
   content: "✕" / "";
 }
 :global(.scene[data-scenario]) .reason {
-  margin: 0.25rem 0.625rem 0;
+  margin: 0;
   color: var(--c-muted);
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .compose-foot {
   display: flex;
   align-items: flex-end;
-  gap: 0.5rem;
-  padding: 0.375rem 0.5rem 0.5rem 0.625rem;
+  gap: var(--space-2);
 }
 :global(.scene[data-scenario]) .actions {
   display: flex;
   flex: 1 1 auto;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: var(--space-2);
 }
 :global(.scene[data-scenario]) .actions button {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
   border: 1px solid var(--c-edge);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--c-btn);
-  padding: 0.1875rem 0.625rem;
+  padding: 0 var(--space-3);
   color: var(--c-fg);
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
   cursor: pointer;
 }
 :global(.scene[data-scenario]) .actions button:hover:not(:disabled) {
@@ -607,8 +618,8 @@ const railActors = railActorIds.flatMap((id) => {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: var(--radius-md);
   background: var(--c-btn-off);
   color: var(--c-muted);
@@ -618,63 +629,11 @@ const railActors = railActorIds.flatMap((id) => {
   color: #ffffff;
 }
 
-:global(.scene[data-scenario]) .feed:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
 @media (min-width: 1024px) {
   :global(.scene[data-scenario]) .feed {
     flex: 1 1 0;
     max-height: none;
-    min-height: 10rem;
   }
-}
-:global(.scene[data-scenario]) .chat-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-:global(.scene[data-scenario]) .chat-reset {
-  flex: none;
-  border: 1px solid transparent;
-  border-radius: 0.375rem;
-  background: color-mix(in srgb, var(--c-fg) 9%, transparent);
-  padding: 0 0.625rem;
-  color: var(--c-fg);
-  font-size: 0.75rem;
-  line-height: 1.6;
-  cursor: pointer;
-}
-:global(.scene[data-scenario]) .chat-reset:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--c-fg) 15%, transparent);
-}
-:global(.scene[data-scenario]) .chat-reset:disabled {
-  color: var(--c-muted);
-  cursor: not-allowed;
-}
-:global(.scene[data-scenario]) .compose-slot {
-  padding: 0.25rem 0.625rem 0;
-  font-size: 0.8125rem;
-}
-:global(.scene[data-scenario]) .compose-slot :global(textarea) {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--c-fg);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  resize: none;
-}
-:global(.scene[data-scenario]) .compose-slot :global(textarea:focus-visible) {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-:global(.scene[data-scenario]) .compose-slot :global([data-saved]) {
-  min-height: 1.25rem;
-  color: var(--c-muted);
-  font-size: 0.75rem;
 }
 
 @media (min-width: 640px) {
@@ -698,8 +657,8 @@ const railActors = railActorIds.flatMap((id) => {
     right: 0;
     left: 0;
     display: flex;
-    height: 20rem;
-    margin-top: 0.25rem;
+    height: min(28rem, 70dvh);
+    margin-top: var(--space-1);
     border: 1px solid var(--c-edge);
     border-radius: var(--radius-lg);
     background: var(--c-bg);
@@ -712,12 +671,12 @@ const railActors = railActorIds.flatMap((id) => {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   width: 100%;
   border: 0;
   border-radius: inherit;
   background: var(--c-side);
-  padding: 0.25rem 0.75rem;
+  padding: var(--space-1) var(--space-3);
   color: var(--c-side-text);
   cursor: pointer;
 }
@@ -732,25 +691,25 @@ const railActors = railActorIds.flatMap((id) => {
   outline-offset: -4px;
 }
 :global(.scene[data-scenario]) .rail-hash {
-  font-size: 1rem;
-  font-weight: 900;
   color: #ffffff;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .rail-avatars {
   display: flex;
-  gap: 0.375rem;
+  gap: var(--space-2);
 }
 :global(.scene[data-scenario]) .rail-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-md);
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: var(--radius-lg);
   background: var(--c-av-slate);
   color: #ffffff;
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .rail-avatar[data-tone="rose"] {
   background: var(--c-av-rose);
@@ -771,14 +730,14 @@ const railActors = railActorIds.flatMap((id) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  border-radius: 999px;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-pill);
   background: #e01e5a;
-  padding: 0 0.3125rem;
+  padding: 0 var(--space-1);
   color: #ffffff;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
   line-height: 1;
 }
 :global(.scene[data-scenario]) .rail-unread[hidden] {
@@ -793,63 +752,9 @@ const railActors = railActorIds.flatMap((id) => {
     min-height: 14rem;
     max-height: none;
   }
-  :global(.scene[data-scenario]) .fmt,
   :global(.scene[data-scenario]) .ph,
   :global(.scene[data-scenario]) .send-shape {
     display: none;
-  }
-  :global(.scene[data-scenario]) .chat-head {
-    border-bottom: 0;
-    padding: 0.5rem 0.875rem 0.25rem;
-  }
-  :global(.scene[data-scenario]) .feed {
-    padding-inline: 0.875rem;
-  }
-  :global(.scene[data-scenario]) .typing {
-    padding-inline: 0.875rem;
-  }
-  :global(.scene[data-scenario]) .composer {
-    padding: 0.25rem 0.625rem 0.625rem;
-  }
-  :global(.scene[data-scenario]) .compose-box {
-    border: 0;
-    border-radius: 1rem;
-    background: var(--c-toolbar);
-    padding-top: 0.375rem;
-  }
-  :global(.scene[data-scenario]) .compose-foot {
-    padding: 0.625rem;
-  }
-  :global(.scene[data-scenario]) .actions {
-    gap: 0.5rem;
-  }
-  :global(.scene[data-scenario]) .actions button,
-  :global(.scene[data-scenario]) .chat-reset {
-    min-height: 2.25rem;
-    border: 0;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--c-fg) 10%, transparent);
-    padding: 0 0.875rem;
-    color: var(--c-fg);
-    font-size: 0.8125rem;
-    font-weight: 600;
-  }
-  :global(.scene[data-scenario]) .chat-reset {
-    min-height: 1.75rem;
-    padding: 0 0.75rem;
-    font-size: 0.75rem;
-  }
-  :global(.scene[data-scenario]) .actions button:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--c-fg) 16%, transparent);
-  }
-  :global(.scene[data-scenario]) .actions button.primary,
-  :global(.scene[data-scenario]) .actions button.primary:hover:not(:disabled) {
-    background: var(--role-accent);
-    color: var(--role-on-accent);
-  }
-  :global(.scene[data-scenario]) .actions button:disabled {
-    background: color-mix(in srgb, var(--c-fg) 6%, transparent);
-    color: var(--c-muted);
   }
 }
 @media (min-width: 1024px) {
@@ -860,42 +765,24 @@ const railActors = railActorIds.flatMap((id) => {
     right: auto;
     bottom: 0;
     left: 3.5rem;
-    width: min(26rem, 85vw);
+    width: min(36rem, 85vw);
     height: auto;
     margin-top: 0;
   }
   :global(.scene[data-scenario]) .chat-rail {
     flex-direction: column;
     justify-content: flex-start;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
   }
   :global(.scene[data-scenario]) .rail-avatars {
     flex-direction: column;
   }
   :global(.scene[data-scenario]) .rail-unread {
     position: absolute;
-    top: 2.25rem;
-    right: 0.125rem;
+    top: 2.75rem;
+    right: 0;
     outline: 2px solid var(--c-side);
-  }
-}
-@media (prefers-color-scheme: dark) {
-  :global(.scene[data-scenario]) .win.chat {
-    --c-bg: #1a1d21;
-    --c-fg: #d1d2d3;
-    --c-muted: #ababad;
-    --c-rule: #35373b;
-    --c-edge: #7d7f82;
-    --c-toolbar: #222529;
-    --c-btn: #1a1d21;
-    --c-btn-hover: #2a2d31;
-    --c-btn-off: #222529;
-    --c-found-bg: #12392e;
-    --c-found: #86ddb5;
-    --c-missing-bg: #4a1f25;
-    --c-missing: #ffabb1;
-    --ring: #78b9f0;
   }
 }
 </style>

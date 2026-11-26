@@ -14,5 +14,6 @@ export const summaryDecide: WorkspaceScenario = lessonScenario({
   label: '自分のシステムで記録を足す更新処理を1つ決める',
   history: [posts.goodWork, posts.todayMemo],
   timeline: opening(posts.decideLast, posts.skipIfNone),
+  done: 'question:written',
   tabs: [docTab('memo', '持ち帰る手順', 'guides/takeaway-steps')],
 });

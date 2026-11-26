@@ -117,9 +117,9 @@ test.describe('第2章のエディタの型チェック', () => {
 
   test('型チェックを入れても、実行とテストの実行は従来どおり動く', async ({ page }) => {
     await open(page);
-    await page.getByRole('button', { name: 'ポチの来院をキャンセルする' }).click();
+    await root(page).getByRole('button', { name: 'ポチの来院をキャンセルする' }).click();
     await expect(page.locator('[data-role="visits-body"] td').nth(2)).toHaveText('cancelled');
-    await page.getByRole('button', { name: 'テストを実行する' }).click();
+    await root(page).getByRole('button', { name: 'テストを実行する' }).click();
     await expect(page.locator('[data-role="summary"]')).toHaveText('pass 4 / fail 4');
   });
 

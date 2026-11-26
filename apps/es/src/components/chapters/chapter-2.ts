@@ -28,6 +28,7 @@ export const chapter2Step1: WorkspaceScenario = lessonScenario({
   label: `演習 ${sceneSteps[1].label}`,
   history: [inquiry],
   collapsed: true,
+  done: 'tests:passed',
   tabs: [stepTab(1)],
 });
 
@@ -45,6 +46,7 @@ export const chapter2Step2: WorkspaceScenario = lessonScenario({
   history: [inquiry],
   collapsed: true,
   timeline: [{ when: 'tests:passed', kind: 'post', post: thanks }],
+  done: 'tests:passed',
   tabs: [stepTab(2)],
 });
 

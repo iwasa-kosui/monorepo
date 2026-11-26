@@ -37,7 +37,12 @@ const scriptClosure = (html: string): Map<string, string> => {
 const loadsRuntimeScript = (html: string): boolean =>
   [...scriptClosure(html).values()].some((source) => markers.some((marker) => source.includes(marker)));
 
-const hasRuntimeMarkup = (html: string): boolean => html.includes('data-playground=') || html.includes('data-play=');
+const withoutStyles = (html: string): string => html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/g, '');
+
+const hasRuntimeMarkup = (html: string): boolean => {
+  const markup = withoutStyles(html);
+  return markup.includes('data-playground=') || markup.includes('data-play=');
+};
 
 const usesPlaygroundRuntime = (html: string): boolean => hasRuntimeMarkup(html) || loadsRuntimeScript(html);
 

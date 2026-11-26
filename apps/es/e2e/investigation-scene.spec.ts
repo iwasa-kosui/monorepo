@@ -538,18 +538,17 @@ test.describe('導入 調査の画面', () => {
     await expect(timer(page)).toHaveText('対応開始から 00:36');
   });
 
-  test('役割の行と本文の見出しは、見た目から隠れ、読み上げには残る', async ({ page }) => {
+  test('役割の文は帯に出て、本文の見出しは、見た目から隠れ、読み上げには残る', async ({ page }) => {
     await ready(page);
     const hiddenOnScreen = async (locator: Locator): Promise<void> => {
       const box = await locator.boundingBox();
       expect(box?.width ?? 0).toBeLessThanOrEqual(1);
       expect(box?.height ?? 0).toBeLessThanOrEqual(1);
     };
-    await hiddenOnScreen(page.locator('.lesson-role'));
     await hiddenOnScreen(page.locator('.chapter-body > .visually-hidden'));
+    await expect(page.locator('[data-action-chip]')).toHaveText('手を動かす');
+    await expect(page.locator('[data-action-text]')).toContainText('カスタマーサポートから届いた連絡に対応して');
     const tree = await page.locator('main').ariaSnapshot();
-    expect(tree).toContain('やってみる');
-    expect(tree).toContain('カスタマーサポートから届いた連絡に対応して');
     expect(tree).not.toContain('できるようになること：');
     expect(tree).toContain('障害対応を体験する');
     await expect(page.getByRole('heading', { level: 2 })).toHaveText('障害対応を体験する');
@@ -558,13 +557,13 @@ test.describe('導入 調査の画面', () => {
       'カスタマーサポートから連絡が届きます。ブラウザで社内のツールを開いて、誰が、いつ、何を、なぜキャンセルしたのかを調べてください。',
     );
     await expect(page.locator('.lesson-bar__title')).toBeVisible();
-    await expect(page.locator('.lesson-footer')).toBeVisible();
-    await expect(page.locator('.lesson-bar__status')).toBeVisible();
+    await expect(page.getByRole('button', { name: '次のページへ' })).toBeVisible();
+    await expect(page.locator('.lesson-bar__progress')).toBeVisible();
   });
 
-  test('immersive でないページでは、役割の行と目標が見える', async ({ page }) => {
+  test('immersive でないページでは、帯の文と目標が見える', async ({ page }) => {
     await page.goto('/chapters/intro/');
-    for (const selector of ['.lesson-role', '.chapter-goal']) {
+    for (const selector of ['[data-action-text]', '.chapter-goal']) {
       const box = await page.locator(selector).boundingBox();
       expect(box?.width ?? 0).toBeGreaterThan(50);
       expect(box?.height ?? 0).toBeGreaterThan(10);
@@ -851,6 +850,8 @@ test.describe('導入 調査の画面', () => {
     await expect(detail(page)).toContainText('clinic-api-1');
     await expect(memo(page, 'when')).toHaveAttribute('data-state', 'unknown');
 
+    await detail(page).getByRole('button', { name: 'ログの詳細を閉じる' }).click();
+    await expect(detail(page)).toBeHidden();
     await cancelRow(page).locator('.col-date').click();
     await expect(detail(page)).toContainText('Event Attributes');
     await expect(detail(page)).toContainText('POST /visits/visit-pochi/cancel 200 12ms');
@@ -965,7 +966,6 @@ test.describe('導入 調査の画面', () => {
     await expect(side.locator('.chs li')).toHaveText(['# general', '# dev', '# 問い合わせ対応', '# 障害対応']);
     await expect(side.locator('.chs li.on')).toHaveText('# 問い合わせ対応');
     await expect(side.locator('button, a, input, [tabindex]')).toHaveCount(0);
-    await expect(scene(page).locator('.composer .fmt')).toHaveAttribute('aria-hidden', 'true');
     await expect(scene(page).locator('.composer .ph')).toHaveAttribute('aria-hidden', 'true');
     await expect(scene(page).locator('.composer .send-shape')).toHaveAttribute('aria-hidden', 'true');
     await expect(scene(page).locator('.composer .ph')).toHaveText('# 問い合わせ対応 へのメッセージ');
@@ -1085,7 +1085,7 @@ test.describe('導入 調査の画面', () => {
     await check('返信後');
   });
 
-  test('ダークモードでは、チャット、DB コンソール、ログの検索、リポジトリ、エージェントの背景色がライトと異なる', async ({ page }) => {
+  test('ダークモードの設定でも、チャット、DB コンソール、ログの検索、リポジトリ、エージェントの背景色はライトと同じ', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
     await begin(page);
     await answerButton(page).click();
@@ -1112,11 +1112,7 @@ test.describe('導入 調査の画面', () => {
     const dark = await read();
     for (const key of Object.keys(light)) {
       expect(light[key], `${key} light`).not.toBe('missing');
-      if (key === 'sidebar') {
-        expect(dark[key], key).toBe(light[key]);
-      } else {
-        expect(dark[key], key).not.toBe(light[key]);
-      }
+      expect(dark[key], key).toBe(light[key]);
     }
   });
 
@@ -1563,57 +1559,64 @@ test.describe('導入 調査の画面', () => {
       { width: 1440, height: 790 },
     ]
   ) {
-    test(`${size.width}x${size.height} で、投稿 1 の本文が全部読める`, async ({ page }) => {
+    test(`${size.width}x${size.height} で、投稿 1 の本文が、チャットの領域の中でスクロールして全部読める`, async ({ page }) => {
       await page.setViewportSize(size);
       await begin(page);
       const text = posts(page).first().locator('.post-text');
-      await expect(text).toBeInViewport({ ratio: 0.99 });
-      const box = await text.evaluate((element) => {
-        const container = element.closest('[data-feed]');
-        const inner = element.getBoundingClientRect();
-        const outer = container?.getBoundingClientRect();
+      await expect(text).toBeAttached();
+      const reach = await text.evaluate((element) => {
+        const container = element.closest<HTMLElement>('[data-feed]');
+        if (container === null) return null;
+        const overflowY = getComputedStyle(container).overflowY;
+        const clipped = container.scrollHeight > container.clientHeight + 1;
+        container.scrollTop = 0;
+        const outerTop = container.getBoundingClientRect().top;
+        const startTop = element.getBoundingClientRect().top;
+        container.scrollTop = container.scrollHeight;
+        const endBottom = element.getBoundingClientRect().bottom;
+        const outerBottom = container.getBoundingClientRect().bottom;
         return {
-          innerTop: inner.top,
-          innerBottom: inner.bottom,
-          outerTop: outer?.top ?? 0,
-          outerBottom: outer?.bottom ?? 0,
-          clipped: container === null ? true : container.scrollHeight > container.clientHeight + 1,
+          scrolls: !clipped || overflowY === 'auto' || overflowY === 'scroll',
+          startVisible: startTop >= outerTop - 1,
+          endVisible: endBottom <= outerBottom + 1,
         };
       });
-      expect(box.innerTop).toBeGreaterThanOrEqual(box.outerTop);
-      expect(box.innerBottom).toBeLessThanOrEqual(box.outerBottom);
-      expect(box.clipped).toBe(false);
+      expect(reach).toEqual({ scrolls: true, startVisible: true, endVisible: true });
     });
   }
 
   for (const size of [{ width: 1280, height: 640 }, { width: 1440, height: 790 }]) {
-    test(`${size.width}x${size.height} で、画面は上部バーとフッターの間いっぱいに広がり、どの状態でも1画面に収まる`, async ({ page }) => {
+    test(`${size.width}x${size.height} で、ページ全体は縦にスクロールせず、あふれる領域はその領域の中でスクロールできる`, async ({ page }) => {
       await page.setViewportSize(size);
       await ready(page);
-      const fit = (): Promise<{ page: boolean; body: boolean; chat: boolean; gap: number; top: number }> =>
+      const fit = (): Promise<{ page: boolean; width: boolean; main: boolean; top: number }> =>
         page.evaluate(() => {
-          const body = document.querySelector('.chapter-body');
-          const chat = document.querySelector('[data-investigation] .chat');
-          const composer = chat?.querySelector('.composer')?.getBoundingClientRect();
-          const frame = chat?.getBoundingClientRect();
+          const main = document.querySelector<HTMLElement>('main.lesson-main');
+          const scroller = document.scrollingElement ?? document.documentElement;
           const sceneBox = document.querySelector('[data-investigation]')?.getBoundingClientRect();
-          const footer = document.querySelector('.lesson-footer')?.getBoundingClientRect();
-          const bar = document.querySelector('.top-bar')?.getBoundingClientRect();
+          const barBox = document.querySelector('[data-action-bar]')?.getBoundingClientRect();
+          let reachable = false;
+          if (main !== null) {
+            const overflowY = getComputedStyle(main).overflowY;
+            const overflows = main.scrollHeight > main.clientHeight + 1;
+            const before = main.scrollTop;
+            main.scrollTop = main.scrollHeight;
+            reachable = (overflowY === 'auto' || overflowY === 'scroll') && (!overflows || main.scrollTop > before);
+            main.scrollTop = before;
+          }
           return {
-            page: document.documentElement.scrollHeight <= window.innerHeight,
-            body: (body?.scrollHeight ?? 0) <= (body?.clientHeight ?? 0),
-            chat: composer !== undefined && frame !== undefined && composer.bottom <= frame.bottom + 1,
-            gap: footer !== undefined && sceneBox !== undefined ? footer.top - sceneBox.bottom : 999,
-            top: bar !== undefined && sceneBox !== undefined ? sceneBox.top - bar.bottom : 999,
+            page: scroller.scrollHeight <= scroller.clientHeight,
+            width: scroller.scrollWidth <= scroller.clientWidth,
+            main: reachable,
+            top: barBox !== undefined && sceneBox !== undefined ? sceneBox.top - barBox.bottom : 999,
           };
         });
       const expectFit = async (label: string): Promise<void> => {
         const result = await fit();
         expect(result.page, `${label} page`).toBe(true);
-        expect(result.body, `${label} body`).toBe(true);
-        expect(result.chat, `${label} chat`).toBe(true);
-        expect(result.gap, `${label} gap`).toBeLessThanOrEqual(12);
-        expect(result.top, `${label} top`).toBeLessThanOrEqual(12);
+        expect(result.width, `${label} width`).toBe(true);
+        expect(result.main, `${label} main`).toBe(true);
+        expect(result.top, `${label} top`).toBeLessThanOrEqual(24);
       };
       await expectFit('idle');
       await startButton(page).click();
@@ -1631,9 +1634,11 @@ test.describe('導入 調査の画面', () => {
       await reply(page).click();
       await expectFit('replied');
       await answerButton(page).click();
+      await agentInput(page).scrollIntoViewIfNeeded();
       await expect(agentInput(page)).toBeInViewport();
       await expect(turns(page)).toHaveCount(9, { timeout: agentDone });
       await expectFit('agent');
+      await agentInput(page).scrollIntoViewIfNeeded();
       await expect(agentInput(page)).toBeInViewport();
       const log = await agentLog(page).evaluate((element) => {
         const box = element.getBoundingClientRect();
@@ -1649,34 +1654,31 @@ test.describe('導入 調査の画面', () => {
   }
 
   for (const size of [{ width: 375, height: 600 }, { width: 800, height: 700 }]) {
-    test(`${size.width}x${size.height} では縦に並び、スクロールしても上部の帯が画面の上部に見える`, async ({ page }) => {
+    test(`${size.width}x${size.height} では、ページ全体は縦にスクロールせず、領域の中でスクロールしても状況の帯が上端に見える`, async ({ page }) => {
       await page.setViewportSize(size);
       await begin(page);
       const boxes = await page.evaluate(() => {
         const rect = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
-        return { chat: rect('[data-investigation] .chat'), browser: rect('[data-investigation] .browser') };
+        return { chat: rect('[data-investigation] .win.chat'), browser: rect('[data-investigation] .browser') };
       });
-      if (size.width < 640) {
-        expect(boxes.chat?.top ?? 0).toBeLessThan(boxes.browser?.top ?? 0);
-      } else {
-        expect(boxes.chat?.bottom ?? 0).toBeLessThanOrEqual((boxes.browser?.top ?? 0) + 1);
-      }
       expect(boxes.chat?.left).toBe(boxes.browser?.left);
-      await page.evaluate(() => {
-        const body = document.querySelector('.chapter-body');
-        if (body !== null) body.scrollTop = 400;
-        window.scrollTo(0, 400);
+      const scrolled = await page.evaluate(() => {
+        const main = document.querySelector<HTMLElement>('main.lesson-main');
+        const scroller = document.scrollingElement ?? document.documentElement;
+        const barTop = (): number =>
+          document.querySelector('[data-investigation] .status-bar')?.getBoundingClientRect().top ?? -999;
+        const before = barTop();
+        if (main !== null) main.scrollTop = main.scrollHeight;
+        return {
+          pageFits: scroller.scrollHeight <= scroller.clientHeight,
+          moved: main?.scrollTop ?? 0,
+          before,
+          after: barTop(),
+        };
       });
-      const moved = await page.evaluate(() =>
-        (document.querySelector('.chapter-body')?.scrollTop ?? 0) + window.scrollY
-      );
-      expect(moved).toBeGreaterThan(100);
-      const { bar, limit } = await page.evaluate(() => {
-        const barBox = document.querySelector('[data-investigation] .status-bar')?.getBoundingClientRect();
-        const bodyBox = document.querySelector('.chapter-body')?.getBoundingClientRect();
-        return { bar: barBox?.top ?? -999, limit: Math.max(bodyBox?.top ?? 0, 0) };
-      });
-      expect(Math.abs(bar - limit)).toBeLessThanOrEqual(2);
+      expect(scrolled.pageFits).toBe(true);
+      expect(scrolled.moved).toBeGreaterThan(0);
+      expect(Math.abs(scrolled.after - scrolled.before)).toBeLessThanOrEqual(2);
       await expect(scene(page).getByRole('group', { name: '対応の状況' })).toBeInViewport({ ratio: 1 });
     });
   }
@@ -1709,7 +1711,7 @@ test.describe('導入 調査の画面', () => {
     await expect(scene(page)).toHaveAttribute('data-selected', 'console');
   });
 
-  test('375px 幅では、タブは短い名前で 1 段に並ぶ。未確認は点で出る', async ({ page }) => {
+  test('375px 幅では、タブは 1 段に並び、列の中でスクロールできる。未確認は点で出る', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await begin(page);
     const strip = scene(page).getByRole('tablist', { name: '開くツール' });
@@ -1721,21 +1723,23 @@ test.describe('導入 調査の画面', () => {
     );
     expect(new Set(boxes.map((box) => box.top)).size).toBe(1);
     for (const box of boxes) expect(box.height).toBeGreaterThanOrEqual(44);
-    expect(await strip.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    await expect(scene(page).locator('.tab:visible .tab-short:visible')).toHaveText(['DB', 'ログ', 'コード']);
+    expect(
+      await strip.evaluate((element) => {
+        const overflowX = getComputedStyle(element).overflowX;
+        return element.scrollWidth <= element.clientWidth || overflowX === 'auto' || overflowX === 'scroll';
+      }),
+    ).toBe(true);
     await expect(tab(page, /DB コンソール/)).toHaveAccessibleName(/DB Console.*DB コンソール/);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     const dot = unseen(page, /リポジトリ/);
     await expect(tab(page, /リポジトリ/)).toHaveAccessibleName(/未確認/);
-    const size = await dot.evaluate((element) => {
-      const box = element.getBoundingClientRect();
-      return { width: box.width, height: box.height };
-    });
-    expect(size).toEqual({ width: 6, height: 6 });
+    await expect(dot).toBeVisible();
+    await expect(dot).toHaveText('未確認');
 
     await tab(page, /リポジトリ/).click();
     await expect(tab(page, /リポジトリ/)).toHaveAttribute('aria-selected', 'true');
+    await tab(page, /リポジトリ/).scrollIntoViewIfNeeded();
     const inside = await tab(page, /リポジトリ/).evaluate((element) => {
       const box = element.getBoundingClientRect();
       const outer = element.closest('[role="tablist"]')?.getBoundingClientRect();
@@ -1744,98 +1748,8 @@ test.describe('導入 調査の画面', () => {
     expect(inside).toBe(true);
     await tab(page, /リポジトリ/).press('Home');
     await expect(tab(page, /チャット/)).toBeFocused();
+    await tab(page, /チャット/).scrollIntoViewIfNeeded();
     await expect(tab(page, /チャット/)).toBeInViewport({ ratio: 1 });
-  });
-
-  test('375px 幅では、タブの並びが画面の下部で「前へ」「次へ」のすぐ上に貼り付く', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 600 });
-    await begin(page);
-    const strip = scene(page).getByRole('tablist', { name: '開くツール' });
-    const gap = (): Promise<number> =>
-      page.evaluate(() => {
-        const bar = document.querySelector('[data-investigation] .tab-strip')?.getBoundingClientRect();
-        const footer = document.querySelector('.lesson-footer')?.getBoundingClientRect();
-        return bar === undefined || footer === undefined ? 999 : footer.top - bar.bottom;
-      });
-    const expectPinned = async (label: string): Promise<void> => {
-      await expect(strip, label).toBeInViewport({ ratio: 1 });
-      const distance = await gap();
-      expect(distance, label).toBeGreaterThanOrEqual(-1);
-      expect(distance, label).toBeLessThanOrEqual(2);
-    };
-    await expectPinned('chat');
-    await tab(page, /DB コンソール/).click();
-    await expectPinned('tools');
-    const order = await page.evaluate(() => {
-      const rect = (selector: string) =>
-        document.querySelector(`[data-investigation] ${selector}`)?.getBoundingClientRect();
-      return {
-        pages: rect('.pages')?.top ?? 0,
-        bar: rect('.tab-strip')?.top ?? 0,
-      };
-    });
-    expect(order.pages).toBeLessThan(order.bar);
-    await page.evaluate(() => window.scrollTo(0, 20));
-    await expectPinned('scrolled');
-  });
-
-  test('375px 幅では、始めると作業環境が画面の端から端まで、上部の帯から「前へ」「次へ」の上までを使う', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 });
-    await begin(page);
-    const measure = (): Promise<Record<string, number>> =>
-      page.evaluate(() => {
-        const rect = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
-        const sceneBox = rect('[data-investigation]');
-        const bar = rect('[data-investigation] .status-bar');
-        const strip = rect('[data-investigation] .tab-strip');
-        const pages = rect('[data-investigation] .pages');
-        const chat = rect('[data-investigation] .win.chat');
-        const footer = rect('.lesson-footer');
-        return {
-          left: sceneBox?.left ?? -1,
-          width: sceneBox?.width ?? -1,
-          barTop: bar?.top ?? -1,
-          barHeight: bar?.height ?? -1,
-          stripToFooter: (footer?.top ?? 0) - (strip?.bottom ?? 0),
-          contentHeight: Math.max(pages?.height ?? 0, chat?.height ?? 0),
-          overflow: document.documentElement.scrollWidth - window.innerWidth,
-        };
-      });
-    const chatView = await measure();
-    expect(chatView.left).toBe(0);
-    expect(chatView.width).toBe(375);
-    expect(Math.abs(chatView.barTop)).toBeLessThanOrEqual(1);
-    expect(chatView.barHeight).toBeLessThanOrEqual(60);
-    expect(Math.abs(chatView.stripToFooter)).toBeLessThanOrEqual(2);
-    expect(chatView.contentHeight).toBeGreaterThan(560);
-    expect(chatView.overflow).toBeLessThanOrEqual(0);
-    await tab(page, /DB コンソール/).click();
-    const toolView = await measure();
-    expect(Math.abs(toolView.barTop)).toBeLessThanOrEqual(1);
-    expect(Math.abs(toolView.stripToFooter)).toBeLessThanOrEqual(2);
-    expect(toolView.contentHeight).toBeGreaterThan(560);
-    expect(toolView.overflow).toBeLessThanOrEqual(0);
-  });
-
-  test('375px 幅では、タブにアイコンが出て、選んだタブの背景が選んだ先へ移る', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 });
-    await begin(page);
-    await expect(scene(page).locator('.tab .tab-icon:visible')).toHaveCount(4);
-    await expect(scene(page).locator('.tab .fav:visible')).toHaveCount(0);
-    const offset = (name: RegExp): Promise<number> =>
-      tab(page, name).evaluate((element) => {
-        const glider = element.closest('[role="tablist"]')?.querySelector('[data-glider]');
-        const box = element.getBoundingClientRect();
-        const pill = glider?.getBoundingClientRect();
-        return pill === undefined ? 999 : Math.abs(pill.left - box.left) + Math.abs(pill.width - box.width);
-      });
-    await expect.poll(() => offset(/チャット/)).toBeLessThanOrEqual(1);
-    await tab(page, /ログの検索/).click();
-    await expect(panel(page, /ログの検索/)).toBeVisible();
-    await expect.poll(() => offset(/ログの検索/)).toBeLessThanOrEqual(1);
-    await tab(page, /チャット/).click();
-    await expect.poll(() => offset(/チャット/)).toBeLessThanOrEqual(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 
   test('375px 幅で動きを減らす設定のときは、タブを切り替えても中身を動かさない', async ({ page }) => {
@@ -1847,24 +1761,18 @@ test.describe('導入 調査の画面', () => {
     expect(running).toBe(0);
   });
 
-  test('375px 幅では、状況の帯が 1 行になり、ボタンはアイコンだけで名前は読み上げに残る', async ({ page }) => {
+  test('375px 幅でも、状況の帯のボタンは名前を持ち、2.75rem 以上の大きさで押せる', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await begin(page);
-    const bar = scene(page).getByRole('group', { name: '対応の状況' });
-    expect((await bar.boundingBox())?.height).toBeLessThanOrEqual(48);
     await expect(timer(page)).toHaveText(/対応開始から\s*00:0\d/);
-    await expect(clock(page)).toBeHidden();
     await expect(affected(page)).toHaveText(/キャンセルになった来院\s*1件/);
     await expect(pauseButton(page)).toHaveAccessibleName('再開する');
     await expect(resetButton(page)).toHaveAccessibleName('最初からやり直す');
     for (const button of [pauseButton(page), resetButton(page)]) {
       const box = await button.boundingBox();
-      expect(box?.width).toBe(32);
-      expect(box?.height).toBe(32);
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
-    await expect(scene(page).locator('.composer .fmt')).toBeHidden();
-    await expect(scene(page).locator('.composer .ph')).toBeHidden();
-    await expect(scene(page).locator('.composer .send-shape')).toBeHidden();
   });
 
   test('375px 幅で別のタブを見ている間に届いた投稿は、チャットのタブに未読の数で出る', async ({ page }) => {

@@ -50,13 +50,16 @@ const config = JSON.stringify({
   <div class="playground-status" data-role="status">
     <span data-role="status-text" role="status"
     >実行環境を読み込んでいます</span>
-    <button type="button" data-role="retry" hidden>もう一度読み込む</button>
+    <button type="button" class="btn btn--soft" data-role="retry" hidden>
+      もう一度読み込む
+    </button>
   </div>
   <div class="playground-toolbar">
     {
       testFile !== undefined && (
         <button
           type="button"
+          class="btn btn--soft"
           data-role="run-tests"
           data-run-file={testFile}
           disabled
@@ -67,26 +70,33 @@ const config = JSON.stringify({
     }
     {
       scripts.map((script) => (
-        <button type="button" data-run-file={script.file} disabled>
+        <button
+          type="button"
+          class="btn btn--soft"
+          data-run-file={script.file}
+          disabled
+        >
           {script.label}
         </button>
       ))
     }
     {
       complete !== undefined && (
-        <button type="button" data-role="complete">
+        <button type="button" class="btn btn--text" data-role="complete">
           {complete.label ?? '完成コードを読み込む'}
         </button>
       )
     }
     {
       editable.length > 0 && (
-        <button type="button" data-role="reset">最初のコードに戻す</button>
+        <button type="button" class="btn btn--text" data-role="reset">
+          最初のコードに戻す
+        </button>
       )
     }
     {
       editable.length > 0 && (
-        <button type="button" data-role="restore" hidden>
+        <button type="button" class="btn btn--text" data-role="restore" hidden>
           読み込む前のコードに戻す
         </button>
       )

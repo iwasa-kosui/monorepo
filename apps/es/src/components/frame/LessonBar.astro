@@ -1,0 +1,129 @@
+---
+import type { PageRoute } from '../../lib/lesson-frame';
+import LessonPageList from './LessonPageList.astro';
+
+interface Segment {
+  readonly id: string;
+  readonly minutes: number;
+  readonly fill: number;
+  readonly state: 'done' | 'current' | 'future';
+}
+
+interface Group {
+  readonly id: string;
+  readonly title: string;
+  readonly range: string;
+  readonly hasCurrent: boolean;
+  readonly links: readonly {
+    readonly href: string;
+    readonly label: string;
+    readonly route: PageRoute;
+  }[];
+}
+
+interface Props {
+  title: string;
+  segments: readonly Segment[];
+  progressLabel: string;
+  estimate: string;
+  limit: string;
+  number: number;
+  total: number;
+  previousHref?: string;
+  nextHref?: string;
+  groups: readonly Group[];
+}
+
+const {
+  title,
+  segments,
+  progressLabel,
+  estimate,
+  limit,
+  number,
+  total,
+  previousHref,
+  nextHref,
+  groups,
+} = Astro.props;
+---
+
+<header class="lesson-bar">
+  <h1 class="lesson-bar__title">{title}</h1>
+  <div class="lesson-bar__progress" role="img" aria-label={progressLabel}>
+    {
+      segments.map((segment) => (
+        <span
+          class="lesson-bar__segment"
+          data-state={segment.state}
+          style={`flex-grow: ${segment.minutes}`}
+        >
+          <span
+            class="lesson-bar__fill"
+            style={`width: ${segment.fill * 100}%`}
+          >
+          </span>
+        </span>
+      ))
+    }
+  </div>
+  <p class="lesson-bar__estimate">目安 {estimate} / {limit}</p>
+  <nav class="lesson-bar__steps" aria-label="ページの移動">
+    <button
+      type="button"
+      class="btn lesson-bar__step"
+      aria-label="前のページへ"
+      data-page-nav="prev"
+      data-href={previousHref}
+      disabled={previousHref === undefined}
+    >
+      <svg
+        aria-hidden="true"
+        width="20"
+        height="20"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12.5 4.5 7 10l5.5 5.5"></path>
+      </svg>
+    </button>
+    <p class="lesson-bar__count">{number} / {total}</p>
+    <button
+      type="button"
+      class="btn lesson-bar__step"
+      aria-label="次のページへ"
+      data-page-nav="next"
+      data-href={nextHref}
+      disabled={nextHref === undefined}
+    >
+      <svg
+        aria-hidden="true"
+        width="20"
+        height="20"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M7.5 4.5 13 10l-5.5 5.5"></path>
+      </svg>
+    </button>
+  </nav>
+  <details class="lesson-menu">
+    <summary class="btn lesson-menu__button">メニュー</summary>
+    <div class="lesson-menu__panel">
+      <p class="lesson-menu__links">
+        <a class="btn btn--soft" href="/">トップページへ</a>
+        <a class="btn btn--soft" href="/glossary/">用語</a>
+        <a class="btn btn--soft" href="/troubleshooting/">うまく動かないとき</a>
+      </p>
+      <LessonPageList groups={groups} idPrefix="menu" label="全ページの一覧" />
+    </div>
+  </details>
+</header>

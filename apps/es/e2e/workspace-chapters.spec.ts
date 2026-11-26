@@ -1006,6 +1006,7 @@ test.describe('演習のページでは、チャットを細い帯に折りた�
     await open(page, '/chapters/chapter-2/4/');
     await recordSignals(page);
     const play = page.locator('[data-play="add-record"]');
+    await play.getByRole('button', { name: 'ヒントと解答' }).click();
     await play.locator('details.play-hint-step').last().locator('summary').click();
     await play.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
     await play.getByRole('button', { name: 'ポチの来院をキャンセルする' }).click();
@@ -1036,6 +1037,7 @@ test.describe('演習のページでは、チャットを細い帯に折りた�
     await open(page, '/chapters/chapter-2/2/');
     await recordSignals(page);
     const play = page.locator('[data-play="add-record"]');
+    await play.getByRole('button', { name: 'ヒントと解答' }).click();
     await play.locator('details.play-hint-step').last().locator('summary').click();
     await play.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
     await play.getByRole('button', { name: 'テストを実行する' }).click();

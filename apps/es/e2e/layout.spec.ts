@@ -12,74 +12,23 @@ type Metrics = {
   readonly innerHeight: number;
   readonly scrollWidth: number;
   readonly innerWidth: number;
-  readonly bodyScrollHeight: number;
-  readonly bodyClientHeight: number;
 };
 
 const measure = (page: Page): Promise<Metrics> =>
   page.evaluate(() => {
-    const body = document.querySelector('.chapter-body');
+    const scroller = document.scrollingElement ?? document.documentElement;
     return {
-      scrollHeight: document.documentElement.scrollHeight,
+      scrollHeight: scroller.scrollHeight,
       innerHeight: window.innerHeight,
-      scrollWidth: document.documentElement.scrollWidth,
+      scrollWidth: scroller.scrollWidth,
       innerWidth: window.innerWidth,
-      bodyScrollHeight: body?.scrollHeight ?? 0,
-      bodyClientHeight: body?.clientHeight ?? 0,
     };
   });
-
-type Scroller = {
-  readonly element: string;
-  readonly clientHeight: number;
-  readonly scrollHeight: number;
-  readonly clientWidth: number;
-  readonly scrollWidth: number;
-};
-
-const innerScrollers = (page: Page): Promise<Scroller[]> =>
-  page.evaluate(() => {
-    const tolerance = 1;
-    const label = (element: Element): string => {
-      const classes = [...element.classList].map((name) => `.${name}`).join('');
-      const language = element.getAttribute('data-language');
-      const text = (element.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 24);
-      return `${element.tagName.toLowerCase()}${classes}${language === null ? '' : `[${language}]`} "${text}"`;
-    };
-    const found: Scroller[] = [];
-    for (const element of document.querySelectorAll('.chapter-body *')) {
-      if (element.closest('details:not([open])') !== null) continue;
-      if (element.matches('.cm-scroller') || element.closest('.playground-results') !== null) continue;
-      if (element.closest('[data-scenario] [role="tabpanel"][data-tool], [data-scenario] [data-feed]') !== null) {
-        continue;
-      }
-      const style = getComputedStyle(element);
-      const scrolls = (value: string): boolean => value === 'auto' || value === 'scroll';
-      if (!scrolls(style.overflowX) && !scrolls(style.overflowY)) continue;
-      const overflowsY = scrolls(style.overflowY) && element.scrollHeight - element.clientHeight > tolerance;
-      const overflowsX = scrolls(style.overflowX) && element.scrollWidth - element.clientWidth > tolerance;
-      if (overflowsY || overflowsX) {
-        found.push({
-          element: label(element),
-          clientHeight: element.clientHeight,
-          scrollHeight: element.scrollHeight,
-          clientWidth: element.clientWidth,
-          scrollWidth: element.scrollWidth,
-        });
-      }
-    }
-    return found;
-  });
-
-const describeScroller = (path: string, size: Size, scroller: Scroller): string =>
-  `${path} ${size.width}x${size.height}: 内部スクロール ${scroller.element} `
-  + `高さ=${scroller.clientHeight}/${scroller.scrollHeight} 幅=${scroller.clientWidth}/${scroller.scrollWidth}`;
 
 const describeFailure = (path: string, size: Size, metrics: Metrics): string =>
   `${path} ${size.width}x${size.height}: `
   + `scrollHeight=${metrics.scrollHeight} innerHeight=${metrics.innerHeight} `
-  + `scrollWidth=${metrics.scrollWidth} innerWidth=${metrics.innerWidth} `
-  + `chapterBody=${metrics.bodyScrollHeight}/${metrics.bodyClientHeight}`;
+  + `scrollWidth=${metrics.scrollWidth} innerWidth=${metrics.innerWidth}`;
 
 const waitForPlaygrounds = async (page: Page, path: string): Promise<void> => {
   for (const playground of await page.locator('[data-playground]:visible').all()) {
@@ -94,7 +43,6 @@ const collectFailures = async (
   page: Page,
   size: Size,
   overflows: (metrics: Metrics) => boolean,
-  checkInnerScroll: boolean,
 ): Promise<string[]> => {
   await page.setViewportSize(size);
   const failures: string[] = [];
@@ -119,9 +67,6 @@ const collectFailures = async (
       if (overflows(metrics)) {
         failures.push(describeFailure(label, size, metrics));
       }
-      if (checkInnerScroll) {
-        failures.push(...(await innerScrollers(page)).map((scroller) => describeScroller(label, size, scroller)));
-      }
     }
   }
   return failures;
@@ -133,11 +78,7 @@ test.describe('PC の画面は 1 ページが一画面に収まる', () => {
       const failures = await collectFailures(
         page,
         size,
-        (metrics) =>
-          metrics.scrollHeight > metrics.innerHeight
-          || metrics.scrollWidth > metrics.innerWidth
-          || metrics.bodyScrollHeight > metrics.bodyClientHeight,
-        true,
+        (metrics) => metrics.scrollHeight > metrics.innerHeight || metrics.scrollWidth > metrics.innerWidth,
       );
       expect(failures).toEqual([]);
     });
@@ -147,16 +88,17 @@ test.describe('PC の画面は 1 ページが一画面に収まる', () => {
 test.describe('スマートフォンの画面は横にスクロールしない', () => {
   for (const size of phoneSizes) {
     test(`${size.width}x${size.height} で横にスクロールが出ない`, async ({ page }) => {
-      const failures = await collectFailures(page, size, (metrics) => metrics.scrollWidth > metrics.innerWidth, false);
+      const failures = await collectFailures(page, size, (metrics) => metrics.scrollWidth > metrics.innerWidth);
       expect(failures).toEqual([]);
     });
 
-    test(`${size.width}x${size.height} で「次へ」を押して次のページへ移動できる`, async ({ page }) => {
+    test(`${size.width}x${size.height} で「次へ」と「前のページへ」を押してページを移動できる`, async ({ page }) => {
       await page.setViewportSize(size);
       await page.goto('/chapters/chapter-4/');
-      await page.getByRole('link', { name: /次へ/ }).click();
+      await page.getByRole('link', { name: '次へ' }).click();
       await expect(page).toHaveURL(/\/chapters\/chapter-4\/2\/$/);
-      await page.getByRole('link', { name: /前へ/ }).click();
+      await page.waitForLoadState('load');
+      await page.getByRole('button', { name: '前のページへ' }).click();
       await expect(page).toHaveURL(/\/chapters\/chapter-4\/$/);
     });
   }
@@ -168,14 +110,16 @@ const collectHintFailures = async (
   page: Page,
   size: Size,
   overflows: (metrics: Metrics) => boolean,
-  checkInnerScroll: boolean,
 ): Promise<string[]> => {
   await page.setViewportSize(size);
   const failures: string[] = [];
   for (const path of hintPaths) {
     await page.goto(path);
     await waitForPlaygrounds(page, path);
-    const steps = page.locator('details.play-hint-step');
+    await page.getByRole('button', { name: 'ヒントと解答' }).click();
+    const dialog = page.locator('[data-role="hints-dialog"]');
+    await expect(dialog).toHaveJSProperty('open', true);
+    const steps = dialog.locator('details.play-hint-step');
     const count = await steps.count();
     expect(count).toBe(4);
     for (let index = 0; index < count; index += 1) {
@@ -185,54 +129,37 @@ const collectHintFailures = async (
       if (overflows(metrics)) {
         failures.push(describeFailure(label, size, metrics));
       }
-      if (checkInnerScroll) {
-        failures.push(...(await innerScrollers(page)).map((scroller) => describeScroller(label, size, scroller)));
+      const fit = await dialog.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const overflowY = getComputedStyle(element).overflowY;
+        const overflowing = element.scrollHeight > element.clientHeight + 1;
+        element.scrollTop = element.scrollHeight;
+        return {
+          inside: box.top >= -1 && box.left >= -1 && box.bottom <= window.innerHeight + 1
+            && box.right <= window.innerWidth + 1,
+          overflowing,
+          scrolls: overflowY === 'auto' || overflowY === 'scroll',
+          reachesEnd: !overflowing || element.scrollTop > 0,
+        };
+      });
+      if (!fit.inside) {
+        failures.push(`${label} ${size.width}x${size.height}: ダイアログが画面からはみ出している`);
       }
-      const close = steps.nth(index).locator('[data-role="hint-close"]');
-      if (await close.isVisible()) {
-        const body = await steps.nth(index).locator('.play-hint-body').evaluate((element) => ({
-          clientHeight: element.clientHeight,
-          scrollHeight: element.scrollHeight,
-        }));
-        if (body.scrollHeight > body.clientHeight + 1) {
-          failures.push(
-            `${label} ${size.width}x${size.height}: 重ねた本文の高さ=${body.clientHeight}/${body.scrollHeight}`,
-          );
-        }
-        const testsButton = page.locator('[data-role="tests"]');
-        if (!(await testsButton.isVisible())) {
-          failures.push(`${label} ${size.width}x${size.height}: 「テストを実行する」ボタンが見えない`);
-        } else {
-          const bodyBox = await steps.nth(index).locator('.play-hint-body').boundingBox();
-          const buttonBox = await testsButton.boundingBox();
-          if (
-            bodyBox !== null && buttonBox !== null
-            && bodyBox.x < buttonBox.x + buttonBox.width && buttonBox.x < bodyBox.x + bodyBox.width
-            && bodyBox.y < buttonBox.y + buttonBox.height && buttonBox.y < bodyBox.y + bodyBox.height
-          ) {
-            failures.push(
-              `${label} ${size.width}x${size.height}: 開いた本文が「テストを実行する」ボタンに重なっている`,
-            );
-          }
-        }
-        await close.click();
+      if (fit.overflowing && !(fit.scrolls && fit.reachesEnd)) {
+        failures.push(`${label} ${size.width}x${size.height}: あふれた本文をダイアログの中でスクロールできない`);
       }
     }
   }
   return failures;
 };
 
-test.describe('「ヒントと解答」を開いても PC の画面は一画面に収まる', () => {
+test.describe('「ヒントと解答」を開いても PC の画面全体は縦にも横にもスクロールしない', () => {
   for (const size of desktopSizes) {
-    test(`${size.width}x${size.height} で各ヒントを開いてもスクロールが出ない`, async ({ page }) => {
+    test(`${size.width}x${size.height} で各ヒントを開いてもページ全体にスクロールが出ず、本文はダイアログの中で読める`, async ({ page }) => {
       const failures = await collectHintFailures(
         page,
         size,
-        (metrics) =>
-          metrics.scrollHeight > metrics.innerHeight
-          || metrics.scrollWidth > metrics.innerWidth
-          || metrics.bodyScrollHeight > metrics.bodyClientHeight,
-        true,
+        (metrics) => metrics.scrollHeight > metrics.innerHeight || metrics.scrollWidth > metrics.innerWidth,
       );
       expect(failures).toEqual([]);
     });
@@ -246,7 +173,6 @@ test.describe('「ヒントと解答」を開いてもスマートフォンの�
         page,
         size,
         (metrics) => metrics.scrollWidth > metrics.innerWidth,
-        false,
       );
       expect(failures).toEqual([]);
     });

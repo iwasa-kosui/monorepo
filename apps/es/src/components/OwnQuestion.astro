@@ -14,16 +14,42 @@ const {
 const inputId = `own-question-${id}`;
 ---
 
-<div class="grid gap-1" data-own-question data-question-id={id}>
-  {showLabel && <label for={inputId} class="text-sm font-bold">{label}</label>}
+<div class="own-question" data-own-question data-question-id={id}>
+  {showLabel && <label for={inputId} class="own-question-label">{label}</label>}
   <textarea
     id={inputId}
-    class="block w-full rounded border border-border bg-surface px-2 py-1"
+    class="own-question-input"
     rows={rows}
     aria-label={showLabel ? undefined : label}
   ></textarea>
-  <div class="min-h-5 text-sm text-muted" role="status" data-saved></div>
+  <div class="own-question-status" role="status" data-saved></div>
 </div>
+
+<style>
+.own-question {
+  display: grid;
+  gap: var(--space-1);
+}
+.own-question-label {
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+}
+.own-question-input {
+  display: block;
+  width: 100%;
+  min-height: var(--tap-min);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+}
+.own-question-status {
+  min-height: 1.5rem;
+  color: var(--role-ink-sub);
+  font-size: var(--text-note);
+}
+</style>
 
 <script>
 import { loadQuestion, saveQuestion } from '../playground/storage.ts';

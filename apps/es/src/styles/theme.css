@@ -1,5 +1,10 @@
 @theme inline {
   --color-*: initial;
+  --color-ink: var(--role-ink);
+  --color-ink-sub: var(--role-ink-sub);
+  --color-ground: var(--role-ground);
+  --color-rail: var(--role-rail);
+  --color-marker: var(--role-marker);
   --color-bg: var(--role-bg);
   --color-surface: var(--role-surface);
   --color-sunken: var(--role-sunken);

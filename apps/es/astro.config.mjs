@@ -8,6 +8,9 @@ export default defineConfig({
   // Astro 7 の既定（'jsx'）は要素間の空白や改行を落とすので、従来どおり見た目を変えない圧縮にする。
   compressHTML: true,
   integrations: [mdx()],
+  markdown: {
+    shikiConfig: { theme: 'github-light' },
+  },
   vite: {
     plugins: [tailwindcss()],
   },

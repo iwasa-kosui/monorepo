@@ -1,6 +1,5 @@
 ---
 import CodePlayground from '../components/CodePlayground.astro';
-import LessonFooter from '../components/frame/LessonFooter.astro';
 import SqlPlayground from '../components/SqlPlayground.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 
@@ -56,5 +55,4 @@ INSERT INTO visits (id, pet_name, status) VALUES ('visit-tama', 'タマ', 'cance
     testFile="visits.test.ts"
     scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
   />
-  <LessonFooter previous={{ href: '/' }} next={{ href: '/setup/' }} />
 </BaseLayout>

@@ -565,10 +565,11 @@ test.describe('矢印キー', () => {
   });
 
   test('エディタの外では矢印キーでページが移動する', async ({ page }) => {
-    await openCheckPage(page);
+    await page.goto('/chapters/chapter-2/3/');
+    await page.waitForLoadState('load');
     await page.locator('h1').click();
     await page.keyboard.press('ArrowRight');
-    await expect(page).toHaveURL(/\/setup\/$/);
+    await expect(page).toHaveURL(/\/chapters\/chapter-2\/4\/$/);
   });
 });
 

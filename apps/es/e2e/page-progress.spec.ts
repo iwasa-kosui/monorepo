@@ -4,16 +4,19 @@ import { chapterPagePaths } from './dist';
 
 const pathOf = (page: Page): string => new URL(page.url()).pathname;
 
+const chapterMinutes = [8, 2, 13, 5, 9, 3];
+const chapterIds = ['intro', 'chapter-1', 'chapter-2', 'chapter-3', 'chapter-4', 'summary'];
+
 const overall = async (page: Page): Promise<{ readonly number: number; readonly total: number }> => {
-  const text = await page.locator('.lesson-bar__status').innerText();
-  const match = /全体\s*(\d+)\/(\d+)/.exec(text);
-  expect(match, `全体の進み具合が読めません: ${text}`).not.toBeNull();
+  const label = (await page.locator('.lesson-bar__progress').getAttribute('aria-label')) ?? '';
+  const match = /全体\s*(\d+)\/(\d+)/.exec(label);
+  expect(match, `全体の進み具合が読めません: ${label}`).not.toBeNull();
   return { number: Number(match?.[1]), total: Number(match?.[2]) };
 };
 
 const guessedMinutes = async (page: Page): Promise<number> => {
-  const text = await page.locator('.lesson-bar__status').innerText();
-  const match = /目安\s*(\d+):(\d{2})ごろ/.exec(text);
+  const text = await page.locator('.lesson-bar__estimate').innerText();
+  const match = /目安\s*(\d+):(\d{2})\s*\/\s*0:40/.exec(text);
   expect(match, `目安の時刻が読めません: ${text}`).not.toBeNull();
   return Number(match?.[1]) * 60 + Number(match?.[2]);
 };
@@ -23,16 +26,14 @@ const openList = async (page: Page): Promise<void> => {
   await expect(page.locator('.lesson-menu__panel')).toBeVisible();
 };
 
+const chapterOf = (path: string): string => /^\/chapters\/([^/]+)\//.exec(path)?.[1] ?? '';
+
 test('全ページで、全体の進み具合が 1 から順に増え、目安の時刻が減らない', async ({ page }) => {
   const paths = chapterPagePaths();
   let previousMinutes = -1;
   for (const [index, path] of paths.entries()) {
     await page.goto(path);
     expect(await overall(page), path).toEqual({ number: index + 1, total: paths.length });
-    const fillWidth = await page.locator('.lesson-footer__progress-fill').evaluate((element) =>
-      (element as HTMLElement).style.width
-    );
-    expect(parseFloat(fillWidth), path).toBeCloseTo(((index + 1) / paths.length) * 100, 3);
     const minutes = await guessedMinutes(page);
     expect(minutes, path).toBeGreaterThanOrEqual(previousMinutes);
     previousMinutes = minutes;
@@ -40,43 +41,97 @@ test('全ページで、全体の進み具合が 1 から順に増え、目安�
   expect(await guessedMinutes(page)).toBeLessThan(40);
 });
 
-test('章の中の進み具合は、見出しにこれまでどおり出る', async ({ page }) => {
+test('全体の進み具合は章ごとの6本の区切りで、幅は章の分に比例し、いまの章は何ページ目かだけ塗る', async ({ page }) => {
+  const paths = chapterPagePaths();
+  await page.goto(paths[0] ?? '/');
+  const grows = await page
+    .locator('.lesson-bar__segment')
+    .evaluateAll((segments) => segments.map((segment) => getComputedStyle(segment).flexGrow));
+  expect(grows).toEqual(chapterMinutes.map(String));
+  for (const path of paths) {
+    await page.goto(path);
+    const chapter = chapterOf(path);
+    const inChapter = paths.filter((candidate) => chapterOf(candidate) === chapter);
+    const number = inChapter.indexOf(path) + 1;
+    const current = chapterIds.indexOf(chapter);
+    const fills = await page
+      .locator('.lesson-bar__segment')
+      .evaluateAll((segments) => segments.map((segment) => segment.getAttribute('data-state')));
+    expect(fills, path).toEqual(
+      chapterIds.map((_, index) => index < current ? 'done' : index === current ? 'current' : 'future'),
+    );
+    const widths = await page
+      .locator('.lesson-bar__fill')
+      .evaluateAll((elements) => elements.map((element) => parseFloat((element as HTMLElement).style.width)));
+    expect(widths, path).toHaveLength(chapterIds.length);
+    widths.forEach((width, index) => {
+      const expected = index < current ? 100 : index === current ? (number / inChapter.length) * 100 : 0;
+      expect(width, path).toBeCloseTo(expected, 3);
+    });
+  }
+});
+
+test('章の中の進み具合は、ヘッダーの「n / total」に出る', async ({ page }) => {
   await page.goto('/chapters/chapter-2/4/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('4/5');
+  await expect(page.locator('.lesson-bar__count')).toHaveText('4 / 5');
   await expect(page.getByRole('heading', { level: 1 })).not.toContainText('全体');
+});
+
+test('目安の時刻は「目安 h:mm / 0:40」の形で出る', async ({ page }) => {
+  await page.goto('/chapters/chapter-2/');
+  await expect(page.locator('.lesson-bar__estimate')).toHaveText('目安 0:10 / 0:40');
 });
 
 test('章ページ以外には進み具合とページ一覧を出さない', async ({ page }) => {
   for (const path of ['/', '/setup/', '/troubleshooting/', '/glossary/']) {
     await page.goto(path);
-    await expect(page.locator('.lesson-bar__status')).toHaveCount(0);
+    await expect(page.locator('.lesson-bar')).toHaveCount(0);
     await expect(page.locator('.lesson-pages')).toHaveCount(0);
-    await expect(page.locator('.lesson-footer')).toHaveCount(0);
+    await expect(page.locator('.action-bar')).toHaveCount(0);
   }
 });
 
-test('幅 1440 未満では、上部バーに章の時間帯だけを出し、内訳はメニューの章の見出しに出す', async ({ page }) => {
+test('メニューの章の見出しに、章の時間帯と内訳が出る', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/chapters/chapter-2/3/');
-  await expect(page.locator('.lesson-bar__status')).toContainText('この章 0:10〜0:23（13分）');
-  await expect(page.locator('.lesson-bar__parts')).toBeHidden();
   await openList(page);
-  await expect(page.locator('.lesson-menu__panel .lesson-pages__group').nth(2)).toContainText('演習9分');
+  await expect(page.locator('.lesson-menu__panel .lesson-pages__group').nth(2)).toContainText(
+    '0:10〜0:23（13分）：説明2分、演習9分、解答の確認2分',
+  );
 });
 
-test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
+test.describe('メニューの中のページ一覧', () => {
   test.use({ viewport: { width: 1024, height: 720 } });
+
+  test('ボタンの名前は「メニュー」で、開くまでは一覧が見えない', async ({ page }) => {
+    await page.goto('/chapters/chapter-2/4/');
+    await expect(page.locator('.lesson-menu > summary')).toHaveText('メニュー');
+    await expect(page.locator('.lesson-menu__panel')).toBeHidden();
+  });
 
   test('開くと全ページへのリンクが並び、現在のページに aria-current が付く', async ({ page }) => {
     const paths = chapterPagePaths();
     const current = '/chapters/chapter-2/4/';
     await page.goto(current);
-    await expect(page.locator('.lesson-menu__panel')).toBeHidden();
     await openList(page);
     const links = page.locator('.lesson-menu__panel .lesson-pages a');
     expect(await links.evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('href')))).toEqual(paths);
     await expect(page.locator('.lesson-menu__panel [aria-current="page"]')).toHaveCount(1);
     await expect(page.locator('.lesson-menu__panel [aria-current="page"]')).toHaveAttribute('href', current);
+  });
+
+  test('各ページに過去・現在・未来の状態が付く', async ({ page }) => {
+    const paths = chapterPagePaths();
+    const current = '/chapters/chapter-2/3/';
+    const currentIndex = paths.indexOf(current);
+    await page.goto(current);
+    await openList(page);
+    const routes = await page
+      .locator('.lesson-menu__panel .lesson-pages a')
+      .evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('data-route')));
+    expect(routes).toEqual(
+      paths.map((_, index) => index < currentIndex ? 'past' : index === currentIndex ? 'current' : 'future'),
+    );
   });
 
   test('章ごとのグループに、章題と時間帯が出る', async ({ page }) => {
@@ -87,6 +142,18 @@ test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
     await expect(groups.nth(0)).toContainText('導入');
     await expect(groups.nth(0)).toContainText('0:00〜0:08（8分）');
     await expect(groups.nth(2)).toContainText('第2章');
+  });
+
+  test('「トップページへ」「用語」「うまく動かないとき」のリンクが入っている', async ({ page }) => {
+    await page.goto('/chapters/chapter-2/4/');
+    await openList(page);
+    const links = page.locator('.lesson-menu__links a');
+    await expect(links).toHaveText(['トップページへ', '用語', 'うまく動かないとき']);
+    expect(await links.evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('href')))).toEqual([
+      '/',
+      '/glossary/',
+      '/troubleshooting/',
+    ]);
   });
 
   test('見出しの無いページは「N ページ目」と表示する', async ({ page }) => {
@@ -126,9 +193,9 @@ test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
     await openList(page);
     await page.locator('.lesson-menu > summary').focus();
     await page.keyboard.press('Tab');
-    await expect(page.locator('.lesson-menu__panel .lesson-pages a').first()).toBeFocused();
+    await expect(page.locator('.lesson-menu__panel a').first()).toBeFocused();
     await expect(page.locator('.lesson-menu__panel')).toBeVisible();
-    await page.locator('.lesson-menu__panel .lesson-pages a').last().focus();
+    await page.locator('.lesson-menu__panel a').last().focus();
     await page.keyboard.press('Tab');
     await expect(page.locator('.lesson-menu__panel')).toBeHidden();
   });
@@ -141,11 +208,11 @@ test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
     await expect(page.getByRole('heading')).toHaveCount(headingsBefore);
   });
 
-  test('一覧を開いても、「次へ」「前へ」の名前のリンクは 1 つずつのまま', async ({ page }) => {
+  test('一覧を開いても、前後のページへのボタンは 1 つずつのまま', async ({ page }) => {
     await page.goto('/chapters/chapter-2/4/');
     await openList(page);
-    await expect(page.getByRole('link', { name: /次へ/ })).toHaveCount(1);
-    await expect(page.getByRole('link', { name: /前へ/ })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: '次のページへ' })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: '前のページへ' })).toHaveCount(1);
   });
 });
 
@@ -162,13 +229,16 @@ test.describe('一覧を開いても画面が動かない', () => {
         page.locator('.chapter-body').evaluate((element) => element.getBoundingClientRect().top);
       const before = await bodyTop();
       await openList(page);
-      const metrics = await page.evaluate(() => ({
-        scrollHeight: document.documentElement.scrollHeight,
-        innerHeight: window.innerHeight,
-        scrollWidth: document.documentElement.scrollWidth,
-        innerWidth: window.innerWidth,
-        panelBottom: document.querySelector('.lesson-menu__panel')?.getBoundingClientRect().bottom ?? 0,
-      }));
+      const metrics = await page.evaluate(() => {
+        const scroller = document.scrollingElement ?? document.documentElement;
+        return {
+          scrollHeight: scroller.scrollHeight,
+          innerHeight: window.innerHeight,
+          scrollWidth: scroller.scrollWidth,
+          innerWidth: window.innerWidth,
+          panelBottom: document.querySelector('.lesson-menu__panel')?.getBoundingClientRect().bottom ?? 0,
+        };
+      });
       expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.innerHeight);
       expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.innerWidth);
       expect(metrics.panelBottom).toBeLessThanOrEqual(metrics.innerHeight);
@@ -176,7 +246,7 @@ test.describe('一覧を開いても画面が動かない', () => {
     });
   }
 
-  for (const path of ['/chapters/chapter-2/2/', '/chapters/chapter-2/4/']) {
+  for (const path of ['/chapters/chapter-2/2/', '/chapters/chapter-2/4/', '/chapters/chapter-3/']) {
     test(`1280x640 の ${path} は、章の見出しが 1 行に収まる`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
       await page.goto(path);
@@ -222,143 +292,43 @@ test.describe('スマートフォンの画面でも横にスクロールしな�
   }
 });
 
-test.describe('サイドバー（幅 1440px 以上）', () => {
+test.describe('幅が広くても、サイドバーは出さず、作業面は画面の幅いっぱいに広がる', () => {
   test.use({ viewport: { width: 1440, height: 790 } });
 
-  test('章ごとの群が並び、現在の章の群だけ開く', async ({ page }) => {
+  test('サイドバーが無く、メニューのボタンが出る', async ({ page }) => {
     await page.goto('/chapters/chapter-2/3/');
-    const groups = page.locator('.lesson-sidebar .lesson-pages__group');
-    await expect(groups).toHaveCount(6);
-    const opened = await groups.evaluateAll((elements) => elements.map((element) => element.hasAttribute('open')));
-    expect(opened).toEqual([false, false, true, false, false, false]);
-    await expect(groups.nth(0)).toContainText('導入');
-    await expect(groups.nth(0)).toContainText('0:00〜0:08（8分）');
-    await expect(groups.nth(2)).toContainText('第2章');
-  });
-
-  test('各ページに過去・現在・未来の状態が付き、現在のページにだけ aria-current が付く', async ({ page }) => {
-    const paths = chapterPagePaths();
-    const current = '/chapters/chapter-2/3/';
-    const currentIndex = paths.indexOf(current);
-    await page.goto(current);
-    const links = page.locator('.lesson-sidebar .lesson-pages a');
-    expect(await links.evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('href')))).toEqual(paths);
-    const routes = await links.evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('data-route')));
-    expect(routes).toEqual(
-      paths.map((_, index) => index < currentIndex ? 'past' : index === currentIndex ? 'current' : 'future'),
-    );
-    await expect(page.locator('.lesson-sidebar [aria-current="page"]')).toHaveCount(1);
-    await expect(page.locator('.lesson-sidebar [aria-current="page"]')).toHaveAttribute('href', current);
-  });
-
-  test('見出しの無いページは「N ページ目」と表示する', async ({ page }) => {
-    await page.goto('/chapters/chapter-3/2/');
-    await expect(page.locator('.lesson-sidebar a[href="/chapters/chapter-3/3/"]')).toHaveText('3 ページ目');
-    await expect(page.locator('.lesson-sidebar a[href="/chapters/chapter-3/4/"]')).not.toContainText('ページ目');
-  });
-
-  test('リンクを押すとそのページへ移動する', async ({ page }) => {
-    const paths = chapterPagePaths();
-    const target = '/chapters/chapter-2/2/';
-    await page.goto('/chapters/chapter-2/3/');
-    await page.locator(`.lesson-sidebar a[href="${target}"]`).click();
-    await expect(page).toHaveURL(/\/chapters\/chapter-2\/2\/$/);
-    expect(await overall(page)).toEqual({ number: paths.indexOf(target) + 1, total: paths.length });
-  });
-
-  test('閉じた章の群を開いて、別の章のページへ移動できる', async ({ page }) => {
-    await page.goto('/chapters/chapter-2/3/');
-    await page.locator('.lesson-sidebar .lesson-pages__group').nth(0).locator('summary').click();
-    await page.locator('.lesson-sidebar a[href="/chapters/intro/2/"]').click();
-    await expect(page).toHaveURL(/\/chapters\/intro\/2\/$/);
-  });
-
-  test('メニューは出さない', async ({ page }) => {
-    await page.goto('/chapters/chapter-2/3/');
-    await expect(page.locator('.lesson-menu')).toBeHidden();
-  });
-
-  test('現在のページがサイドバーの中で見える位置に出る', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 400 });
-    await page.goto(chapterPagePaths().at(-1) ?? '/');
-    await expect.poll(() =>
-      page.evaluate(() => {
-        const sidebar = document.querySelector('.lesson-sidebar')?.getBoundingClientRect();
-        const here = document.querySelector('.lesson-sidebar [aria-current="page"]')?.getBoundingClientRect();
-        return sidebar !== undefined && here !== undefined && here.top >= sidebar.top - 1
-          && here.bottom <= sidebar.bottom + 1;
-      })
-    ).toBe(true);
-  });
-
-  test('幅 1439px ではサイドバーを隠し、メニューに畳む', async ({ page }) => {
-    await page.setViewportSize({ width: 1439, height: 720 });
-    await page.goto('/chapters/chapter-2/3/');
-    await expect(page.locator('.lesson-sidebar')).toBeHidden();
+    await expect(page.locator('.lesson-sidebar')).toHaveCount(0);
     await expect(page.locator('.lesson-menu > summary')).toBeVisible();
   });
 
-  test('演習のページでは幅が広くてもサイドバーを隠し、本文を全幅にする', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 790 });
+  test('演習のページで、作業面の幅が画面の幅に近い', async ({ page }) => {
     await page.goto('/chapters/chapter-2/4/');
-    await expect(page.locator('.lesson-sidebar')).toBeHidden();
-    await expect(page.locator('.lesson-menu > summary')).toBeVisible();
     const width = await page.locator('.lesson-main').evaluate((element) => element.getBoundingClientRect().width);
     expect(width).toBeGreaterThan(1400);
   });
-
-  test('章の時間帯と内訳がサイドバーの章の見出しに出る', async ({ page }) => {
-    await page.goto('/chapters/chapter-2/3/');
-    await expect(page.locator('.lesson-sidebar .lesson-pages__group').nth(2)).toContainText(
-      '0:10〜0:23（13分）：説明2分、演習9分、解答の確認2分',
-    );
-  });
-
-  test('上部バーに章の時間帯と内訳が出る', async ({ page }) => {
-    await page.goto('/chapters/chapter-2/3/');
-    await expect(page.locator('.lesson-bar__status')).toContainText(
-      'この章 0:10〜0:23（13分）：説明2分、演習9分、解答の確認2分',
-    );
-    await expect(page.locator('.lesson-bar__parts')).toBeVisible();
-  });
 });
 
-test.describe('スマートフォンの幅の上部の帯', () => {
+test.describe('スマートフォンの幅のヘッダー', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test('題名とページ番号とメニューだけを 1 行に出し、ほかのリンクと時間の目安はメニューの中に入れる', async ({ page }) => {
+  test('章の名前、前後のボタン、メニューが出て、リンクはメニューの中に入っている', async ({ page }) => {
     await page.goto('/chapters/chapter-2/4/');
-    const bar = page.locator('.top-bar');
+    const bar = page.locator('.lesson-bar');
     await expect(bar.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(bar.locator('.lesson-bar__count')).toHaveText('4/5');
-    await expect(bar.locator('.top-bar__home')).toBeHidden();
-    await expect(bar.locator('.lesson-bar__help').first()).toBeHidden();
-    await expect(bar.locator('.lesson-bar__status')).toBeHidden();
-    expect((await bar.boundingBox())?.height).toBeLessThanOrEqual(56);
+    await expect(bar.locator('.lesson-bar__count')).toHaveText('4 / 5');
+    await expect(bar.getByRole('button', { name: '前のページへ' })).toBeVisible();
+    await expect(bar.getByRole('button', { name: '次のページへ' })).toBeVisible();
+    await expect(bar.locator('.lesson-menu__links a').first()).toBeHidden();
 
     const menu = page.locator('.lesson-menu > summary');
-    await expect(menu).toHaveAccessibleName('ページ一覧');
     const size = await menu.boundingBox();
-    expect(size?.width).toBeGreaterThanOrEqual(36);
-    expect(size?.height).toBeGreaterThanOrEqual(36);
+    expect(size?.width).toBeGreaterThanOrEqual(44);
+    expect(size?.height).toBeGreaterThanOrEqual(44);
     await menu.click();
-    const extra = page.locator('.lesson-menu__extra');
-    await expect(extra).toBeVisible();
-    await expect(extra.locator('.lesson-menu__status')).toContainText('全体');
-    await expect(extra.locator('.lesson-menu__status')).toContainText('目安');
-    await expect(extra.getByRole('link')).toHaveText(['トップページへ', '用語', 'うまく動かないとき']);
+    await expect(page.locator('.lesson-menu__links a')).toHaveText(['トップページへ', '用語', 'うまく動かないとき']);
     await expect(page.locator('.lesson-menu__panel .lesson-pages [aria-current="page"]')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await extra.getByRole('link', { name: '用語' }).click();
+    await page.locator('.lesson-menu__links').getByRole('link', { name: '用語' }).click();
     await expect(page).toHaveURL(/\/glossary\/$/);
-  });
-
-  test('640px 以上では、メニューの中にリンクと時間の目安を出さない', async ({ page }) => {
-    await page.setViewportSize({ width: 1024, height: 720 });
-    await page.goto('/chapters/chapter-2/4/');
-    await expect(page.locator('.top-bar__home')).toBeVisible();
-    await expect(page.locator('.lesson-bar__status')).toBeVisible();
-    await page.locator('.lesson-menu > summary').click();
-    await expect(page.locator('.lesson-menu__extra')).toBeHidden();
   });
 });

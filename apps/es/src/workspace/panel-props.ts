@@ -20,16 +20,3 @@ export const expectTab = <K extends TabKind>(tab: TabDefinition, kind: K): Extra
   }
   return tab as Extract<TabDefinition, { kind: K }>;
 };
-
-const shortTitles = {
-  console: 'DB',
-  logs: 'ログ',
-  repo: 'コード',
-  agent: 'AI',
-  slot: '画面',
-  editor: 'エディタ',
-  doc: '文書',
-  pr: 'PR',
-} satisfies Record<TabKind, string>;
-
-export const shortTitleOf = (tab: TabDefinition): string => shortTitles[tab.kind];

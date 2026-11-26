@@ -194,12 +194,12 @@ const sectionId = (name: string): string =>
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.125rem 0.75rem;
-  padding: 0.375rem 0.75rem 0.25rem;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-2);
 }
 :global(.scene[data-scenario]) .pr-repo {
   color: var(--gh-muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .pr-repo span:first-child,
 :global(.scene[data-scenario]) .pr-repo strong {
@@ -208,74 +208,80 @@ const sectionId = (name: string): string =>
 :global(.scene[data-scenario]) .pr-title {
   flex: 1 1 14rem;
   min-width: 0;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  line-height: 1.4;
+  font-size: var(--text-lead);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
 }
 :global(.scene[data-scenario]) .pr-number {
   color: var(--gh-muted);
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 :global(.scene[data-scenario]) .pr-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
+  gap: var(--space-2);
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .pr-state {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--gh-open);
-  padding: 0 0.625rem;
+  padding: 0 var(--space-3);
   color: var(--gh-open-text);
-  font-weight: 700;
-  line-height: 1.6;
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .pr-stat {
   font-family: var(--font-code);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .pr-add {
   color: var(--gh-add-text);
 }
 :global(.scene[data-scenario]) .pr-del {
-  margin-left: 0.25rem;
+  margin-left: var(--space-1);
   color: var(--gh-del-text);
 }
 :global(.scene[data-scenario]) .pr-tabs {
   display: flex;
   flex: none;
-  gap: 0.25rem;
-  margin: 0 0.75rem;
+  gap: var(--space-1);
+  margin: 0 var(--space-4);
   border-bottom: 1px solid var(--gh-rule);
 }
 :global(.scene[data-scenario]) .pr-tabs button {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
   margin-bottom: -1px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
-  padding: 0.125rem 0.625rem;
+  padding: 0 var(--space-3);
   color: var(--gh-muted);
-  font-size: 0.8125rem;
-  line-height: 1.6;
+  font-size: var(--text-code);
+  line-height: var(--leading-tight);
   cursor: pointer;
 }
 :global(.scene[data-scenario]) .pr-tabs button[aria-selected="true"] {
   border-bottom-color: var(--gh-tab-line);
   color: var(--gh-fg);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario])
   .pr-tabs
   button:hover:not([aria-selected="true"]) {
   color: var(--gh-fg);
 }
+:global(.scene[data-scenario]) .pr-tabs button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
 :global(.scene[data-scenario]) .pr-count {
-  margin-left: 0.25rem;
-  border-radius: 999px;
+  margin-left: var(--space-1);
+  border-radius: var(--radius-pill);
   background: var(--gh-rule);
-  padding: 0 0.375rem;
+  padding: 0 var(--space-2);
   color: var(--gh-fg);
-  font-size: 0.75rem;
+  font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .pr-body {
   display: flex;
@@ -288,7 +294,7 @@ const sectionId = (name: string): string =>
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
-  padding: 0.5rem 0.75rem 0.75rem;
+  padding: var(--space-3) var(--space-4) var(--space-4);
 }
 :global(.scene[data-scenario]) .pr-section[hidden] {
   display: none;
@@ -298,9 +304,9 @@ const sectionId = (name: string): string =>
   border: 1px solid var(--gh-rule);
   border-radius: var(--radius-lg);
   background: var(--gh-bg);
-  padding: 0.5rem 1rem 0.75rem;
-  font-size: 0.9375rem;
-  line-height: 1.7;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
   overflow-wrap: anywhere;
 }
 :global(.scene[data-scenario]) .pr-comment > :global(:first-child) {
@@ -310,25 +316,45 @@ const sectionId = (name: string): string =>
   margin-bottom: 0;
 }
 :global(.content) :global(.scene[data-scenario]) .pr-comment :global(h2) {
-  margin-block: 0.75rem 0.375rem;
-  font-size: 1.125rem;
+  margin-block: var(--space-3) var(--space-2);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
 }
 :global(.content) :global(.scene[data-scenario]) .pr-comment :global(p),
 :global(.content) :global(.scene[data-scenario]) .pr-comment :global(ul),
 :global(.content) :global(.scene[data-scenario]) .pr-comment :global(ol) {
-  margin-block: 0.5rem;
+  margin-block: var(--space-2);
 }
 :global(.scene[data-scenario]) .pr-comment :global(li + li) {
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
 }
 :global(.content)
   :global(.scene[data-scenario])
   .pr-comment
   :global(:not(pre) > code) {
   background: var(--gh-band);
+  font-size: var(--text-code);
 }
-:global(.scene[data-scenario]) .pr-comment :global(figure.quote) {
-  margin-block: 0.5rem;
+:global(.content)
+  :global(.scene[data-scenario])
+  .pr-comment
+  :global(figure.quote) {
+  margin-block: var(--space-2);
+  border-radius: var(--radius-lg);
+  background: var(--gh-band);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .pr-comment
+  :global(figure.quote figcaption) {
+  margin-top: var(--space-2);
+  border-left: 0;
+  padding-left: 0;
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .pr-file {
   overflow: hidden;
@@ -339,17 +365,18 @@ const sectionId = (name: string): string =>
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   border-bottom: 1px solid var(--gh-rule);
   background: var(--gh-band);
-  padding: 0.1875rem 0.625rem;
-  font-size: 0.8125rem;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-code);
 }
 :global(.scene[data-scenario]) .pr-file-head code {
   background: transparent;
   padding: 0;
   font-family: var(--font-code);
-  font-weight: 700;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
 }
 :global(.scene[data-scenario]) .pr-diff-scroll {
   overflow-x: auto;
@@ -365,13 +392,14 @@ const sectionId = (name: string): string =>
   margin: 0;
   border-collapse: collapse;
   font-family: var(--font-code);
-  font-size: 0.75rem;
-  line-height: 1.6;
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .pr-hunk {
   background: var(--gh-hunk);
-  padding: 0 0.625rem;
+  padding: 0 var(--space-3);
   color: var(--gh-muted);
+  font-size: var(--text-code);
   text-align: left;
   caption-side: top;
 }
@@ -380,15 +408,17 @@ const sectionId = (name: string): string =>
   padding: 0;
 }
 :global(.scene[data-scenario]) .pr-num {
-  width: 2.5rem;
-  min-width: 2.5rem;
-  padding: 0 0.5rem;
+  width: 3.25rem;
+  min-width: 3.25rem;
+  padding: 0 var(--space-2);
   color: var(--gh-muted);
+  font-size: var(--text-code);
   text-align: right;
   user-select: none;
 }
 :global(.scene[data-scenario]) .pr-code {
-  padding: 0 0.625rem;
+  padding: 0 var(--space-3);
+  font-size: var(--text-code);
   white-space: pre;
 }
 :global(.scene[data-scenario]) .pr-sign {
@@ -422,25 +452,5 @@ const sectionId = (name: string): string =>
 }
 :global(.scene[data-scenario]) .pr-line.pr-del .pr-code {
   color: var(--gh-del-text);
-}
-@media (prefers-color-scheme: dark) {
-  :global(.scene[data-scenario]) .panel[data-kind="pr"] {
-    --gh-bg: #0d1117;
-    --gh-band: #151b23;
-    --gh-fg: #e6edf3;
-    --gh-muted: #9198a1;
-    --gh-rule: #3d444d;
-    --gh-link: #4493f8;
-    --gh-tab-line: #f78166;
-    --gh-open: #238636;
-    --gh-add-bg: #12261e;
-    --gh-add-num: #1b4721;
-    --gh-add-text: #7ee787;
-    --gh-del-bg: #2d1316;
-    --gh-del-num: #5a1e22;
-    --gh-del-text: #ffa198;
-    --gh-hunk: #121d2f;
-    --ring: #4493f8;
-  }
 }
 </style>

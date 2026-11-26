@@ -13,6 +13,10 @@ describe('lessonPages', () => {
     expect(Object.keys(lessonPages).sort()).toEqual(entryIds);
   });
 
+  it.each(Object.entries(lessonPages))('%s の最初の状態は、聞くか手を動かすかのどちらか', (_, page) => {
+    expect(['listen', 'do']).toContain(page.mode);
+  });
+
   it.each(Object.entries(lessonPages))(
     '%s の役割の行は1文で、見出し語から始めず、バッククォートが対になっている',
     (_, page) => {
