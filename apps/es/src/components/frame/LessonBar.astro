@@ -1,6 +1,7 @@
 ---
 import type { PageRoute } from '../../lib/lesson-frame';
 import LessonPageList from './LessonPageList.astro';
+import TextSizeSwitch from './TextSizeSwitch.astro';
 
 interface Segment {
   readonly id: string;
@@ -118,6 +119,7 @@ const {
   <details class="lesson-menu">
     <summary class="btn lesson-menu__button">メニュー</summary>
     <div class="lesson-menu__panel">
+      <TextSizeSwitch idPrefix="menu" />
       <p class="lesson-menu__links">
         <a class="btn btn--soft" href="/">トップページへ</a>
         <a class="btn btn--soft" href="/glossary/">用語</a>

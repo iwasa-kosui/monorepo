@@ -1,7 +1,9 @@
 import { setAction } from '../lesson/action-bar';
+import { notifyNudge, nudgeAttribute } from '../lesson/nudge';
 import { createChat } from './chat';
 import { clockOf, formatElapsed } from './clock';
 import { hasFired, isMet, keyOf, record } from './conditions';
+import { nextSignals, nudgeSpecOf } from './nudge-target';
 import { emitSignal, type PanelController } from './panel';
 import { mountPanel } from './panels';
 import { fillTemplate, interimText, type MemoOverride, memoViews, replyGate } from './rules';
@@ -18,7 +20,14 @@ import {
   type TimelineEvent,
   type WorkspaceScenario,
 } from './scenario';
-import { createScheduler, type Recurring, type ScheduledItem, tickMs, type WaitingItem } from './scheduler';
+import {
+  createScheduler,
+  type Recurring,
+  type ScheduledItem,
+  type SchedulerStatus,
+  tickMs,
+  type WaitingItem,
+} from './scheduler';
 import { createTabs } from './tabs';
 
 const typingLeadMs = 1500;
@@ -95,6 +104,53 @@ export const mountWorkspace = (root: HTMLElement): void => {
     }
   };
 
+  let nudged: HTMLElement | null = null;
+
+  const tabButtonOf = (key: string): HTMLElement | null =>
+    root.querySelector<HTMLElement>(`[role="tab"][data-tool="${key}"]`);
+
+  const nudgeVisible = (element: HTMLElement | null, chatFront: boolean): HTMLElement | null => {
+    if (element === null) return null;
+    const panel = element.closest<HTMLElement>('[role="tabpanel"][data-tool]');
+    const shown = panel !== null && (panel.dataset.tool !== state.selected || chatFront)
+      ? tabButtonOf(panel.dataset.tool ?? '')
+      : compact.matches && state.view === 'tools' && element.closest('.win.chat') !== null
+      ? root.querySelector<HTMLElement>('[data-chat-tab]')
+      : element;
+    return shown === null || shown.matches(':disabled') ? null : shown;
+  };
+
+  const nudgeElement = (status: SchedulerStatus, chatFront: boolean): HTMLElement | null => {
+    if (timed && status === 'idle') return nudgeVisible(startButton, chatFront);
+    if (status === 'paused') return null;
+    if (doneWhen !== undefined && isMet(fired, doneWhen)) return null;
+    const reply = root.querySelector<HTMLElement>('[data-action="reply"]');
+    if (reply !== null && !reply.hidden && !reply.matches(':disabled') && !state.replied) {
+      return nudgeVisible(reply, chatFront);
+    }
+    const context = { tabs: scenario.tabs, selected: chatFront ? '' : state.selected };
+    for (const signal of nextSignals(fired, scenario.gates, doneWhen)) {
+      const spec = nudgeSpecOf(signal, context);
+      if (spec === null) continue;
+      const element = nudgeVisible(
+        'tab' in spec ? tabButtonOf(spec.tab) : root.querySelector<HTMLElement>(spec.selector),
+        chatFront,
+      );
+      if (element !== null) return element;
+    }
+    return null;
+  };
+
+  const updateNudge = (): void => {
+    const chatFront = compact.matches && state.view === 'chat';
+    const next = nudgeElement(scheduler.status(), chatFront);
+    if (next === nudged) return;
+    nudged?.removeAttribute(nudgeAttribute);
+    next?.setAttribute(nudgeAttribute, '');
+    nudged = next;
+    notifyNudge();
+  };
+
   function render(): void {
     const status = scheduler.status();
     const gate = replyGate(scenario.gates, fired);
@@ -147,6 +203,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
         setAction({ state: done ? 'done' : 'do' });
       }
     }
+    updateNudge();
   }
 
   const startInterval = (): void => {
@@ -440,6 +497,11 @@ export const mountWorkspace = (root: HTMLElement): void => {
     const panel = tab.initial === false ? undefined : tabs.panelOf(tab.key);
     if (panel !== undefined) mountController(tab, panel);
   }
+  new MutationObserver(updateNudge).observe(root, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['disabled', 'hidden'],
+  });
   render();
   if (!timed) begin();
 };

@@ -1,0 +1,57 @@
+.nudge-arrow {
+  position: fixed;
+  z-index: 100;
+  padding: var(--space-2);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.nudge-arrow[data-visible="true"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.nudge-arrow[data-direction="up"] {
+  transform: rotate(180deg);
+}
+
+.nudge-arrow[data-direction="left"] {
+  transform: rotate(90deg);
+}
+
+.nudge-arrow[data-direction="right"] {
+  transform: rotate(-90deg);
+}
+
+.nudge-arrow svg {
+  display: block;
+  overflow: visible;
+  width: var(--space-6);
+  height: var(--space-6);
+  fill: var(--role-ink);
+  stroke: var(--role-ground);
+  stroke-width: 4.5;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nudge-arrow {
+    transition: opacity 0.25s ease-in-out, visibility 0s linear 0.25s;
+  }
+
+  .nudge-arrow[data-visible="true"] {
+    transition: opacity 0.25s ease-in-out, visibility 0s;
+  }
+
+  .nudge-arrow[data-visible="true"] svg {
+    animation: nudge-bob 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes nudge-bob {
+  50% {
+    transform: translateY(var(--space-2));
+  }
+}

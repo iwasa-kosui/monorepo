@@ -17,6 +17,7 @@ import {
 } from '../../lib/page-guide';
 import { formatClock, schedule, withTimeRanges } from '../../schedule';
 import '../../styles/lesson-frame.css';
+import '../../styles/nudge.css';
 import ActionBar from './ActionBar.astro';
 import LessonBar from './LessonBar.astro';
 
@@ -142,4 +143,5 @@ const nextHref = hrefOf(pages[index + 1]);
 <script>
 import '../../lesson/action-bar-client';
 import '../../lesson/frame-client';
+import '../../lesson/nudge-client';
 </script>

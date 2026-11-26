@@ -1,0 +1,55 @@
+.text-size {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.text-size__legend {
+  margin-bottom: var(--space-1);
+  padding: 0;
+  color: var(--role-ink-sub);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+.text-size__options {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+.text-size__option {
+  position: relative;
+  display: inline-flex;
+}
+.text-size__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  background: var(--role-rail);
+  padding: 0 var(--space-4);
+  color: var(--role-ink);
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  cursor: pointer;
+}
+.text-size__option:first-child .text-size__label {
+  border-radius: var(--radius-lg) var(--radius-sm) var(--radius-sm)
+    var(--radius-lg);
+}
+.text-size__option:last-child .text-size__label {
+  border-radius: var(--radius-sm) var(--radius-lg) var(--radius-lg)
+    var(--radius-sm);
+}
+.text-size__option:not(:first-child):not(:last-child) .text-size__label {
+  border-radius: var(--radius-sm);
+}
+.text-size__option input:checked + .text-size__label {
+  background: var(--role-ink);
+  color: var(--role-ground);
+}
+.text-size__option input:focus-visible + .text-size__label {
+  outline: 3px solid var(--role-ink);
+  outline-offset: 2px;
+}
