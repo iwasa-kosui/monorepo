@@ -11,6 +11,7 @@ export type EditorOptions = {
   label: string;
   readOnly?: boolean;
   wrap?: boolean;
+  typecheck?: Extension;
   onChange?: (doc: string) => void;
   onCursor?: (line: number, column: number) => void;
   onRun?: () => void;
@@ -66,6 +67,9 @@ export const createEditorState = (doc: string, options: EditorOptions): EditorSt
   }
   if (options.wrap === true) {
     extensions.push(EditorView.lineWrapping);
+  }
+  if (options.typecheck !== undefined) {
+    extensions.push(options.typecheck);
   }
   if (options.onCursor !== undefined) {
     const onCursor = options.onCursor;

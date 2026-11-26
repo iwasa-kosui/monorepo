@@ -2,7 +2,7 @@
 goal: 医療や教育を支えるシステムに求められる品質と、イベントソーシングを段階的に適用する考え方が分かります。
 ---
 
-<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
+<div class="grid gap-4 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
 
 ## 医療や教育を支えるシステムへの関心
@@ -38,7 +38,7 @@ import InvestigationScene from '../../../components/intro/InvestigationScene.ast
 </div>
 
 <InvestigationScene />
-<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
+<div class="grid gap-4 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
 
 ## 求められる品質: 過去を説明できること
@@ -69,7 +69,7 @@ import InvestigationScene from '../../../components/intro/InvestigationScene.ast
 
 </div>
 </div>
-<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
+<div class="grid gap-4 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
 
 ## イベントソーシングは一部の技術者のこだわりか
@@ -93,7 +93,7 @@ import InvestigationScene from '../../../components/intro/InvestigationScene.ast
 
 </div>
 </div>
-<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
+<div class="grid gap-4 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
 
 ## このハンズオンの目的
@@ -111,32 +111,27 @@ import InvestigationScene from '../../../components/intro/InvestigationScene.ast
 </div>
 ---
 wide: true
+immersive: true
 ---
 
-import MethodFigure from '../../../components/intro/MethodFigure.astro';
+import BackupRestore from '../../../components/intro/BackupRestore.astro';
+import { evidenceScenario } from '../../../components/intro/evidence-scenario';
+import Workspace from '../../../components/workspace/Workspace.astro';
 
-## 記録する方法の比較
+<div class="visually-hidden">
 
-過去の状態を見るだけなら、私たちもデータ基盤のタイムトラベルで調べられるようにしました。手作業の SQL まで拾うならトリガーや CDC の方が強いです。しかし、なぜ変えたのかを知っているのは更新処理を呼ぶコードだけです。
+## アクセスログとDBバックアップでは何が解決できないのか
 
-<MethodFigure />
-import RecordStartFigure from '../../../components/intro/RecordStartFigure.astro';
-
-<div class="intro-spread">
-<div class="intro-text">
-
-## 後から記録を足すことの限界
-
-もちろん、後から記録を足しても、足す前に起きたことは分かりません。第3章で、キャンセルの理由を答えられない行を見てもらいます。
-
-しかし、「今記録できていないから今さらやっても仕方がない」という考えは捨てるべきです。データが記録できていない状態を現在進行形の問題として捉えるべきです。
-
-この問題は、私たちアプリケーション開発者にとっても他人ごとではありません。
+アクセスログとDBバックアップに、誰が、いつ、何を、なぜは残っているでしょうか。2ページ目のポチのキャンセルを、もう一度調べてみましょう。
 
 </div>
-<RecordStartFigure />
-</div>
-<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
+
+<Workspace scenario={evidenceScenario}>
+<Fragment slot="backup">
+<BackupRestore />
+</Fragment>
+</Workspace>
+<div class="grid gap-4 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
 
 ## コードを見ない開発と品質の保証

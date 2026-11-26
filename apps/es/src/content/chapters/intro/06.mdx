@@ -1,11 +1,22 @@
 ---
 wide: true
+immersive: true
 ---
 
-import MethodFigure from '../../../components/intro/MethodFigure.astro';
+import BackupRestore from '../../../components/intro/BackupRestore.astro';
+import { evidenceScenario } from '../../../components/intro/evidence-scenario';
+import Workspace from '../../../components/workspace/Workspace.astro';
 
-## 記録する方法の比較
+<div class="visually-hidden">
 
-過去の状態を見るだけなら、私たちもデータ基盤のタイムトラベルで調べられるようにしました。手作業の SQL まで拾うならトリガーや CDC の方が強いです。しかし、なぜ変えたのかを知っているのは更新処理を呼ぶコードだけです。
+## アクセスログとDBバックアップでは何が解決できないのか
 
-<MethodFigure />
+アクセスログとDBバックアップに、誰が、いつ、何を、なぜは残っているでしょうか。2ページ目のポチのキャンセルを、もう一度調べてみましょう。
+
+</div>
+
+<Workspace scenario={evidenceScenario}>
+<Fragment slot="backup">
+<BackupRestore />
+</Fragment>
+</Workspace>

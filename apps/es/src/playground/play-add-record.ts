@@ -131,6 +131,7 @@ const mount = (root: HTMLElement): void => {
     opened: [editedFile],
     active: editedFile,
     wrap: true,
+    typecheck: true,
     onChange: () => {
       persist();
       discardBackup();

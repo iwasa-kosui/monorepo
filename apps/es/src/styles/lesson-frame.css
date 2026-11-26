@@ -218,6 +218,13 @@ summary.lesson-pages__title:focus-visible {
   font-size: 0.8125rem;
   line-height: 1.5;
 }
+.content .lesson-frame--intro .lesson-role,
+.lesson-frame--intro .content .lesson-role {
+  font-size: 1rem;
+}
+.lesson-frame--intro .chapter-goal {
+  font-size: 1.25rem;
+}
 .lesson-role strong {
   color: var(--role-accent);
   font-weight: 700;
@@ -480,6 +487,9 @@ summary.lesson-pages__title:focus-visible {
   .lesson-frame--wide .chapter-goal {
     margin-top: 0.25rem;
     font-size: 0.875rem;
+  }
+  .lesson-frame--intro .chapter-goal {
+    font-size: 1.125rem;
   }
   .content .lesson-frame--wide .chapter-body,
   .lesson-frame--wide .content .chapter-body {

@@ -1,0 +1,232 @@
+---
+import SqlPlayground from '../SqlPlayground.astro';
+import { restoredVisitsSql } from './evidence-scenario';
+
+interface Props {
+  duration?: number;
+}
+
+const { duration = 6000 } = Astro.props;
+
+const backups = ['2026-11-04 00:00', '2026-11-05 00:00', '2026-11-06 00:00'];
+const initial = 'SELECT * FROM visits;';
+---
+
+<div
+  class="restore"
+  data-backup-restore
+  data-duration={duration}
+  data-initial-sql={initial}
+>
+  <fieldset class="backups">
+    <legend>毎日 0:00 の定期バックアップ</legend>
+    {
+      backups.map((backup, index) => (
+        <label>
+          <input
+            type="radio"
+            name="backup"
+            value={backup}
+            checked={index === backups.length - 1}
+          />
+          {backup}
+        </label>
+      ))
+    }
+  </fieldset>
+  <button type="button" class="run" data-restore>復元する</button>
+  <p class="status" aria-live="polite" data-status></p>
+  <div class="bar" aria-hidden="true" data-bar hidden><span></span></div>
+  <h3 class="restored" data-heading hidden></h3>
+  <SqlPlayground
+    id="intro-evidence-restored"
+    setup={restoredVisitsSql}
+    initial={initial}
+    hidden={true}
+  />
+</div>
+
+<style>
+.restore {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.restore > :global(.playground) {
+  align-self: stretch;
+  margin-block: 0;
+}
+.backups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  border: 1px solid var(--role-rule);
+  border-radius: var(--radius-md);
+  padding: 0.375rem 0.75rem 0.5rem;
+}
+.backups legend {
+  padding-inline: 0.25rem;
+  font-weight: 700;
+}
+.backups label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: var(--font-code);
+}
+.backups input {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--role-accent);
+}
+.run {
+  min-height: 2.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--role-accent);
+  padding: 0 1.25rem;
+  color: var(--role-on-accent);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.run:disabled {
+  background: var(--role-sunken);
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+.status {
+  margin: 0;
+  font-weight: 700;
+}
+.status:empty {
+  display: none;
+}
+.bar {
+  align-self: stretch;
+  height: 0.75rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--role-sunken);
+}
+.bar[hidden] {
+  display: none;
+}
+.bar span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  background: var(--role-accent);
+  animation: fill var(--duration, 6000ms) linear forwards;
+}
+.restored {
+  margin: 0.25rem 0 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+.restored[hidden] {
+  display: none;
+}
+
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar span {
+    animation: none;
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--role-accent) 0 0.5rem,
+      transparent 0.5rem 1rem
+    );
+  }
+}
+
+.restore :global([data-role="reset"]),
+.restore :global([data-role="reset-sql"]),
+.restore :global([data-role="restore"]) {
+  display: none !important;
+}
+</style>
+
+<script>
+import { emitSignal } from '../../workspace/panel';
+
+for (
+  const root of document.querySelectorAll<HTMLElement>('[data-backup-restore]')
+) {
+  const duration = Number(root.dataset.duration);
+  const button = root.querySelector<HTMLButtonElement>('[data-restore]');
+  const status = root.querySelector<HTMLElement>('[data-status]');
+  const bar = root.querySelector<HTMLElement>('[data-bar]');
+  const heading = root.querySelector<HTMLElement>('[data-heading]');
+  const playground = root.querySelector<HTMLElement>('[data-playground="sql"]');
+  const radios = [
+    ...root.querySelectorAll<HTMLInputElement>('input[name="backup"]'),
+  ];
+  if (
+    button === null || status === null || bar === null || heading === null
+    || playground === null
+  ) continue;
+
+  const results = playground.querySelector<HTMLElement>(
+    '[data-role="results"]',
+  );
+  if (results !== null) {
+    new MutationObserver(() => {
+      if (results.querySelector('.playground-result') === null) return;
+      emitSignal(root, 'sql:executed', { key: 'restored' });
+    }).observe(results, { childList: true });
+  }
+
+  let restoredOnce = false;
+
+  const lock = (locked: boolean): void => {
+    button.disabled = locked;
+    for (const radio of radios) radio.disabled = locked;
+  };
+
+  const finish = (label: string): void => {
+    status.textContent = '';
+    bar.hidden = true;
+    heading.textContent = `復元した DB（${label} 時点）`;
+    heading.hidden = false;
+    if (restoredOnce) {
+      playground.dispatchEvent(new CustomEvent('playground:discard-state'));
+      playground.dispatchEvent(
+        new CustomEvent('playground:set-sql', {
+          detail: { sql: root.dataset.initialSql ?? '', run: false },
+        }),
+      );
+      playground.querySelector('[data-role="results"]')?.replaceChildren();
+    }
+    playground.hidden = false;
+    restoredOnce = true;
+    lock(false);
+  };
+
+  button.addEventListener('click', () => {
+    const chosen = radios.find((radio) => radio.checked);
+    if (chosen === undefined || button.disabled) return;
+    lock(true);
+    heading.hidden = true;
+    if (restoredOnce) playground.hidden = true;
+    bar.style.setProperty('--duration', `${duration}ms`);
+    bar.hidden = false;
+    status.textContent = '復元しています';
+    setTimeout(() => finish(chosen.value), duration);
+  });
+}
+</script>
