@@ -857,6 +857,11 @@ describe('第1章から第4章とまとめの筋書き', () => {
       expect(mdxOf('summary/02')).toMatch(/<Fragment slot="composer">\n<OwnQuestion id="summary-update" /);
     });
 
+    it('第4章 5 ページ目で選んだパターンを入力欄に書き、まとめの 2 ページ目がその内容を表示する', () => {
+      expect(mdxOf('chapter-4/05')).toContain('<OwnQuestion id="chapter-4"');
+      expect(mdxOf('summary/02')).toContain('<OwnQuestionView id="chapter-4"');
+    });
+
     it('実行基盤を使うタブ（console、editor）を置かない', () => {
       for (const id of ['summary/01', 'summary/02']) {
         const scenario = lessonScenarios[id];

@@ -201,7 +201,7 @@ const comparisonPosts: readonly Post[] = [posts.comparisonMade, posts.chooseOne]
 
 export const chapter4Overview: WorkspaceScenario = lessonScenario({
   id: 'chapter-4-overview',
-  label: '3つの相談を、自分が挙げた質問に近いかを考えながら見る',
+  label: '3つの相談を、普段の業務で運用しているシステムに近いかを考えながら見る',
   history: [posts.tamaAsked, posts.tamaAnswer, posts.tamaAcknowledged],
   timeline: opening(...overviewPosts),
   tabs: [docTab('memo', '相談の一覧', 'consultations/list')],
