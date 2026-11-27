@@ -192,7 +192,7 @@ export const incidentScenario: WorkspaceScenario = {
       },
     },
     {
-      at: 30,
+      at: 15,
       kind: 'log',
       entry: {
         level: 'INFO',
@@ -203,11 +203,11 @@ export const incidentScenario: WorkspaceScenario = {
       },
       millis: 214,
     },
-    { at: 30, kind: 'sql', sql: cancelTamaSql },
-    { at: 30, kind: 'affected', count: 2 },
-    { at: 36, kind: 'post', post: { actor: 'support', text: 'すみません、もう1件です' } },
+    { at: 15, kind: 'sql', sql: cancelTamaSql },
+    { at: 15, kind: 'affected', count: 2 },
+    { at: 20, kind: 'post', post: { actor: 'support', text: 'すみません、もう1件です' } },
     {
-      at: 39,
+      at: 23,
       kind: 'post',
       post: {
         actor: 'support',
@@ -216,7 +216,7 @@ export const incidentScenario: WorkspaceScenario = {
       },
     },
     {
-      at: 60,
+      at: 34,
       kind: 'post',
       post: {
         actor: 'support',
@@ -224,7 +224,7 @@ export const incidentScenario: WorkspaceScenario = {
       },
     },
     {
-      at: 105,
+      at: 56,
       kind: 'post',
       post: { actor: 'support', text: 'どうでしょう…？病院さんずっとお待ちで💦' },
       unlessReplied: true,
@@ -380,13 +380,13 @@ export const incidentScenario: WorkspaceScenario = {
   reply: {
     lines: [
       { text: '18:11:58 にポチの来院をキャンセルする操作があったのは確認できました' },
-      { after: 30, text: 'タマの来院も 18:20:30 に同じ操作でキャンセルされてます' },
+      { after: 15, text: 'タマの来院も 18:20:15 に同じ操作でキャンセルされてます' },
       { text: 'ただ、誰がなんでキャンセルしたかは、DB にもログにもコードにも残ってなくて、分からないです…' },
     ],
     followUps: [
-      { actor: 'support', delay: 1.5, text: 'えっ' },
-      { actor: 'support', delay: 1.5, text: '誰がなんでキャンセルしたか分からないと、病院さんに説明できないです…' },
-      { actor: 'support', delay: 2, text: 'なんで記録取ってないんですか' },
+      { actor: 'support', delay: 0.8, text: 'えっ' },
+      { actor: 'support', delay: 0.8, text: '誰がなんでキャンセルしたか分からないと、病院さんに説明できないです…' },
+      { actor: 'support', delay: 1, text: 'なんで記録取ってないんですか' },
     ],
   },
   agent: {

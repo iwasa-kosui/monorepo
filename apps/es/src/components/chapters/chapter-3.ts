@@ -55,7 +55,7 @@ export const chapter3Answer: WorkspaceScenario = lessonScenario({
   reply: {
     lines: [{ text: '{operated_by}が、{reason}でキャンセルしてます（{event_at}）' }],
     from: { signal: targetShown, formats: { event_at: 'datetime' } },
-    followUps: [{ actor: 'support', delay: 1.2, text: answeredThanks.text }],
+    followUps: [{ actor: 'support', delay: 0.6, text: answeredThanks.text }],
   },
   tabs: [
     {
@@ -143,7 +143,7 @@ export const chapter3Before: WorkspaceScenario = lessonScenario({
   },
   reply: {
     lines: [{ text: posts.tamaAnswer.text }],
-    followUps: [{ actor: 'support', delay: 1.2, text: posts.tamaAcknowledged.text }],
+    followUps: [{ actor: 'support', delay: 0.6, text: posts.tamaAcknowledged.text }],
   },
   tabs: [docTab('memo', '記録を足す前に起きたこと', 'guides/before-record')],
 });
