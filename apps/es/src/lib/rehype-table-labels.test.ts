@@ -20,11 +20,6 @@ const tableOf = (head: Node[] | undefined, rows: Node[][]): Node =>
   ]);
 
 const marked = (...children: Node[]): Node => ({
-  ...el('div', children),
-  properties: { 'data-alternatives-table': '' },
-});
-
-const markedJsx = (...children: Node[]): Node => ({
   type: 'mdxJsxFlowElement',
   attributes: [{ type: 'mdxJsxAttribute', name: 'data-alternatives-table' }],
   children,
@@ -73,13 +68,6 @@ describe('rehypeTableLabels', () => {
     const table = tableOf(undefined, [[cell('td', text('A')), cell('td', text('B'))]]);
     run(el('root', [marked(table)]));
     expect(bodyCells(table).map((c) => c.properties?.['data-label'])).toEqual([undefined, undefined]);
-  });
-
-  it('MDX の JSX 要素で印を付けた中の表にも付ける', () => {
-    const table = tableOf([cell('th', text('案'))], [[cell('td', text('A'))]]);
-    run(el('root', [markedJsx(table)]));
-    expect(table.properties?.role).toBe('table');
-    expect(bodyCells(table)[0]?.properties?.['data-label']).toBe('案');
   });
 
   it('印の無い表は変更しない', () => {

@@ -51,8 +51,7 @@ const labelCells = (table: HastNode, labels: readonly string[]): void => {
 const marker = 'data-alternatives-table';
 
 const isMarked = (node: HastNode): boolean =>
-  (node.type === 'element' && node.properties?.[marker] !== undefined)
-  || (node.type === 'mdxJsxFlowElement' && (node.attributes ?? []).some((attribute) => attribute.name === marker));
+  node.type === 'mdxJsxFlowElement' && (node.attributes ?? []).some((attribute) => attribute.name === marker);
 
 const walk = (node: HastNode, inside: boolean): void => {
   const marked = inside || isMarked(node);

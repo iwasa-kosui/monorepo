@@ -434,6 +434,7 @@ const approvable = config.approvable === true;
     .doc-paper
     :global([data-alternatives-table] td:not(:first-child))::before {
     content: attr(data-label);
+    content: attr(data-label) / "";
     color: var(--role-muted);
     text-wrap: balance;
   }
