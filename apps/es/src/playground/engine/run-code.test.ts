@@ -176,6 +176,37 @@ describe('Node に合わせた振る舞い', () => {
   });
 });
 
+describe('console.table', () => {
+  it('table に見出しとセルの文字列を持たせ、text は罫線の表のままにする', async () => {
+    const outcome = await run({
+      'main.ts': 'console.table([{ id: \'visit-1\', count: 2 }, { id: \'visit-2\' }]);\nconsole.log(\'after\');',
+    }, 'main.ts');
+    const [table, after] = outcome.logs;
+    expect(table?.table).toEqual({
+      head: ['(index)', 'id', 'count'],
+      rows: [['0', '\'visit-1\'', '2'], ['1', '\'visit-2\'', '']],
+    });
+    expect(table?.text).toBe([
+      '┌─────────┬───────────┬───────┐',
+      '│ (index) │ id        │ count │',
+      '├─────────┼───────────┼───────┤',
+      '│ 0       │ \'visit-1\' │ 2     │',
+      '│ 1       │ \'visit-2\' │       │',
+      '└─────────┴───────────┴───────┘',
+    ].join('\n'));
+    expect(after).toEqual({ stream: 'stdout', text: 'after' });
+  });
+
+  it('1 行の文字数の上限で text が切れたときは table を付けない', async () => {
+    const outcome = await run({
+      'main.ts': 'console.table([{ v: \'x\'.repeat(20000) }]);',
+    }, 'main.ts');
+    expect(outcome.logs).toHaveLength(1);
+    expect(outcome.logs[0]?.text).toHaveLength(10_001);
+    expect(outcome.logs[0]?.table).toBeUndefined();
+  });
+});
+
 describe('出力の上限', () => {
   it('console の行数、合計文字数、1 行の文字数に上限がある', async () => {
     const lines = await run({ 'main.ts': 'for (let i = 0; i < 20000; i += 1) console.log(\'line \' + i);' }, 'main.ts');

@@ -2,7 +2,7 @@ import { createRuntime, RuntimeScriptError } from './client.ts';
 import { applyRuntimeState, element, failureElement, mountWhenShown, query } from './dom.ts';
 import { revealText } from './editor.ts';
 import { maxLogLineChars, maxMessageChars } from './engine/limits.ts';
-import type { RunOutcome } from './engine/types.ts';
+import type { LogLine, LogTable, RunOutcome } from './engine/types.ts';
 import { clearEdits, loadEdits, saveEdits } from './storage.ts';
 import { createWorkbench } from './workbench.ts';
 
@@ -18,7 +18,34 @@ type CodeConfig = {
   complete: { files: Record<string, string> } | null;
 };
 
-const logText = (outcome: RunOutcome): string => outcome.logs.map((line) => line.text).join('\n');
+const renderTable = ({ head, rows }: LogTable): HTMLElement =>
+  element('div', { className: 'playground-table-scroll' }, [
+    element('table', { className: 'playground-console-table' }, [
+      element('thead', {}, [element('tr', {}, head.map((title) => element('th', { text: title })))]),
+      element('tbody', {}, rows.map((row) => element('tr', {}, row.map((cell) => element('td', { text: cell }))))),
+    ]),
+  ]);
+
+const renderLogLines = (logs: readonly LogLine[]): HTMLElement[] => {
+  const elements: HTMLElement[] = [];
+  let texts: string[] = [];
+  const flush = (): void => {
+    if (texts.length > 0) {
+      elements.push(element('pre', { className: 'playground-log', text: texts.join('\n') }));
+      texts = [];
+    }
+  };
+  for (const line of logs) {
+    if (line.table === undefined) {
+      texts.push(line.text);
+    } else {
+      flush();
+      elements.push(renderTable(line.table));
+    }
+  }
+  flush();
+  return elements;
+};
 
 const renderLogs = (outcome: RunOutcome): HTMLElement[] => {
   const { totalLines, shownLines, cutLines } = outcome.logSummary;
@@ -40,7 +67,7 @@ const renderLogs = (outcome: RunOutcome): HTMLElement[] => {
   }
   return [
     element('p', { className: 'playground-label', text: '出力' }),
-    element('pre', { className: 'playground-log', text: logText(outcome) }),
+    ...renderLogLines(outcome.logs),
     ...notes,
   ];
 };
