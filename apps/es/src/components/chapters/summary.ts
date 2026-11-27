@@ -11,7 +11,7 @@ export const summaryToday: WorkspaceScenario = lessonScenario({
 
 export const summaryDecide: WorkspaceScenario = lessonScenario({
   id: 'summary-decide',
-  label: '自分のシステムで記録を足す更新処理を1つ決める',
+  label: '普段の業務で運用しているシステムで記録を足す更新処理を1つ決める',
   history: [posts.goodWork, posts.todayMemo],
   timeline: opening(posts.decideLast, posts.skipIfNone),
   done: 'question:written',
