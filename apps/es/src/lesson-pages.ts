@@ -21,7 +21,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/01': {
     flow: 'problem',
     mode: 'listen',
-    role: '医療や教育を支えるシステムへの関心',
+    role: 'ミッションクリティカルな領域において求められる品質',
   },
   'intro/02': {
     flow: 'try',
