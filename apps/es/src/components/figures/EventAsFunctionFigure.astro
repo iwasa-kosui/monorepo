@@ -15,14 +15,6 @@ const targetState = [
   '}',
 ];
 
-const right = (length: number): string =>
-  `<svg class="h" viewBox="0 0 ${length} 24" aria-hidden="true" focusable="false"><path class="shaft" d="M4 12H${
-    length - 6
-  }"/><path class="head" d="M${length - 16} 5L${length - 4} 12L${
-    length - 16
-  } 19"/><circle class="dot" cx="9" cy="12" r="5" style="--dx:${
-    length - 24
-  }px;--dy:0px"/></svg>`;
 const down = (length: number): string =>
   `<svg class="v" viewBox="0 0 24 ${length}" aria-hidden="true" focusable="false"><path class="shaft" d="M12 4V${
     length - 6
@@ -32,7 +24,7 @@ const down = (length: number): string =>
     length - 24
   }px"/></svg>`;
 
-const arrow = right(96) + down(48);
+const arrow = down(48);
 ---
 
 <section
@@ -82,7 +74,6 @@ const arrow = right(96) + down(48);
 
 <style>
 .cfig.fn {
-  container-type: inline-size;
   gap: var(--space-3);
 }
 .cfig.fn .mono {
@@ -209,9 +200,6 @@ const arrow = right(96) + down(48);
   width: 100%;
   height: auto;
 }
-.arrow :global(svg.h) {
-  display: none;
-}
 .arrow :global(.shaft),
 .arrow :global(.head) {
   fill: none;
@@ -223,30 +211,6 @@ const arrow = right(96) + down(48);
 .arrow :global(.dot) {
   fill: var(--role-accent);
   opacity: 0;
-}
-
-@container (min-width: 68rem) {
-  .flow {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 6rem minmax(0, 1fr);
-    align-items: center;
-    gap: var(--space-2);
-  }
-  .link {
-    flex-direction: column;
-    gap: var(--space-1);
-    text-align: center;
-  }
-  .arrow {
-    order: 0;
-    width: 100%;
-  }
-  .arrow :global(svg.h) {
-    display: block;
-  }
-  .arrow :global(svg.v) {
-    display: none;
-  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
