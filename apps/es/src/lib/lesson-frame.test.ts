@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { groupPages } from './lesson-frame';
+import { groupPages, overallPosition } from './lesson-frame';
 
 const pages = [
   { chapter: 'intro' },
@@ -35,5 +35,30 @@ describe('groupPages', () => {
 
   it('現在のページの位置が範囲外ならエラーにする', () => {
     expect(() => groupPages(pages, 5)).toThrow();
+  });
+});
+
+describe('overallPosition', () => {
+  const numbered = [
+    { chapter: 'intro', number: 1 },
+    { chapter: 'intro', number: 2 },
+    { chapter: 'chapter-1', number: 1 },
+    { chapter: 'chapter-1', number: 2 },
+    { chapter: 'summary', number: 1 },
+  ];
+
+  it('章をまたいだ通し番号と総数を返す', () => {
+    expect(overallPosition(numbered, 'chapter-1', 2)).toEqual({ number: 4, total: 5 });
+  });
+
+  it('ページを1つ足すと、後ろのページの通し番号と総数が1ずつ増える', () => {
+    const extended = [...numbered.slice(0, 2), { chapter: 'intro', number: 3 }, ...numbered.slice(2)];
+    const before = overallPosition(numbered, 'summary', 1);
+    const after = overallPosition(extended, 'summary', 1);
+    expect(after).toEqual({ number: before!.number + 1, total: before!.total + 1 });
+  });
+
+  it('該当するページが無いと undefined を返す', () => {
+    expect(overallPosition(numbered, 'chapter-2', 1)).toBeUndefined();
   });
 });

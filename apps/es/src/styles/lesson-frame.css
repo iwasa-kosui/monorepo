@@ -78,6 +78,9 @@
   font-weight: var(--weight-bold);
   white-space: nowrap;
 }
+.lesson-bar__count-label {
+  margin-inline-end: 0.25em;
+}
 
 .lesson-menu {
   position: relative;
@@ -307,6 +310,20 @@
 }
 
 @media (max-width: 767px) {
+  .lesson-bar__count {
+    position: relative;
+  }
+  .lesson-bar__count-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    border: 0;
+    white-space: nowrap;
+  }
   .lesson-main {
     --main-pad-top: var(--space-4);
     --main-pad-x: var(--space-4);

@@ -28,8 +28,8 @@ interface Props {
   progressLabel: string;
   estimate: string;
   limit: string;
-  number: number;
-  total: number;
+  overallNumber: number;
+  overallTotal: number;
   previousHref?: string;
   nextHref?: string;
   groups: readonly Group[];
@@ -41,8 +41,8 @@ const {
   progressLabel,
   estimate,
   limit,
-  number,
-  total,
+  overallNumber,
+  overallTotal,
   previousHref,
   nextHref,
   groups,
@@ -92,7 +92,11 @@ const {
         <path d="M12.5 4.5 7 10l5.5 5.5"></path>
       </svg>
     </button>
-    <p class="lesson-bar__count">{number} / {total}</p>
+    <p class="lesson-bar__count">
+      <span class="lesson-bar__count-label">全体</span>{overallNumber} / {
+        overallTotal
+      }
+    </p>
     <button
       type="button"
       class="btn lesson-bar__step"
