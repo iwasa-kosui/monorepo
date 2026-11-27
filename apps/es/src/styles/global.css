@@ -162,9 +162,6 @@ body:not(.chapter-page):has(.top-page) .content {
   display: none;
 }
 
-.content .chapter-goal {
-  margin: 0.25rem 0 0;
-}
 .visually-hidden {
   position: absolute;
   width: 1px;

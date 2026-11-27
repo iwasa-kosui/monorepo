@@ -97,7 +97,6 @@ const limit = formatClock(
 const fullWidth = meta.flow === 'exercise';
 const wide = chapter === 'intro' || page.entry.data.wide === true;
 const immersive = page.entry.data.immersive === true;
-const goal = page.entry.data.goal;
 const nextHref = hrefOf(pages[index + 1]);
 ---
 
@@ -125,14 +124,6 @@ const nextHref = hrefOf(pages[index + 1]);
     />
     <ActionBar state={meta.mode} text={meta.role} nextHref={nextHref} />
     <main class="lesson-main content">
-      {
-        goal !== undefined && meta.mode === 'listen' && !immersive
-          && (
-          <p class="note chapter-goal">
-            <strong>できるようになること：</strong>{goal}
-          </p>
-        )
-      }
       <article class="chapter-body">
         <slot />
       </article>
