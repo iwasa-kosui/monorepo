@@ -142,7 +142,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-4/05': {
     flow: 'try',
     mode: 'do',
-    role: '文書の比較表で、3つのパターンを同じ軸で比べ、第1章で挙げた問いに近いパターンを1つ選ぶ',
+    role: '文書の比較表で、3つのパターンを同じ軸で比べ、普段の業務で運用しているシステムに近いパターンを1つ選ぶ',
   },
   'chapter-4/06': {
     flow: 'recap',

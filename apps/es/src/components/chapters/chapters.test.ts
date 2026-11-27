@@ -138,7 +138,9 @@ const tamaAnswer = 'タマの方は、記録を足す前のキャンセルなの
 const tamaAcknowledged = 'そうなんですね…了解です';
 const otherTeams = '記録の話、ほかのチームからも相談が来てます';
 const threeConsultations = '3つあるので順番に見ていきましょう';
-const closestQuestion = '自分が挙げた質問に近いのはどれか、考えながら見てもらえると';
+const pastExperience =
+  '医療SaaSの共通基盤で、既存の顧客基盤に最新状態しか残っておらず、過去のユーザー、店舗、端末、ライセンスの変化を追うことが難しかった経験があります';
+const closestQuestion = '普段の業務で運用しているシステムに近いのはどれか、考えながら見てもらえると';
 const financeGreeting = 'お疲れ様です。昨日のキャンセル件数の件で質問です';
 const financeAsked = '集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？';
 const financeAnswer = '記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです';
@@ -184,6 +186,7 @@ const earlier: readonly (readonly [string, string])[] = [
 const chapter4Texts = [
   otherTeams,
   threeConsultations,
+  pastExperience,
   closestQuestion,
   financeGreeting,
   financeAsked,
@@ -367,8 +370,16 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(openingChannel(scenario.timeline, scenario.chat.channel)).toBe(devChannel);
   });
 
-  it('参加者への問いかけ 6 件だけが kosui の発言である', () => {
-    const asked = new Set([ownQuestion, afterOwnQuestion, closestQuestion, chooseOne, decideLast, skipIfNone]);
+  it('参加者への問いかけ 6 件と、第4章の経験の 1 件だけが kosui の発言である', () => {
+    const asked = new Set([
+      ownQuestion,
+      afterOwnQuestion,
+      pastExperience,
+      closestQuestion,
+      chooseOne,
+      decideLast,
+      skipIfNone,
+    ]);
     const found = new Set<string>();
     for (const [, scenario] of entries) {
       for (const post of postsOf(scenario)) {
@@ -699,7 +710,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       return scenario.history.map((post) => [post.actor, post.text] as const);
     };
 
-    it('1 ページ目は、第3章 4 ページ目の最後のやり取りを履歴に持ち、開いた時点でテックリードが 2 件、kosui が 1 件投稿する', () => {
+    it('1 ページ目は、第3章 4 ページ目の最後のやり取りを履歴に持ち、開いた時点でテックリードが 2 件、kosui が 2 件投稿する', () => {
       const scenario = lessonScenarios['chapter-4/01'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       expect(history('chapter-4/01')).toEqual([
@@ -710,6 +721,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       expect(opened(scenario)).toEqual([
         ['techlead', otherTeams],
         ['techlead', threeConsultations],
+        ['kosui', pastExperience],
         ['kosui', closestQuestion],
       ]);
       expect(summary(scenario)).toEqual(['memo:doc:相談の一覧']);
@@ -720,7 +732,10 @@ describe('第1章から第4章とまとめの筋書き', () => {
     const consultations = [
       {
         id: 'chapter-4/02',
-        history: [['techlead', otherTeams], ['techlead', threeConsultations], ['kosui', closestQuestion]],
+        history: [['techlead', otherTeams], ['techlead', threeConsultations], ['kosui', pastExperience], [
+          'kosui',
+          closestQuestion,
+        ]],
         opened: [['finance', financeGreeting], ['finance', financeAsked]],
         answer: financeAnswer,
         follow: ['finance', financeThanks],
@@ -856,6 +871,11 @@ describe('第1章から第4章とまとめの筋書き', () => {
       expect(summary(scenario)).toEqual(['memo:doc:持ち帰る手順']);
       expect(scenario.chat.buttons).toEqual([]);
       expect(mdxOf('summary/02')).toMatch(/<Fragment slot="composer">\n<OwnQuestion id="summary-update" /);
+    });
+
+    it('第4章 5 ページ目で選んだパターンを入力欄に書き、まとめの 2 ページ目がその内容を表示する', () => {
+      expect(mdxOf('chapter-4/05')).toContain('<OwnQuestion id="chapter-4"');
+      expect(mdxOf('summary/02')).toContain('<OwnQuestionView id="chapter-4"');
     });
 
     it('実行基盤を使うタブ（console、editor）を置かない', () => {
