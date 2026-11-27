@@ -20,26 +20,26 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 <CodePlayground
   exercise="chapter-4-external-sync-done"
   editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'what-was-sent.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'what-was-imported.ts']}
   testFile="visits.test.ts"
-  reveal="export const cancelVisit"
-  scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
+  reveal="export const importExternalCancellation"
+  scripts={[{ file: 'what-was-imported.ts', label: 'what-was-imported.ts を実行する' }]}
 />
 </Fragment>
 <Fragment slot="memo">
 
-> 外部システムに、いつ何を送ったのか。
+> 予約サイトから、いつ何が届き、どう取り込んだのか。
 
-`cancelVisit` は来院をキャンセルしたあと、リマインダーの取り消しを外部システムへ送ります。外部への送信はトランザクションに入りません。そこで `cancelVisit` は記録を2回に分けます。`cancelVisit` は、トランザクションの中で `VisitCancelled` と送信の予定 `ReminderCancellationRequested` を記録します。`cancelVisit` は、コミットの後に外部へ送り、結果を `ReminderCancellationSent` か `ReminderCancellationFailed` として記録します。
+飼い主は、予約サイトで来院をキャンセルできます。予約サイトは、キャンセルを予約システムへ送ります。`importExternalCancellation` は、届いたキャンセルを `ExternalCancellationReceived` として記録します。この記録は、予約サイトが送ってきた内容で、予約システムがどう反映したかを含みません。続けて、`importExternalCancellation` は来院をキャンセルし、取り込んだ結果を記録します。キャンセルできた場合は、第2章と同じ `VisitCancelled` を記録します。キャンセルできなかった場合は、`ExternalCancellationRejected` を理由と一緒に記録します。届いた内容と取り込んだ結果は、同じトランザクションで記録します。
 
-3行目は、確認用スクリプトが結果の記録を失敗させた例です。`result` の `unconfirmed` は、送信の予定があり結果の記録が無い送信を表します。この送信が外部に届いたとは限りません。この演習のコードは、未確認の送信を再送しません。
+実行結果の表の2行目は、予約サイトでの操作は診察の前で、予約システムに届いたのは診察の後だった例です。予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。`result` の `rejected` は、届いたキャンセルを取り込まなかったことを表します。`rejectedReason` は、取り込まなかった理由です。
 
 <div class="detail-row">
 
 <details>
 <summary>読み取り関数を見る</summary>
 
-<CodeBlock code={readFunctionsOf('chapter-4-external-sync-done', 'findSendRecords')} />
+<CodeBlock code={readFunctionsOf('chapter-4-external-sync-done', 'findImportRecords')} />
 
 </details>
 
@@ -47,20 +47,12 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 <summary>出力例を見る</summary>
 
 ```text
-┌─────────┬────────────────────────────┬────────────────────────────┬─────────────────────────────────────────────┐
-│ (index) │ requestedAt                │ finishedAt                 │ message                                     │
-├─────────┼────────────────────────────┼────────────────────────────┼─────────────────────────────────────────────┤
-│ 0       │ '2026-11-06T10:14:12.720Z' │ '2026-11-06T10:14:12.720Z' │ { visitId: 'visit-1', petName: 'ポチ' }     │
-│ 1       │ '2026-11-06T10:14:12.720Z' │ '2026-11-06T10:14:12.720Z' │ { visitId: 'visit-2', petName: 'タマ' }     │
-│ 2       │ '2026-11-06T10:14:12.720Z' │ null                       │ { visitId: 'visit-3', petName: 'コタロウ' } │
-└─────────┴────────────────────────────┴────────────────────────────┴─────────────────────────────────────────────┘
-┌─────────┬────────────────────────┬────────────────┬───────────────┬──────────────────────────┐
-│ (index) │ reason                 │ operatedBy     │ result        │ error                    │
-├─────────┼────────────────────────┼────────────────┼───────────────┼──────────────────────────┤
-│ 0       │ '飼い主の都合'         │ '受付スタッフ' │ 'sent'        │ null                     │
-│ 1       │ '来院前に回復したため' │ '院長'         │ 'failed'      │ '送信先に接続できません' │
-│ 2       │ '飼い主の都合'         │ '受付スタッフ' │ 'unconfirmed' │ null                     │
-└─────────┴────────────────────────┴────────────────┴───────────────┴──────────────────────────┘
+┌─────────┬───────────┬────────────┬────────────────────────────┬────────────────────────────┬────────────────────────┬────────────┬────────────────────────────────────────────┐
+│ (index) │ visitId   │ petName    │ operatedAt                 │ receivedAt                 │ cancelReason           │ result     │ rejectedReason                             │
+├─────────┼───────────┼────────────┼────────────────────────────┼────────────────────────────┼────────────────────────┼────────────┼────────────────────────────────────────────┤
+│ 0       │ 'visit-1' │ 'ポチ'     │ '2026-11-20T09:00:00.000Z' │ '2026-11-27T14:36:07.121Z' │ '飼い主の都合'         │ 'applied'  │ null                                       │
+│ 1       │ 'visit-2' │ 'コタロウ' │ '2026-11-20T09:30:00.000Z' │ '2026-11-27T14:36:07.122Z' │ '来院前に回復したため' │ 'rejected' │ '診察が終わった来院はキャンセルできません' │
+└─────────┴───────────┴────────────┴────────────────────────────┴────────────────────────────┴────────────────────────┴────────────┴────────────────────────────────────────────┘
 ```
 
 </details>
@@ -68,7 +60,7 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 <details>
 <summary>手元の Node で動かすとき</summary>
 
-`chapter-4-external-sync-done` で `node what-was-sent.ts` を実行します。
+`chapter-4-external-sync-done` で `node what-was-imported.ts` を実行します。
 
 </details>
 

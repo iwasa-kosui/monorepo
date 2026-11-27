@@ -40,17 +40,17 @@ const summaryTableSql = `SELECT
 FROM daily_cancellation_counts AS c;`;
 
 const externalSyncSql = `SELECT
-  requested.target_id AS visit_id,
-  requested.event_at,
-  requested.payload ->> '$.message' AS message
-FROM business_events AS requested
-WHERE requested.event_name = 'ReminderCancellationRequested'
-  AND NOT EXISTS (
-    SELECT 1 FROM business_events AS finished
-    WHERE finished.event_name IN ('ReminderCancellationSent', 'ReminderCancellationFailed')
-      AND finished.payload ->> '$.causationEventId' = requested.event_id
-  )
-ORDER BY requested.event_id;`;
+  received.target_id AS visit_id,
+  received.event_at AS received_at,
+  received.payload ->> '$.operatedAt' AS operated_at,
+  received.payload ->> '$.reason' AS cancel_reason,
+  outcome.event_name AS result,
+  outcome.payload ->> '$.reason' AS rejected_reason
+FROM business_events AS received
+JOIN business_events AS outcome
+  ON outcome.payload ->> '$.receivedEventId' = received.event_id
+WHERE received.event_name = 'ExternalCancellationReceived'
+ORDER BY received.event_id;`;
 
 const auditLogSql = `SELECT
   a.id AS audit_log_id,
@@ -154,7 +154,7 @@ const summaryTable: Pattern = {
 
 const externalSync: Pattern = {
   exercise: 'chapter-4-external-sync-done',
-  script: 'what-was-sent.ts',
+  script: 'what-was-imported.ts',
   storageId: 'chapter-4-external-sync',
   initialSql: externalSyncSql,
   tables: [visitsWithoutDate, businessEvents],
@@ -190,11 +190,11 @@ const financeExchange: readonly Post[] = [
   posts.financeAnswer,
   posts.financeThanks,
 ];
-const reminderExchange: readonly Post[] = [
-  posts.reminderGreeting,
-  posts.reminderAsked,
-  posts.reminderAnswer,
-  posts.reminderThanks,
+const siteExchange: readonly Post[] = [
+  posts.siteGreeting,
+  posts.siteAsked,
+  posts.siteAnswer,
+  posts.siteThanks,
 ];
 const auditExchange: readonly Post[] = [
   posts.auditGreeting,
@@ -225,12 +225,12 @@ export const chapter4SummaryTable: WorkspaceScenario = consultation({
 
 export const chapter4ExternalSync: WorkspaceScenario = consultation({
   id: 'chapter-4-external-sync',
-  label: '外部への送信が届いたか分からない',
+  label: '予約サイトのキャンセルが反映されたか分からない',
   history: financeExchange,
-  opened: [posts.reminderGreeting, posts.reminderAsked],
-  answer: posts.reminderAnswer,
-  thanks: posts.reminderThanks,
-  doc: { title: '相談2: 外部への送信が届いたか分からない', path: 'consultations/external-sync' },
+  opened: [posts.siteGreeting, posts.siteAsked],
+  answer: posts.siteAnswer,
+  thanks: posts.siteThanks,
+  doc: { title: '相談2: 予約サイトのキャンセルが反映されたか分からない', path: 'consultations/external-sync' },
   pattern: externalSync,
   thanksDelay: 0.6,
 });
@@ -238,7 +238,7 @@ export const chapter4ExternalSync: WorkspaceScenario = consultation({
 export const chapter4AuditLog: WorkspaceScenario = consultation({
   id: 'chapter-4-audit-log',
   label: '監査ログに変更の理由がない',
-  history: reminderExchange,
+  history: siteExchange,
   opened: [posts.auditGreeting, posts.auditAsked],
   answer: posts.auditAnswer,
   thanks: posts.auditThanks,

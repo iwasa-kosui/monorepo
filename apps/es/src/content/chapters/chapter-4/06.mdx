@@ -29,10 +29,10 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <CodePlayground
   exercise="chapter-4-external-sync-start"
   editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'what-was-sent.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'what-was-imported.ts']}
   testFile="visits.test.ts"
-  reveal="export const cancelVisit"
-  scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
+  reveal="export const importExternalCancellation"
+  scripts={[{ file: 'what-was-imported.ts', label: 'what-was-imported.ts を実行する' }]}
   complete={{ exercise: 'chapter-4-external-sync-done' }}
 />
 </Fragment>
@@ -65,7 +65,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 | 開始のコード | 実装する内容 | 確認用スクリプト |
 |---|---|---|
 | `chapter-4-summary-table-start` | `explainCancellationCount` と `verifyCancellationCount` | `why-this-count.ts` |
-| `chapter-4-external-sync-start` | `cancelVisit` の送信の予定と結果の記録、`findSendRecords`、`findUnconfirmedSends` | `what-was-sent.ts` |
+| `chapter-4-external-sync-start` | `importExternalCancellation` の届いた内容と取り込んだ結果の記録、`findImportRecords`、`findUnappliedImports` | `what-was-imported.ts` |
 | `chapter-4-audit-log-start` | `cancelVisit` の `payload` への `auditLogId` の追加、`explainChange`、`findChangesWithoutReason` | `why-changed.ts` |
 
 </details>

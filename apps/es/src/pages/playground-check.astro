@@ -47,12 +47,15 @@ INSERT INTO visits (id, pet_name, status) VALUES ('visit-tama', 'タマ', 'cance
     complete={{ exercise: 'chapter-2-step-1' }}
   />
 
-  <h2>コードを編集して実行する欄（第4章の外部システムとの同期の完成コード）</h2>
+  <h2>コードを編集して実行する欄（第4章の外部システム同期の完成コード）</h2>
   <CodePlayground
     exercise="chapter-4-external-sync-done"
     editable={['visits.ts']}
-    readonly={['db.ts', 'visits.test.ts', 'what-was-sent.ts']}
+    readonly={['db.ts', 'visits.test.ts', 'what-was-imported.ts']}
     testFile="visits.test.ts"
-    scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
+    scripts={[{
+      file: 'what-was-imported.ts',
+      label: 'what-was-imported.ts を実行する',
+    }]}
   />
 </BaseLayout>
