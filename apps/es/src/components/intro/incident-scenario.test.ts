@@ -42,9 +42,9 @@ describe('障害対応の筋書き', () => {
     expect(new Date(startedAt).toISOString()).toBe('2026-11-06T18:20:00.000Z');
   });
 
-  it('連絡は 0 秒、36 秒、60 秒、105 秒に始まり、1 つの連絡は短い投稿を数件に分けて届ける', () => {
+  it('連絡は 0 秒、20 秒、34 秒、56 秒に始まり、1 つの連絡は短い投稿を数件に分けて届ける', () => {
     const posts = timedEvents.flatMap((event) => (event.kind === 'post' ? [event.at] : []));
-    expect(posts).toEqual([0, 2, 5, 36, 39, 60, 105]);
+    expect(posts).toEqual([0, 2, 5, 20, 23, 34, 56]);
     expect(timedEvents.flatMap((event) => (event.kind === 'post' ? [event.post.text] : []))).toEqual([
       'お疲れ様です！すみません、急ぎで見てほしいです🙏',
       '動物病院さんから電話があって、予約してたはずの来院がキャンセルになってるそうです。飼い主さんがもう受付に来ちゃってて…',
@@ -54,15 +54,15 @@ describe('障害対応の筋書き', () => {
       '病院さんに折り返さないとなので、わかってるところまででいいので教えてください！',
       'どうでしょう…？病院さんずっとお待ちで💦',
     ]);
-    expect(timedEvents.filter((event) => event.at === 30).map((event) => event.kind)).toEqual([
+    expect(timedEvents.filter((event) => event.at === 15).map((event) => event.kind)).toEqual([
       'log',
       'sql',
       'affected',
     ]);
   });
 
-  it('105 秒の投稿は、最終の返信をしていない場合だけ届く', () => {
-    const late = timedEvents.find((event) => event.kind === 'post' && event.at === 105);
+  it('56 秒の投稿は、最終の返信をしていない場合だけ届く', () => {
+    const late = timedEvents.find((event) => event.kind === 'post' && event.at === 56);
     expect(late?.kind === 'post' && late.unlessReplied).toBe(true);
   });
 
@@ -72,7 +72,7 @@ describe('障害対応の筋書き', () => {
     expect(incidentScenario.tabs.find((tab) => tab.key === 'agent')?.initial).toBe(false);
   });
 
-  it('30 秒の出来事は、タマの来院を cancelled にする', () => {
+  it('15 秒の出来事は、タマの来院を cancelled にする', () => {
     const update = timedEvents.find((event) => event.kind === 'sql');
     expect(update?.kind === 'sql' && update.sql).toBe(
       `UPDATE visits SET status = 'cancelled' WHERE id = 'visit-tama';`,
@@ -131,7 +131,7 @@ describe('障害対応の筋書き', () => {
   it('投稿者の名前と最終の返信の文面がある', () => {
     expect(actors['support']?.name).toBe('カスタマーサポート');
     expect(actors['you']?.name).toBe('あなた');
-    expect(reply.followUps.map((item) => item.delay)).toEqual([1.5, 1.5, 2]);
+    expect(reply.followUps.map((item) => item.delay)).toEqual([0.8, 0.8, 1]);
     expect(reply.followUps.map((item) => item.text)).toEqual([
       'えっ',
       '誰がなんでキャンセルしたか分からないと、病院さんに説明できないです…',
@@ -139,7 +139,7 @@ describe('障害対応の筋書き', () => {
     ]);
     expect(reply.lines).toEqual([
       { text: '18:11:58 にポチの来院をキャンセルする操作があったのは確認できました' },
-      { after: 30, text: 'タマの来院も 18:20:30 に同じ操作でキャンセルされてます' },
+      { after: 15, text: 'タマの来院も 18:20:15 に同じ操作でキャンセルされてます' },
       { text: 'ただ、誰がなんでキャンセルしたかは、DB にもログにもコードにも残ってなくて、分からないです…' },
     ]);
     expect(interim).toMatchObject({
@@ -162,11 +162,11 @@ describe('ログの行', () => {
   it('時刻と内容から、一覧と詳細に出す値を作る', () => {
     const view = describeLog(
       { level: 'INFO', method: 'POST', path: '/visits/visit-tama/cancel', status: 200, duration: 11 },
-      startedAt + 30_214,
+      startedAt + 15_214,
       logs.config,
     );
-    expect(view.iso).toBe('2026-11-06T18:20:30.214Z');
-    expect(view.date).toBe('Nov 06 18:20:30.214');
+    expect(view.iso).toBe('2026-11-06T18:20:15.214Z');
+    expect(view.date).toBe('Nov 06 18:20:15.214');
     expect(view.content).toBe('POST /visits/visit-tama/cancel 200 11ms');
     expect(view.target).toBe(false);
     expect(view.attrs.map(([key]) => key)).toEqual([
