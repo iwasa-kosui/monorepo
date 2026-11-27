@@ -38,7 +38,7 @@ const rows: readonly Row[] = [
     from: [{ name: 'visit_id' }],
     column: 'target_id',
     value: 'visit-pochi',
-    why: '問い合わせの来院の記録を探すため',
+    why: '来院の ID で記録を検索するため',
   },
   {
     from: [],
@@ -58,7 +58,7 @@ const rows: readonly Row[] = [
 <section
   class="cfig mapping"
   data-record-mapping-figure
-  aria-label="ステップ1の列を business_events の列に移す図"
+  aria-label="visit_cancellations の列を business_events の列に移す図"
 >
   <div class="merge">
     <div class="side">
@@ -81,10 +81,10 @@ const rows: readonly Row[] = [
   <div
     class="map"
     role="table"
-    aria-label="ステップ1の列と business_events の列の対応"
+    aria-label="visit_cancellations の列と business_events の列の対応"
   >
     <div class="row head" role="row">
-      <span class="from" role="columnheader">ステップ1</span>
+      <span class="from" role="columnheader">ADR 1 の列</span>
       <span class="to" role="columnheader">
         <span class="mono">business_events</span> の列
       </span>
@@ -365,15 +365,50 @@ const rows: readonly Row[] = [
   .merge-arrow::before {
     content: "↓";
   }
+  .map {
+    gap: var(--space-2);
+  }
   .row {
-    grid-template-columns: 7rem minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .from {
-    gap: var(--space-1);
+    grid-row: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    padding-bottom: 0;
+  }
+  .head .from {
+    align-items: flex-start;
+  }
+  .sources {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .to,
+  .why {
+    grid-column: 1;
   }
   .arrow {
-    min-width: 0.5rem;
-    margin-right: 0.3125rem;
+    flex: none;
+    width: 2px;
+    min-width: 0;
+    height: 0.75rem;
+    margin: 0 0 0.3125rem 1rem;
+  }
+  .arrow::after {
+    top: auto;
+    right: auto;
+    bottom: -0.3125rem;
+    left: 50%;
+    border: 0.3125rem solid transparent;
+    border-bottom: 0;
+    border-top-color: var(--role-accent-strong);
+    transform: translateX(-50%);
+  }
+  .sources:has(.none) + .arrow::after {
+    border-left-color: transparent;
+    border-top-color: var(--role-border);
   }
 }
 </style>
