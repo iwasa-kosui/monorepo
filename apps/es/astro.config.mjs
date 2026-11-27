@@ -2,6 +2,8 @@ import mdx from '@astrojs/mdx';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 
+import { rehypeTableLabels } from './src/lib/rehype-table-labels.ts';
+
 export default defineConfig({
   site: 'https://es.kosui.workers.dev',
   output: 'static',
@@ -10,6 +12,7 @@ export default defineConfig({
   integrations: [mdx()],
   markdown: {
     shikiConfig: { theme: 'github-light' },
+    rehypePlugins: [rehypeTableLabels],
   },
   vite: {
     plugins: [tailwindcss()],

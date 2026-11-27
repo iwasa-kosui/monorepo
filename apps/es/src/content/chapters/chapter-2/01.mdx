@@ -69,6 +69,8 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 採用した案と、採用しなかった5つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、△は一部だけ満たすこと、×は満たさないことを表します。
 
+<div data-alternatives-table>
+
 | 案 | 人と理由を回答できる | 記録が欠落しない | `visits` を変更せず、業務を止めない |
 |---|---|---|---|
 | 更新処理の中で追記する（採用） | ○ | ○ | △ |
@@ -77,6 +79,8 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 | DB の機能で自動的に記録する | × | ○ | ○ |
 | 別のトランザクションで記録する | ○ | × | ○ |
 | システム全体を作り直す | ○ | ○ | × |
+
+</div>
 
 #### ログに出力する
 
