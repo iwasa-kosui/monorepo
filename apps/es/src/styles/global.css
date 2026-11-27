@@ -8,7 +8,7 @@ html {
   --root-text-size: 90%;
   font-size: var(--root-text-size);
 }
-/* PC の幅では標準の文字が小さく見えるため、基準を上げる */
+/* PC の幅では文字が小さく見えるため上げる。1279px 以下は2列の幅が狭いので据え置く */
 @media (min-width: 1280px) {
   html {
     --root-text-size: 100%;
