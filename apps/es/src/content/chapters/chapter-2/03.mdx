@@ -3,6 +3,7 @@ wide: true
 immersive: true
 ---
 
+import EventAsFunctionFigure from '../../../components/figures/EventAsFunctionFigure.astro';
 import RecordMappingFigure from '../../../components/figures/RecordMappingFigure.astro';
 import Quote from '../../../components/Quote.astro';
 import { chapter2Table } from '../../../components/chapters/chapter-2';
@@ -97,6 +98,13 @@ ADR 1 は、キャンセルした人と理由を後から回答できるよう�
 #### `target_state` を持たない
 
 `target_state` の列を持つかどうかは、上の比較とは別の決定です。`target_state` の列を持たない場合は、1行のサイズが小さくなり、来院の状態を保持する場所は `visits` だけになります。しかし、`visits` の行はその後も変わります。ある時点の状態を後から確認するには、来院の変更をすべて記録して順にたどる必要があります。現時点で記録しているのは来院のキャンセルだけなので、ある時点の状態を記録から復元できません。
+
+</Fragment>
+<Fragment slot="explain">
+
+`event_name`、`payload`、`target_state` の3つの列は、関数にたとえることもできます。`event_name` という関数に `payload` という引数を与えると、結果として `target_state` の状態が出力されます。あくまで例ですが、このように捉えると分かりやすいかもしれません。
+
+<EventAsFunctionFigure />
 
 </Fragment>
 </Workspace>

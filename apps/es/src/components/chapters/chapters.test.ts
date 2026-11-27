@@ -567,6 +567,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       ]);
       expect(summary(lessonScenarios['chapter-2/03'] as WorkspaceScenario)).toEqual([
         'memo:doc:ADR 2: 出来事ごとの記録を、1つのテーブルにまとめる',
+        'explain:doc:3つの列を関数にたとえる',
       ]);
       expect(summary(lessonScenarios['chapter-2/04'] as WorkspaceScenario)).toEqual([
         'editor:editor:visits.ts — clinic-api',
