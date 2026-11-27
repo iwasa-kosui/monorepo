@@ -1,5 +1,10 @@
 ---
-import { openingChannel, placeholderOf } from '../../workspace/channel';
+import {
+  hasOpeningPost,
+  openingChannel,
+  placeholderOf,
+  postsInChannel,
+} from '../../workspace/channel';
 import { chatPanelIdOf } from '../../workspace/panel-props';
 import type { WorkspaceScenario } from '../../workspace/scenario';
 
@@ -16,6 +21,9 @@ const placeholder = placeholderOf(
   chat.channel,
   chat.placeholder,
 );
+const emptyOnOpen = !hasOpeningPost(scenario.timeline)
+  && postsInChannel(scenario.history, initialChannel, chat.channel).length
+    === 0;
 const timed = scenario.mode === 'timed';
 const memoId = `${scenario.id}-memo`;
 const reasonId = `${scenario.id}-reason`;
@@ -71,17 +79,28 @@ const railActors = railActorIds.flatMap((id) => {
       </button>
     )
   }
-  <div class="chat-side" aria-hidden="true">
-    <span class="dots"><i></i><i></i><i></i></span>
+  <div class="chat-side">
+    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
     <p class="ws">{chat.workspace}</p>
-    <ul class="chs">
+    <ul class="chs" aria-label="チャンネル">
       {
         chat.channels.map((channel) => (
-          <li
-            class={channel.name === initialChannel ? 'on' : undefined}
-            data-channel={channel.name}
-          >
-            {channel.name}
+          <li>
+            <button
+              type="button"
+              class="ch"
+              data-channel={channel.name}
+              aria-current={channel.name === initialChannel ? 'true' : undefined}
+            >
+              <span class="ch-name">{channel.name}</span>
+              <span
+                class="ch-count"
+                data-channel-count
+                hidden
+                aria-hidden="true"
+              >0</span>
+              <span class="cfig-sr" data-channel-label></span>
+            </button>
           </li>
         ))
       }
@@ -104,12 +123,37 @@ const railActors = railActorIds.flatMap((id) => {
       }
     </div>
 
+    <ul class="chat-channels" aria-label="チャンネル">
+      {
+        chat.channels.map((channel) => (
+          <li>
+            <button
+              type="button"
+              class="ch"
+              data-channel={channel.name}
+              aria-current={channel.name === initialChannel ? 'true' : undefined}
+            >
+              <span class="ch-name">{channel.name}</span>
+              <span
+                class="ch-count"
+                data-channel-count
+                hidden
+                aria-hidden="true"
+              >0</span>
+              <span class="cfig-sr" data-channel-label></span>
+            </button>
+          </li>
+        ))
+      }
+    </ul>
+
     <ol
       class="feed"
       aria-live="polite"
       aria-label="チャットの投稿"
       tabindex="0"
       data-feed
+      data-empty={emptyOnOpen ? '' : undefined}
     >
     </ol>
 
@@ -296,21 +340,102 @@ const railActors = railActorIds.flatMap((id) => {
 }
 :global(.scene[data-scenario]) .chs li {
   margin: 0 var(--space-2);
+}
+:global(.scene[data-scenario]) .ch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  border: 0;
   border-radius: var(--radius-md);
+  background: transparent;
   padding: var(--space-1) var(--space-2);
+  color: inherit;
+  font: inherit;
   line-height: var(--leading-normal);
+  text-align: left;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .ch-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-:global(.scene[data-scenario]) .chs li.on {
+:global(.scene[data-scenario]) .ch[data-channel-unread] {
+  font-weight: var(--weight-bold);
+}
+:global(.scene[data-scenario]) .ch-count {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-pill);
+  background: #e01e5a;
+  padding: 0 var(--space-1);
+  color: #ffffff;
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+:global(.scene[data-scenario]) .ch-count[hidden] {
+  display: none;
+}
+:global(.scene[data-scenario]) .chs .ch:hover:not([aria-current="true"]) {
+  background: color-mix(in srgb, var(--c-side) 85%, #ffffff);
+}
+:global(.scene[data-scenario]) .chs .ch:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -2px;
+}
+:global(.scene[data-scenario]) .chs .ch[aria-current="true"] {
   background: var(--c-side-sel);
   color: #ffffff;
   font-weight: var(--weight-bold);
 }
+:global(.scene[data-scenario]) .chat-channels {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  flex-wrap: wrap;
+  list-style: none;
+}
+:global(.scene[data-scenario]) .chat-channels li {
+  flex: none;
+  margin: 0;
+}
+:global(.scene[data-scenario]) .chat-channels .ch {
+  gap: var(--space-1);
+  min-height: var(--tap-min);
+  background: var(--c-btn-off);
+  padding: 0 var(--space-2);
+  font-size: var(--text-note);
+  color: var(--c-fg);
+  white-space: nowrap;
+}
+:global(.scene[data-scenario])
+  .chat-channels
+  .ch:hover:not([aria-current="true"]) {
+  background: var(--c-rule);
+}
+:global(.scene[data-scenario]) .chat-channels .ch[aria-current="true"] {
+  background: var(--c-side-sel);
+  color: #ffffff;
+}
+:global(.scene[data-scenario]) .chat-channels .ch:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 @container (min-width: 26rem) {
   :global(.scene[data-scenario]) .chat-side {
     display: flex;
+  }
+  :global(.scene[data-scenario]) .chat-channels {
+    display: none;
   }
 }
 :global(.scene[data-scenario]) .chat-main {
@@ -347,6 +472,12 @@ const railActors = railActorIds.flatMap((id) => {
   overflow-y: auto;
   padding: var(--space-3) var(--space-4);
   list-style: none;
+}
+:global(.scene[data-scenario]) .feed[data-empty]::before {
+  content: "このチャンネルに発言はありません";
+  color: var(--c-muted);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .feed:focus-visible {
   outline: 2px solid var(--ring);
@@ -666,6 +797,9 @@ const railActors = railActorIds.flatMap((id) => {
   }
   :global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-side {
     display: none;
+  }
+  :global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-channels {
+    display: flex;
   }
   :global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-main {
     display: none;
