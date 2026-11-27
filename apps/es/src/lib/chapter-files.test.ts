@@ -38,13 +38,13 @@ describe('immersive のページ', () => {
 
   const expected = [
     'intro/02.mdx',
-    'intro/06.mdx',
+    'intro/07.mdx',
     ...chapterNames().filter((chapter) => chapter !== 'intro').flatMap((chapter) =>
       chapterPageFiles(chapter).map((file) => `${chapter}/${file}`)
     ),
   ].sort();
 
-  it('immersive は導入の 2 ページ目と 6 ページ目と、第1章から第4章とまとめの全ページに付き、wide も残っている', () => {
+  it('immersive は導入の 2 ページ目と 7 ページ目と、第1章から第4章とまとめの全ページに付き、wide も残っている', () => {
     expect(immersiveFiles().sort()).toEqual(expected);
     for (const file of expected) {
       expect(read(`src/content/chapters/${file}`), file).toMatch(/^wide: true$/m);
@@ -56,8 +56,8 @@ describe('immersive のページ', () => {
     expect(source).toMatch(/<div class="visually-hidden">\n\n## .+\n\n.+\n\n<\/div>\n\n<InvestigationScene \/>/);
   });
 
-  it('導入の 6 ページ目も、見た目から隠す本文の見出しを、作業環境の前に置く', () => {
-    const source = read('src/content/chapters/intro/06.mdx');
+  it('導入の 7 ページ目も、見た目から隠す本文の見出しを、作業環境の前に置く', () => {
+    const source = read('src/content/chapters/intro/07.mdx');
     expect(source).toMatch(/<div class="visually-hidden">\n\n## .+\n\n.+\n\n<\/div>\n\n<Workspace /);
   });
 
@@ -79,8 +79,8 @@ describe('immersive のページ', () => {
 });
 
 describe('導入の文面', () => {
-  it('導入は 7 ページに分かれている', () => {
-    expect(chapterPageFiles('intro')).toHaveLength(7);
+  it('導入は 8 ページに分かれている', () => {
+    expect(chapterPageFiles('intro')).toHaveLength(8);
   });
 
   it('分けたページをつないだ本文が、承認済みの導入と 1 文字も違わない', () => {

@@ -1,0 +1,825 @@
+---
+import './figure.css';
+
+type View = 'mechanism' | 'burdens';
+type Props = { readonly view: View };
+type Part = string | { readonly code: string };
+type Burden = {
+  readonly n: number;
+  readonly title: string;
+  readonly body: readonly Part[];
+};
+type Group = {
+  readonly heading: string;
+  readonly items: readonly Burden[];
+};
+
+const { view } = Astro.props;
+
+const label = view === 'mechanism'
+  ? 'ポチの来院のキャンセルを、状態を上書きする作りと、イベントソーシングとCQRSの作りで比べる図'
+  : 'イベントソーシングとCQRSの作りのうち、既存システムへの導入で負担になる箇所を番号で示す図';
+
+const columns = ['id', 'pet_name', 'status'] as const;
+const sql =
+  'UPDATE visits SET status = \'cancelled\' WHERE id = \'visit-pochi\';';
+const events = [
+  { order: '1', target: 'visit-pochi', name: '来院を予約した', lit: 'first' },
+  {
+    order: '2',
+    target: 'visit-pochi',
+    name: '来院をキャンセルした',
+    lit: 'append',
+  },
+] as const;
+
+const groups: readonly Group[] = [
+  {
+    heading: '「最初からイベント中心に設計しなければ使えない」と見られる箇所',
+    items: [
+      {
+        n: 1,
+        title: '更新処理の置き換え',
+        body: [
+          '状態の変更は、すべてイベントとして記録します。',
+          { code: 'visits' },
+          ' を上書きしている更新処理を、すべてイベントの追記に置き換える必要があります。',
+        ],
+      },
+      {
+        n: 2,
+        title: '導入する前の出来事',
+        body: [
+          '既存の ',
+          { code: 'visits' },
+          ' の行には、最新の状態しかありません。導入する前の出来事は、イベントとして残っていません。',
+        ],
+      },
+    ],
+  },
+  {
+    heading: '「考えることが多く、現実的ではない」と見られる箇所',
+    items: [
+      {
+        n: 3,
+        title: 'イベントの形の変更',
+        body: [
+          '記録したイベントは書き換えません。イベントの形を変えた後も、古い形のイベントを読めるようにする必要があります。',
+        ],
+      },
+      {
+        n: 4,
+        title: '状態の組み立て直しにかかる時間',
+        body: [
+          'イベントが増えると、先頭から順に適用する時間が延びます。途中の状態を保存するスナップショットを検討します。',
+        ],
+      },
+      {
+        n: 5,
+        title: '読み取り用のデータへの反映の遅れ',
+        body: [
+          '書き込みの直後は、読み取り用のデータに反映されていないことがあります。',
+        ],
+      },
+    ],
+  },
+];
+
+const right = (length: number): string =>
+  `<svg class="h" viewBox="0 0 ${length} 24" aria-hidden="true" focusable="false"><path class="shaft" d="M4 12H${
+    length - 6
+  }"/><path class="head" d="M${length - 16} 5L${length - 4} 12L${
+    length - 16
+  } 19"/><circle class="dot" cx="9" cy="12" r="5" style="--dx:${
+    length - 24
+  }px;--dy:0px"/></svg>`;
+const down = (length: number): string =>
+  `<svg class="v" viewBox="0 0 24 ${length}" aria-hidden="true" focusable="false"><path class="shaft" d="M12 4V${
+    length - 6
+  }"/><path class="head" d="M5 ${length - 16}L12 ${length - 4}L19 ${
+    length - 16
+  }"/><circle class="dot" cx="12" cy="9" r="5" style="--dx:0px;--dy:${
+    length - 24
+  }px"/></svg>`;
+const turn = (length: number): string => right(length) + down(48);
+
+const shortArrow = turn(96);
+const midArrow = turn(128);
+const sqlArrow = turn(320);
+const downArrow = down(56);
+
+const lit = (name: string): Record<string, string> =>
+  view === 'mechanism'
+    ? { 'data-lit': name }
+    : {};
+const focus = (n: number): Record<string, string> =>
+  view === 'burdens'
+    ? { 'data-focus': '', style: `--at:${(n - 1) / 5}` }
+    : {};
+---
+
+<section class="cfig es" data-view={view} aria-label={label}>
+  {
+    view === 'mechanism' && (
+      <div class="stage">
+        <p class="stage-label">状態を上書きする（いまの予約システム）</p>
+        <div class="flow-a">
+          <div class="box">キャンセルの操作</div>
+          <div class="link link-h" data-link="sql">
+            <code class="sql">{sql}</code>
+            <span class="arrow"><Fragment set:html={sqlArrow} /></span>
+          </div>
+          <div class="tbl">
+            <table class="cfig-table">
+              <caption><code>visits</code></caption>
+              <thead>
+                <tr>
+                  {
+                    columns.map((column) => (
+                      <th scope="col" class="mono">{column}</th>
+                    ))
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">visit-pochi</td>
+                  <td class="keep">ポチ</td>
+                  <td class="mono" {...lit('status')}>
+                    <del class="before">reserved</del>
+                    <span class="after">cancelled</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="note">上書きする前の値は残りません。</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  <div class="stage">
+    {
+      view === 'mechanism' && (
+        <p class="stage-label">
+          イベントを追記する（イベントソーシングとCQRS）
+        </p>
+      )
+    }
+    <div class="flow-b">
+      <div class="zone zone-write">
+        <span class="tag">変更する処理</span>
+        <div class="box">キャンセルの操作</div>
+        <div class="link link-h" data-link="append">
+          <span class="label">追記する</span>
+          <span class="arrow">
+            <Fragment set:html={shortArrow} />
+            {
+              view === 'burdens' && (
+                <span class="badge" aria-hidden="true" {...focus(1)}>1</span>
+              )
+            }
+          </span>
+        </div>
+        <div class="tbl">
+          <table class="cfig-table">
+            <caption>
+              {
+                view === 'burdens' && (
+                  <span class="badge" aria-hidden="true" {...focus(3)}>3</span>
+                )
+              }イベントの記録
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">順番</th>
+                <th scope="col">対象</th>
+                <th scope="col">イベント</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                view === 'burdens' && (
+                  <tr class="past">
+                    <td colspan="3">
+                      <span class="badge" aria-hidden="true" {...focus(2)}
+                      >2</span>導入する前の出来事
+                    </td>
+                  </tr>
+                )
+              }
+              {
+                events.map((event) => (
+                  <tr>
+                    <td class="mono" {...lit(event.lit)}>{event.order}</td>
+                    <td class="mono" {...lit(event.lit)}>{event.target}</td>
+                    <td {...lit(event.lit)}>{event.name}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="link link-h" data-link="apply">
+          <span class="label">先頭から順に適用する</span>
+          <span class="arrow">
+            <Fragment set:html={midArrow} />
+            {
+              view === 'burdens' && (
+                <span class="badge" aria-hidden="true" {...focus(4)}>4</span>
+              )
+            }
+          </span>
+        </div>
+        <div class="state">
+          <div class="cap">現在の状態</div>
+          <div class="values">
+            <span class="chip mono" {...lit('first')}>reserved</span>
+            <span class="to" aria-hidden="true">→</span>
+            <span class="chip chip-now mono" {...lit('second')}>cancelled</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="link link-down" data-link="build">
+        <span class="label">読み取り用のデータを作る</span>
+        <span class="arrow">
+          <Fragment set:html={downArrow} />
+          {
+            view === 'burdens' && (
+              <span class="badge" aria-hidden="true" {...focus(5)}>5</span>
+            )
+          }
+        </span>
+      </div>
+
+      <div class="zone zone-read">
+        <span class="tag">読み取る処理</span>
+        <div class="tbl">
+          <table class="cfig-table">
+            <caption>読み取り用のデータ</caption>
+            <thead>
+              <tr>
+                {
+                  columns.map((column) => (
+                    <th scope="col" class="mono">{column}</th>
+                  ))
+                }
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono" {...lit('read')}>visit-pochi</td>
+                <td class="keep" {...lit('read')}>ポチ</td>
+                <td class="mono" {...lit('read')}>cancelled</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="link link-h" data-link="read">
+          <span class="label">読み取る</span>
+          <span class="arrow"><Fragment set:html={midArrow} /></span>
+        </div>
+        <div class="box">来院の一覧の画面</div>
+      </div>
+    </div>
+  </div>
+
+  {
+    view === 'burdens' && (
+      <div class="groups">
+        {
+          groups.map((group) => (
+            <div class="group">
+              <p class="group-head">{group.heading}</p>
+              <ol class="items">
+                {
+                  group.items.map((item) => (
+                    <li class="item" {...focus(item.n)}>
+                      <span class="badge" aria-hidden="true">{item.n}</span>
+                      <div class="item-text">
+                        <strong class="item-title">{item.title}</strong>
+                        <span class="item-body">
+                          {
+                            item.body.map((part) =>
+                  typeof part === 'string'
+                    ? part
+                    : (
+                              <code>{part.code}</code>
+                            )
+                )
+                          }
+                        </span>
+                      </div>
+                    </li>
+                  ))
+                }
+              </ol>
+            </div>
+          ))
+        }
+      </div>
+    )
+  }
+</section>
+
+<style>
+.cfig.es[data-view] {
+  --lit: var(--role-marker);
+  --face: var(--role-ground);
+  container-type: inline-size;
+  gap: var(--space-5);
+}
+.cfig.es .mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.cfig.es .stage-label {
+  margin: 0;
+  font-size: var(--fig-text);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.flow-a,
+.flow-b {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--face);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  text-align: center;
+}
+
+.zone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+.zone-write {
+  --face: var(--role-ground);
+  background: var(--role-accent-soft);
+}
+.zone-read {
+  --face: var(--role-surface);
+  background: var(--role-ground);
+}
+.tag {
+  align-self: flex-start;
+  border-radius: var(--radius-sm);
+  background: var(--role-accent-strong);
+  padding: 0 var(--space-2);
+  color: var(--role-on-strong);
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+
+.link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  color: var(--role-fg);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+.link-down {
+  align-self: center;
+}
+.arrow {
+  position: relative;
+  display: block;
+  flex: none;
+  order: -1;
+  width: 1.5rem;
+  color: var(--role-muted);
+  line-height: 0;
+}
+.arrow :global(svg) {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.arrow :global(svg.h) {
+  display: none;
+}
+.arrow :global(.shaft),
+.arrow :global(.head) {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.arrow :global(.dot) {
+  fill: var(--role-accent);
+  opacity: 0;
+}
+.cfig.es .sql {
+  flex: 0 1 auto;
+  max-width: 100%;
+  font-size: var(--fig-code);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.label {
+  min-width: 0;
+}
+
+.tbl {
+  --base: var(--face);
+  min-width: 0;
+}
+.cfig.es .tbl .cfig-table td {
+  background-color: var(--base);
+}
+.cfig.es .tbl .cfig-table caption {
+  font-size: var(--fig-small);
+}
+.cfig.es .tbl .cfig-table .past td {
+  --base: var(--role-surface);
+  color: var(--role-muted);
+}
+.cfig.es .tbl .cfig-table th,
+.cfig.es .tbl .cfig-table td.mono,
+.cfig.es .tbl .cfig-table td.keep {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+.cfig.es .tbl .cfig-table td[data-lit="status"] {
+  white-space: normal;
+}
+.before,
+.after {
+  white-space: nowrap;
+}
+.cfig.es .note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fig-small);
+  line-height: var(--leading-normal);
+}
+.before {
+  margin-right: var(--space-2);
+  color: var(--role-muted);
+  font-family: var(--font-code);
+  font-size: var(--fig-label);
+}
+.after {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+  font-weight: var(--weight-bold);
+}
+
+.state {
+  min-width: 0;
+  border-radius: var(--radius-md);
+  background: var(--face);
+  padding: var(--space-2) var(--space-3);
+}
+.cap {
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+.chip {
+  --base: transparent;
+  border-radius: var(--radius-sm);
+  background-color: var(--base);
+  padding: 0 var(--space-2);
+}
+.chip-now {
+  --base: var(--role-highlight-soft);
+  font-weight: var(--weight-bold);
+}
+.to {
+  color: var(--role-muted);
+  font-size: var(--fig-small);
+}
+
+.badge {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--role-accent-strong);
+  color: var(--role-on-strong);
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+.arrow > .badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+}
+.cfig.es .tbl caption .badge,
+.cfig.es .tbl .past .badge {
+  margin-right: var(--space-2);
+  vertical-align: middle;
+}
+
+.groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+}
+.group {
+  min-width: 0;
+}
+.cfig.es .group-head {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fig-text);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+  text-wrap: balance;
+}
+.cfig.es .items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cfig.es .item {
+  --base: transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--base);
+  padding: var(--space-2);
+  font-size: var(--fig-text);
+  line-height: var(--leading-normal);
+}
+.item-text {
+  min-width: 0;
+}
+.item-title {
+  display: block;
+}
+.item-body {
+  display: block;
+}
+
+@container (max-width: 30rem) {
+  .cfig.es .tbl .cfig-table th,
+  .cfig.es .tbl .cfig-table td {
+    padding-inline: var(--space-1);
+  }
+}
+
+@container (min-width: 60rem) {
+  .flow-a {
+    display: grid;
+    grid-template-columns: 8rem 20rem minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .flow-b {
+    display: grid;
+    grid-template-columns: 8rem 6rem minmax(0, 1fr) 8rem auto;
+    gap: var(--space-2);
+  }
+  .zone {
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: center;
+    row-gap: var(--space-2);
+  }
+  .zone-write {
+    grid-column: 1 / -1;
+  }
+  .zone-read {
+    grid-column: 3 / -1;
+  }
+  .zone > .tag {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .link-down {
+    grid-column: 3;
+    justify-self: center;
+  }
+  .link-h {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    text-align: center;
+  }
+  .link-h .arrow {
+    order: 0;
+    width: 100%;
+  }
+  .link-h .arrow :global(svg.h) {
+    display: block;
+  }
+  .link-h .arrow :global(svg.v) {
+    display: none;
+  }
+  .groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cfig.es[data-view="mechanism"] {
+    --cycle: 11s;
+  }
+  .cfig.es[data-view="burdens"] {
+    --cycle: 15s;
+  }
+
+  [data-link="sql"] .arrow :global(.dot),
+  [data-link="append"] .arrow :global(.dot) {
+    animation: travel var(--cycle) linear infinite;
+  }
+  [data-link="build"] .arrow :global(.dot) {
+    animation: travel-late var(--cycle) linear infinite;
+  }
+  [data-lit="status"] {
+    animation: lit-status var(--cycle) linear infinite;
+  }
+  [data-lit="append"] {
+    animation: lit-append var(--cycle) linear infinite;
+  }
+  [data-lit="first"] {
+    animation: lit-first var(--cycle) linear infinite;
+  }
+  [data-lit="second"] {
+    animation: lit-second var(--cycle) linear infinite;
+  }
+  [data-lit="read"] {
+    animation: lit-read var(--cycle) linear infinite;
+  }
+
+  .item[data-focus] {
+    animation: focus-face var(--cycle) linear infinite;
+    animation-delay: calc((var(--at) - 1) * var(--cycle));
+  }
+  .badge[data-focus] {
+    animation: focus-scale var(--cycle) linear infinite;
+    animation-delay: calc((var(--at) - 1) * var(--cycle));
+  }
+
+  @keyframes travel {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    1% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    11% {
+      opacity: 1;
+      transform: translate(var(--dx), var(--dy));
+    }
+    12%,
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy));
+    }
+  }
+  @keyframes travel-late {
+    0%,
+    54% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    55% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    65% {
+      opacity: 1;
+      transform: translate(var(--dx), var(--dy));
+    }
+    66%,
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy));
+    }
+  }
+
+  @keyframes lit-status {
+    0%,
+    12%,
+    24%,
+    100% {
+      background-color: var(--base);
+    }
+    13.5%,
+    22.5% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes lit-append {
+    0%,
+    12%,
+    24%,
+    38%,
+    50%,
+    100% {
+      background-color: var(--base);
+    }
+    13.5%,
+    22.5%,
+    39.5%,
+    48.5% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes lit-first {
+    0%,
+    26%,
+    38%,
+    100% {
+      background-color: var(--base);
+    }
+    27.5%,
+    36.5% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes lit-second {
+    0%,
+    38%,
+    50%,
+    100% {
+      background-color: var(--base);
+    }
+    39.5%,
+    48.5% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes lit-read {
+    0%,
+    66%,
+    78%,
+    100% {
+      background-color: var(--base);
+    }
+    67.5%,
+    76.5% {
+      background-color: var(--lit);
+    }
+  }
+
+  @keyframes focus-face {
+    0%,
+    20%,
+    100% {
+      background-color: var(--base);
+    }
+    2%,
+    18% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes focus-scale {
+    0%,
+    20%,
+    100% {
+      scale: 1;
+    }
+    2%,
+    18% {
+      scale: 1.3;
+    }
+  }
+}
+</style>

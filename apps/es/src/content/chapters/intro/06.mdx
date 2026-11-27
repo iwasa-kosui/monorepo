@@ -1,39 +1,22 @@
----
-wide: true
-immersive: true
----
+<div class="grid gap-4 [&>*]:min-w-0 [&_h2]:text-balance">
+<div class="intro-text">
 
-import BackupRestore from '../../../components/intro/BackupRestore.astro';
-import { evidenceScenario } from '../../../components/intro/evidence-scenario';
-import Workspace from '../../../components/workspace/Workspace.astro';
+## 段階的な適用
 
-<div class="visually-hidden">
+イベントソーシングの考え方を全て適用することはなくても、段階的に適用することで、求められている品質を担保できます。
 
-## アクセスログとDBバックアップでは何が解決できないのか
-
-アクセスログとDBバックアップに、誰が、いつ、何を、なぜは残っているでしょうか。2ページ目のポチのキャンセルを、もう一度調べます。
+私も、そのまま導入するのではなく、必要なエッセンスを既存システムへ部分的に適用してきました。CQRSやイベントソーシングを導入しなくても、イベントを記録するだけで大きな価値があると考えています。
 
 </div>
+<div class="intro-text">
 
-<Workspace scenario={evidenceScenario}>
-<Fragment slot="backup">
-<BackupRestore />
-</Fragment>
-<Fragment slot="explain">
+## このハンズオンの目的
 
-アクセスログとDBバックアップから分かるのは、キャンセルの日時と、`status` が `reserved` から `cancelled` に変わったことだけです。キャンセルした人と理由は、どちらにも残っていません。
+そこで本ハンズオンでは、段階的な適用の最初の段階として、「記録が全くない状態」から「少なくとも記録だけはある状態」を、既存システムのままで目指します。
 
-### アクセスログの限界
+題名のイベントソーシングから借りるのは追記で残す考え方です。記録から状態を組み立て直すことは今日はしません。既存のテーブルと更新処理はそのままにして、更新処理を呼ぶコードに1か所、業務で起きた出来事の記録を足します。第2章の終わりに、記録を足すと `visits.ts` が何行変わるかを見ます。
 
-アクセスログは、リクエストごとに日時、メソッド、URL、ステータスコード、所要時間、IP アドレス、User-Agent を記録しています。そのため、`POST /visits/visit-pochi/cancel` が 2026-11-06 18:11:58 に呼ばれたことは分かります。
+なお、誰が、いつ、何を、なぜがもう残っているなら今日の方法は要りません。
 
-しかし、このアクセスログには、リクエストを送った人とキャンセルの理由を記録する項目がありません。
-
-### DBバックアップの限界
-
-定期バックアップを復元すると、`visit-pochi` の `status` は `reserved` です。現在の DB の `status` は `cancelled` なので、`status` が `reserved` から `cancelled` に変わったことは分かります。
-
-しかし、バックアップで戻るのは残っていた値だけです。`visits` テーブルには、キャンセルした人と理由を保存する列がありません。誰がなぜ変えたのかは、残していなければどこにもありません。
-
-</Fragment>
-</Workspace>
+</div>
+</div>

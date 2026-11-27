@@ -7,7 +7,7 @@ export type ScheduleRow = {
 };
 
 export const schedule: readonly ScheduleRow[] = [
-  { id: 'intro', title: '導入', minutes: 8, pageStarts: [0, 1, 3, 4, 5, 5, 7] },
+  { id: 'intro', title: '導入', minutes: 10, pageStarts: [0, 1, 3, 4, 6, 7, 7, 9] },
   { id: 'chapter-1', title: '第1章 答えられない問いを挙げる', minutes: 2 },
   {
     id: 'chapter-2',
@@ -16,13 +16,13 @@ export const schedule: readonly ScheduleRow[] = [
     parts: '説明2分、演習9分、解答の確認2分',
     pageStarts: [0, 1, 6, 7, 12],
   },
-  { id: 'chapter-3', title: '第3章 記録から、誰がなぜキャンセルしたかを答える', minutes: 5 },
+  { id: 'chapter-3', title: '第3章 記録から、誰がなぜキャンセルしたかを答える', minutes: 4 },
   {
     id: 'chapter-4',
     title: '第4章 3パターンを比較する',
-    minutes: 9,
-    parts: '実演7分、判断表で比べて選ぶ2分',
-    pageStarts: [0, 0, 3, 5, 7, 8],
+    minutes: 8,
+    parts: '実演6分、判断表で比べて選ぶ2分',
+    pageStarts: [0, 0, 2, 4, 6, 7],
   },
   { id: 'summary', title: 'まとめ', minutes: 3 },
 ];
