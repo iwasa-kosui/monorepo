@@ -1,4 +1,4 @@
-import type { Post } from './scenario';
+import type { Post, TimelineEvent } from './scenario';
 
 type Channeled = Pick<Post, 'channel'>;
 
@@ -9,6 +9,13 @@ const channelReadSeconds = 3;
 const channelChangeGapSeconds = channelReadSeconds + typingLeadMs / 1000;
 
 export const channelOfPost = (post: Channeled, defaultChannel: string): string => post.channel ?? defaultChannel;
+
+export const openingChannel = (timeline: readonly TimelineEvent[], defaultChannel: string): string => {
+  for (const event of timeline) {
+    if (event.at !== undefined && event.kind === 'post') return channelOfPost(event.post, defaultChannel);
+  }
+  return defaultChannel;
+};
 
 export const postsInChannel = <T extends Channeled>(
   posts: readonly T[],
@@ -25,12 +32,13 @@ export const openingSchedule = <T extends Channeled>(
   posts: readonly T[],
   defaultChannel: string,
 ): { readonly post: T; readonly at: number }[] => {
-  let channel = defaultChannel;
+  const [first] = posts;
+  let channel = first === undefined ? defaultChannel : channelOfPost(first, defaultChannel);
   let at = 0;
   return posts.map((post, index) => {
     const next = channelOfPost(post, defaultChannel);
     const gap = next === channel ? sameChannelGapSeconds : channelChangeGapSeconds;
-    at = index === 0 ? (next === channel ? 0 : gap) : at + gap;
+    at = index === 0 ? 0 : at + gap;
     channel = next;
     return { post, at };
   });

@@ -10,7 +10,7 @@ import type {
   WorkspaceScenario,
 } from '../../workspace/scenario';
 
-const inquiryChannel = '# 問い合わせ対応';
+export const inquiryChannel = '# 問い合わせ対応';
 export const devChannel = '# dev';
 export const handsOnChannel = '# ハンズオン';
 
@@ -140,7 +140,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
     channels: [
       { name: '# general' },
       { name: devChannel },
-      { name: inquiryChannel, current: true },
+      { name: inquiryChannel },
       { name: '# 障害対応' },
       { name: handsOnChannel },
     ],
