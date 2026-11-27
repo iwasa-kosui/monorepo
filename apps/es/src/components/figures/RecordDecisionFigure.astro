@@ -20,7 +20,7 @@ type Write = {
 const visit: readonly Cell[] = [
   { column: 'id', value: 'visit-pochi' },
   { column: 'pet_name', value: 'ポチ' },
-  { column: 'status', value: 'cancelled', before: 'reserved' },
+  { column: 'status', value: 'cancelled', before: 'checked_in' },
 ];
 const record: readonly Cell[] = [
   { column: 'id', value: '1' },
@@ -158,7 +158,7 @@ const writes: readonly Write[] = [
         <span class="mono">visit_cancellations</span>
         への記録が失敗すると、トランザクションを取り消します。<span class="mono"
         >visits</span> の <span class="mono">status</span> は <span class="mono"
-        >reserved</span> に戻ります。
+        >checked_in</span> に戻ります。
       </div>
     </div>
   </div>
