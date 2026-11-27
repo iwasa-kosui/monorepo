@@ -17,8 +17,8 @@ type Group = {
 const { view } = Astro.props;
 
 const label = view === 'mechanism'
-  ? 'ポチの来院の受付とキャンセルを、状態を上書きする作りと、イベントソーシングとCQRSの作りで比べる図'
-  : 'イベントソーシングとCQRSの作りのうち、既存システムへの導入で負担になる箇所を番号で示す図';
+  ? 'ポチの来院の受付とキャンセルを、状態を上書きする作りと、イベントソーシングをCQRSと組み合わせた作りで比べる図'
+  : 'イベントソーシングをCQRSと組み合わせた作りのうち、既存システムへの導入で負担になる箇所を番号で示す図';
 
 const columns = ['id', 'pet_name', 'status'] as const;
 const sqls = [
@@ -193,7 +193,7 @@ const focus = (n: number): Record<string, string> =>
     {
       view === 'mechanism' && (
         <p class="stage-label">
-          イベントを追記する（イベントソーシングとCQRS）
+          イベントを追記する（イベントソーシング）
         </p>
       )
     }
