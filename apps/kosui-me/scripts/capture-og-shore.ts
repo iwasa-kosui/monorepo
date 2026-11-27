@@ -18,8 +18,8 @@ const esbuild = createRequire(require.resolve('tsx/package.json'))('esbuild') as
 
 const { values } = parseArgs({
   options: {
-    time: { type: 'string', default: '28.4' },
-    frame: { type: 'string', default: '965,215,240' },
+    time: { type: 'string', default: '7.9' },
+    frame: { type: 'string', default: '900,250,250' },
     out: { type: 'string', default: path.join(import.meta.dirname, 'og-assets', 'shore.png') },
   },
 });
