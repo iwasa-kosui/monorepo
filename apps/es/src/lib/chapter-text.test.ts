@@ -12,7 +12,7 @@ describe('第1章の出力例', () => {
   );
 
   it('演習のテスト名をすべて載せている', () => {
-    expect(testNames.length).toBe(8);
+    expect(testNames.length).toBe(9);
     for (const name of testNames) {
       expect(page).toContain(name);
     }

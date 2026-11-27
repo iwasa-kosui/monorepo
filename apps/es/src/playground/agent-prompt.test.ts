@@ -53,10 +53,10 @@ describe('手元のコーディングエージェント用のプロンプト', (
     }
   });
 
-  it('完了条件は pass 8 と fail 0', () => {
+  it('完了条件は pass 9 と fail 0', () => {
     for (const step of [1, 2] as const) {
       expect(buildLocalAgentPrompt(step, origin)).toContain(
-        `\`node --test visits.test.ts\` の結果に \`pass 8\` と \`fail 0\` が出れば、ステップ${step}は完了です。`,
+        `\`node --test visits.test.ts\` の結果に \`pass 9\` と \`fail 0\` が出れば、ステップ${step}は完了です。`,
       );
     }
   });
@@ -84,7 +84,7 @@ describe('手元のコーディングエージェント用のプロンプト', (
     expect(scene).toContain(
       squash('このディレクトリの `db.ts` とテストは、`business_events` 用です。`visits.ts` はステップ1の解答です。'),
     );
-    expect(scene).toContain(squash('`pass 8` と `fail 0` が出れば、ステップ1は完了です。'));
-    expect(scene).toContain(squash('`pass 8` と `fail 0` が出れば、ステップ2は完了です。'));
+    expect(scene).toContain(squash('`pass 9` と `fail 0` が出れば、ステップ1は完了です。'));
+    expect(scene).toContain(squash('`pass 9` と `fail 0` が出れば、ステップ2は完了です。'));
   });
 });

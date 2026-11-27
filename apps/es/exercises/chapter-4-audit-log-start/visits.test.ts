@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, it } from 'node:test';
 import { createDatabase } from './db.ts';
-import { cancelVisit, completeVisit, explainChange, findChangesWithoutReason, reserveVisit } from './visits.ts';
+import {
+  cancelVisit,
+  checkInVisit,
+  completeVisit,
+  explainChange,
+  findChangesWithoutReason,
+  reserveVisit,
+} from './visits.ts';
 
 const visitId = 'visit-1';
 const cancelInput = { visitId, reason: '飼い主の都合', operatedBy: '受付スタッフ' };
@@ -123,6 +130,15 @@ describe('監査ログ', () => {
     assert.equal(logs.length, 1);
     assert.equal(logs[0]?.old_value, 'reserved');
     assert.equal(logs[0]?.new_value, 'completed');
+    assert.equal(logs[0]?.operated_by, '獣医師');
+  });
+
+  it('来院を受け付けると、監査ログに変更前後の値と操作者が残る', () => {
+    checkInVisit(db, { visitId, operatedBy: '獣医師' });
+    const logs = auditLogsOf(visitId);
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0]?.old_value, 'reserved');
+    assert.equal(logs[0]?.new_value, 'checked_in');
     assert.equal(logs[0]?.operated_by, '獣医師');
   });
 

@@ -8,6 +8,10 @@ export const reserveVisit = (db: DatabaseSync, input: { visitId: string; petName
   db.prepare(`INSERT INTO visits (id, pet_name, status) VALUES (?, ?, 'reserved')`).run(input.visitId, input.petName);
 };
 
+export const checkInVisit = (db: DatabaseSync, input: { visitId: string }): void => {
+  db.prepare(`UPDATE visits SET status = 'checked_in' WHERE id = ?`).run(input.visitId);
+};
+
 export const completeVisit = (db: DatabaseSync, input: { visitId: string }): void => {
   db.prepare(`UPDATE visits SET status = 'completed' WHERE id = ?`).run(input.visitId);
 };

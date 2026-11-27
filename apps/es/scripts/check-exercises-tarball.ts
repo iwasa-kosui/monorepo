@@ -39,8 +39,8 @@ try {
     });
 
   const start = runTests('chapter-1-start');
-  if (start.status === 0 || !/pass 4\b/.test(start.stdout) || !/fail 4\b/.test(start.stdout)) {
-    errors.push(`chapter-1-start: 事前準備のページの説明（pass 4、fail 4）と結果が違います\n${start.stdout}`);
+  if (start.status === 0 || !/pass 5\b/.test(start.stdout) || !/fail 4\b/.test(start.stdout)) {
+    errors.push(`chapter-1-start: 事前準備のページの説明（pass 5、fail 4）と結果が違います\n${start.stdout}`);
   }
   for (const dir of ['chapter-2-step-1', 'chapter-2-step-2']) {
     const done = runTests(dir);

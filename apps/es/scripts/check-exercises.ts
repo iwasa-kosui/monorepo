@@ -5,11 +5,13 @@ import { join } from 'node:path';
 const exercisesDir = join(import.meta.dirname, '..', 'exercises');
 const reporter = join(import.meta.dirname, 'json-lines-reporter.ts');
 
+const checkInStatus = '予約した来院を受け付けると、来院の状態が受付済みになる';
 const existing = [
   '予約した来院をキャンセルすると、来院の状態がキャンセルになる',
   '診察が終わった来院はキャンセルできない',
   'キャンセルできなかったときは、記録を残さない',
   '来院の更新に失敗したら、記録も残らない',
+  checkInStatus,
 ];
 const step1 = [
   '来院をキャンセルすると、来院キャンセルの記録が1行残る',
@@ -94,10 +96,11 @@ const chapter4 = [
     script: 'why-changed.ts',
     outputs: ['飼い主の都合', 'VisitCancelled', 'visit-3', 'completed'],
     existing: [
-      ...existing,
+      ...existing.filter((name) => name !== checkInStatus),
       ...step2,
       'キャンセルすると、監査ログに変更前後の値と操作者が残る',
       '診察を終えると、監査ログに変更前後の値と操作者が残る',
+      '来院を受け付けると、監査ログに変更前後の値と操作者が残る',
       '監査ログの記録に失敗したら、来院のキャンセルも失敗する',
     ],
     tests: [

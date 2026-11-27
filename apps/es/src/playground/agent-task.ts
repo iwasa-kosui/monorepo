@@ -6,7 +6,7 @@ export const exercisesName = 'es-patchwork-exercises';
 export const exercisesArchive = `${exercisesName}.tar.gz`;
 export const testCommand = 'node --test visits.test.ts';
 export const nodeRequirement = '24.12.0';
-export const completion = 'pass 8 / fail 0';
+export const completion = 'pass 9 / fail 0';
 
 const sentences: Readonly<Record<AgentStep, readonly string[]>> = {
   1: [

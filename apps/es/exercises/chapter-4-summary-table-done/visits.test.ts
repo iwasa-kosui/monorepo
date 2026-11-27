@@ -4,6 +4,7 @@ import { beforeEach, describe, it } from 'node:test';
 import { createDatabase } from './db.ts';
 import {
   cancelVisit,
+  checkInVisit,
   completeVisit,
   explainCancellationCount,
   reserveVisit,
@@ -56,6 +57,11 @@ describe('既存の業務', () => {
     `);
     assert.throws(() => cancelVisit(db, cancelInput), /更新に失敗しました/);
     assert.equal(eventsOf(visitId).length, 0);
+  });
+
+  it('予約した来院を受け付けると、来院の状態が受付済みになる', () => {
+    checkInVisit(db, { visitId });
+    assert.equal(statusOf(visitId), 'checked_in');
   });
 });
 
