@@ -55,6 +55,9 @@ export const scenarioProblems = (scenario: WorkspaceScenario): string[] => {
     if (event.kind === 'post') {
       checkActor(event.post.actor, where);
       checkChannel(event.post, where);
+      if (event.at !== undefined && event.delay !== undefined) {
+        problems.push(`${where} は at 指定なので、delay は使われません`);
+      }
     }
     if (event.kind === 'tab') checkTab(event.tab, where);
     if (event.kind === 'log' && event.tab !== undefined) checkTab(event.tab, where, 'logs');

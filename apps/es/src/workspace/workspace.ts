@@ -337,7 +337,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
           return;
         }
         if (event.when !== undefined && !reducedMotion()) {
-          const due = atMs + signalDelayMs;
+          const due = atMs + (event.delay === undefined ? signalDelayMs : event.delay * 1000);
           chat.setTyping(event.post);
           scheduler.schedule([{ at: due, run: () => chat.addPost(event.post, due) }]);
           return;

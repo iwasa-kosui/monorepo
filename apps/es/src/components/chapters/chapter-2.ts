@@ -53,7 +53,7 @@ export const chapter2Step2: WorkspaceScenario = lessonScenario({
   label: `演習 ${sceneSteps[2].label}`,
   history: [inquiry],
   collapsed: true,
-  timeline: [{ when: 'tests:passed', kind: 'post', post: thanks }],
+  timeline: [{ when: 'tests:passed', kind: 'post', post: thanks, delay: 0.6 }],
   done: 'tests:passed',
   tabs: [stepTab(2)],
 });

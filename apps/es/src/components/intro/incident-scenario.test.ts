@@ -61,9 +61,16 @@ describe('障害対応の筋書き', () => {
     ]);
   });
 
-  it('56 秒の投稿は、最終の返信をしていない場合だけ届く', () => {
-    const late = timedEvents.find((event) => event.kind === 'post' && event.at === 56);
-    expect(late?.kind === 'post' && late.unlessReplied).toBe(true);
+  it('34 秒と 56 秒の投稿は、最終の返信をしていない場合だけ届く', () => {
+    const unlessRepliedAt = (at: number): boolean | undefined => {
+      const event = timedEvents.find((item) => item.kind === 'post' && item.at === at);
+      return event?.kind === 'post' ? event.unlessReplied === true : undefined;
+    };
+    expect(unlessRepliedAt(34)).toBe(true);
+    expect(unlessRepliedAt(56)).toBe(true);
+    for (const event of timedEvents.filter((item) => item.kind === 'post' && item.at <= 23)) {
+      expect(event.kind === 'post' && event.unlessReplied, `${event.at} 秒`).not.toBe(true);
+    }
   });
 
   it('エージェントのタブは、「答えを見る」の合図で足して開く', () => {

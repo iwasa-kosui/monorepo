@@ -69,7 +69,7 @@ export type Trigger = AtSeconds | OnSignal;
 export type TabAction = 'add' | 'open' | 'unseen';
 
 export type Effect =
-  | { readonly kind: 'post'; readonly post: Post; readonly unlessReplied?: true }
+  | { readonly kind: 'post'; readonly post: Post; readonly unlessReplied?: true; readonly delay?: number }
   | { readonly kind: 'log'; readonly entry: LogEntry; readonly millis: number; readonly tab?: string }
   | { readonly kind: 'sql'; readonly sql: string; readonly tab?: string }
   | { readonly kind: 'affected'; readonly count: number }

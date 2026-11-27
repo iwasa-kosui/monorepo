@@ -400,6 +400,25 @@ describe('第1章から第4章とまとめの筋書き', () => {
     );
   });
 
+  it('返信の後のカスタマーサポートの発言は 0.6 秒で届き、経理と情シスの発言は 1.2 秒で届く', () => {
+    const followUpDelays = (id: string): (number | undefined)[] =>
+      lessonScenarios[id]?.reply?.followUps.map((item) => item.delay) ?? [];
+    for (const id of ['chapter-3/01', 'chapter-3/04', 'chapter-4/03']) {
+      expect(followUpDelays(id), id).toEqual([0.6]);
+    }
+    for (const id of ['chapter-4/02', 'chapter-4/04']) {
+      expect(followUpDelays(id), id).toEqual([1.2]);
+    }
+  });
+
+  it('テストが通った後のカスタマーサポートの発言は 0.6 秒で届く', () => {
+    const posted = lessonScenarios['chapter-2/04']?.timeline.filter(
+      (event) => event.kind === 'post' && event.when === 'tests:passed',
+    );
+    expect(posted).toHaveLength(1);
+    expect(posted?.[0]?.kind === 'post' && posted[0].delay).toBe(0.6);
+  });
+
   it('投稿の文は、定めた文だけである', () => {
     const allowed = new Set([
       inquiry,
