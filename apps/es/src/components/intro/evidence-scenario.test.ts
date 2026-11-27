@@ -23,6 +23,14 @@ describe('証拠の調査の筋書き', () => {
     }
   });
 
+  it('テックリードの発言の時刻は、問い合わせの最後の発言より後である', () => {
+    const lastInquiry = evidenceScenario.history.map((post) => post.time ?? '').sort().at(-1) ?? '';
+    expect(lastInquiry).toBe('18:24');
+    for (const post of [accessLogLimit, backupLimit]) {
+      expect((post.time ?? '') > lastInquiry).toBe(true);
+    }
+  });
+
   it('解説のタブは、ログの確認とバックアップの復元で追加される', () => {
     const additions = evidenceScenario.timeline.filter((event) => event.kind === 'tab');
     expect(additions).toHaveLength(2);
