@@ -60,9 +60,9 @@ const inquiry = 'ポチちゃんの来院です（visit-pochi）。誰がいつ�
 const whyNotRecorded = 'なんで記録取ってないんですか';
 const afterIncident = 'さっきの件、おつかれさまでした';
 const ownQuestion =
-  '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときに聞かれた質問を、ここに1つ書いてみてください。たとえば、こんなのです。';
+  '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときにあなたが聞かれた質問を、下の入力欄に1つ書いてみてください。たとえば、こんなのです。';
 const afterOwnQuestion =
-  '書けたら、その質問の答えを記録する列が、自分のシステムのテーブルにあるかを考えてみてください。\n質問を思いつかないときは、書かなくて大丈夫です。そのときは、ポチの来院のキャンセルの問い合わせを、自分の質問の代わりに使ってください。';
+  '質問を書けたら、次のことを考えてみてください。あなたが普段の業務で運用しているシステムは、あなたが書いた質問に答えるための情報を、データベースに保持していますか？ たとえば「この予約は、誰がキャンセルしましたか。」という質問なら、答えるための情報は、予約をキャンセルした人の情報です。\n質問を思いつかない人は、何も書かなくて大丈夫です。何も書かない人は、画面の上の右向きの矢印のボタンを押して、次のページへ進んでください。\nこの後のページは、あなたの質問の代わりに、カスタマーサポートから届いた問い合わせを取り上げます。ポチの来院を、誰が、いつ、なぜキャンセルしたのかを尋ねる問い合わせです。';
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
@@ -116,6 +116,7 @@ const earlier: readonly (readonly [string, string])[] = [
   ['support', whyNotRecorded],
   ['techlead', afterIncident],
   ['kosui', ownQuestion],
+  ['kosui', afterOwnQuestion],
   ['techlead', wantRecord],
   ['techlead', runTests],
   ['techlead', failedFour],
@@ -311,8 +312,10 @@ describe('第1章から第4章とまとめの筋書き', () => {
       const source = mdxOf(id);
       const sentences = source.split(/[。\n]/).map((line) => line.trim()).filter((line) => line.length >= 12);
       for (const post of postsOf(scenario)) {
-        for (const sentence of sentences) {
-          expect(post.text, `${id}: ${sentence}`).not.toContain(sentence);
+        for (const text of [post.text, ...(post.list ?? [])]) {
+          for (const sentence of sentences) {
+            expect(text, `${id}: ${sentence}`).not.toContain(sentence);
+          }
         }
       }
     }
