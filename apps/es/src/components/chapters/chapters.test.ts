@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { projectFilesOf } from '../../lib/snapshots';
-import { typingStartMs } from '../../workspace/channel';
+import { channelOfPost, openingChannel, typingStartMs } from '../../workspace/channel';
 import { type Post, signalNames, type WorkspaceScenario } from '../../workspace/scenario';
 import { scenarioProblems } from '../../workspace/validate';
+import { evidenceScenario } from '../intro/evidence-scenario';
 import { incidentScenario } from '../intro/incident-scenario';
+import { devChannel, handsOnChannel, inquiryChannel } from './common';
 import { lessonScenarios } from './index';
 
 const entries = Object.entries(lessonScenarios);
@@ -52,6 +54,62 @@ const postsOf = (scenario: WorkspaceScenario): Post[] => [
   ...scenario.history,
   ...scenario.timeline.flatMap((event) => (event.kind === 'post' ? [event.post] : [])),
 ];
+
+const allScenarios: readonly (readonly [string, WorkspaceScenario])[] = [
+  ...entries,
+  ['intro/incident', incidentScenario],
+  ['intro/evidence', evidenceScenario],
+];
+
+type Spoken = { readonly where: string; readonly actor: string; readonly text: string; readonly channel: string };
+
+const spokenOf = (scenario: WorkspaceScenario): Spoken[] => [
+  ...scenario.history.map((post, index) => ({
+    where: `history[${index}]`,
+    actor: post.actor,
+    text: post.text,
+    channel: channelOfPost(post, scenario.chat.channel),
+  })),
+  ...scenario.timeline.flatMap((event, index) =>
+    event.kind === 'post'
+      ? [{
+        where: `timeline[${index}]`,
+        actor: event.post.actor,
+        text: event.post.text,
+        channel: channelOfPost(event.post, scenario.chat.channel),
+      }]
+      : []
+  ),
+  ...(scenario.reply?.followUps ?? []).map((followUp, index) => ({
+    where: `reply.followUps[${index}]`,
+    actor: followUp.actor,
+    text: followUp.text,
+    channel: scenario.chat.channel,
+  })),
+];
+
+const channelProblems = (id: string, scenario: WorkspaceScenario): string[] => {
+  const nameOf = (actor: string): string => scenario.actors[actor]?.name ?? actor;
+  const expectedChannel = (actor: string): string =>
+    nameOf(actor) === 'テックリード' ? devChannel : nameOf(actor) === 'kosui' ? handsOnChannel : scenario.chat.channel;
+  const problems: string[] = [];
+  for (const item of spokenOf(scenario)) {
+    const head = `${id} ${item.where} ${nameOf(item.actor)}「${item.text.slice(0, 16)}」`;
+    const expected = expectedChannel(item.actor);
+    if (item.channel !== expected) problems.push(`${head}は「${item.channel}」にあるが、「${expected}」にあるべき`);
+    if (item.channel === devChannel && nameOf(item.actor) !== 'テックリード') {
+      problems.push(`${head}は「${devChannel}」にあるが、テックリード以外の発言者である`);
+    }
+    if (item.channel === inquiryChannel && ['テックリード', 'kosui'].includes(nameOf(item.actor))) {
+      problems.push(`${head}は「${inquiryChannel}」にあるが、${nameOf(item.actor)}の発言である`);
+    }
+  }
+  const hasTechlead = spokenOf(scenario).some((item) => nameOf(item.actor) === 'テックリード');
+  if (hasTechlead && !scenario.chat.channels.some((channel) => channel.name === devChannel)) {
+    problems.push(`${id} はテックリードの発言があるが、chat.channels に「${devChannel}」がない`);
+  }
+  return problems;
+};
 
 const summary = (scenario: WorkspaceScenario): string[] =>
   scenario.tabs.map((tab) => `${tab.key}:${tab.kind}:${tab.title}`);
@@ -230,26 +288,70 @@ describe('第1章から第4章とまとめの筋書き', () => {
   it('既定のチャンネルは「# 問い合わせ対応」で、一覧の末尾に「# ハンズオン」がある', () => {
     for (const [, scenario] of entries) {
       expect(scenario.chat.channel).toBe('# 問い合わせ対応');
-      expect(scenario.chat.channels.find((channel) => channel.current === true)?.name).toBe('# 問い合わせ対応');
       expect(scenario.chat.channels.map((channel) => channel.name).at(-1)).toBe('# ハンズオン');
     }
   });
 
-  it('kosui の発言は「# ハンズオン」、テックリードの発言は「# dev」に属し、他の発言者の発言はチャンネルを指定しない', () => {
-    const channels: Readonly<Record<string, string>> = { kosui: '# ハンズオン', techlead: '# dev' };
-    for (const [id, scenario] of entries) {
-      for (const post of postsOf(scenario)) {
-        expect(post.channel, `${id}: ${post.text}`).toBe(channels[post.actor]);
-      }
+  it('テックリードの発言は「# dev」、kosui の発言は「# ハンズオン」、他の発言者の発言は既定のチャンネルに出る', () => {
+    expect(allScenarios.flatMap(([id, scenario]) => channelProblems(id, scenario))).toEqual([]);
+  });
+
+  describe('発言のチャンネルの検査は、誤った筋書きを検出する', () => {
+    const base = lessonScenarios['chapter-3/01'];
+    if (base === undefined) throw new Error('筋書きがありません');
+    const followUp = { actor: 'support', delay: 1.2, text: answeredThanks };
+
+    it('返信の発言者がテックリードだと、既定のチャンネルに出てしまうので検出する', () => {
+      const wrong: WorkspaceScenario = {
+        ...base,
+        reply: { lines: [], followUps: [{ ...followUp, actor: 'techlead' }] },
+      };
+      const problems = channelProblems('wrong', wrong);
+      expect(problems).toHaveLength(2);
+      expect(problems[0]).toBe(
+        `wrong reply.followUps[0] テックリード「${
+          answeredThanks.slice(0, 16)
+        }」は「${inquiryChannel}」にあるが、「${devChannel}」にあるべき`,
+      );
+    });
+
+    it('テックリードの発言がチャンネルを指定していないと、検出する', () => {
+      const wrong: WorkspaceScenario = { ...base, history: [{ actor: 'techlead', text: afterIncident }] };
+      expect(channelProblems('wrong', wrong)[0]).toContain(
+        `wrong history[0] テックリード「${afterIncident}」は「${inquiryChannel}」にある`,
+      );
+    });
+
+    it('テックリード以外の発言が「# dev」にあると、検出する', () => {
+      const wrong: WorkspaceScenario = { ...base, history: [{ actor: 'support', channel: devChannel, text: inquiry }] };
+      expect(channelProblems('wrong', wrong)).toHaveLength(2);
+    });
+
+    it('テックリードの発言があるのに、チャンネルの一覧に「# dev」がないと、検出する', () => {
+      const wrong: WorkspaceScenario = {
+        ...base,
+        history: [{ actor: 'techlead', channel: devChannel, text: afterIncident }],
+        chat: { ...base.chat, channels: base.chat.channels.filter((channel) => channel.name !== devChannel) },
+      };
+      expect(channelProblems('wrong', wrong)).toEqual([
+        `wrong はテックリードの発言があるが、chat.channels に「${devChannel}」がない`,
+      ]);
+    });
+  });
+
+  it('開いた時点で届く発言があるページは、開いた時点のチャンネルがその最初の発言のチャンネルである', () => {
+    for (const [id, scenario] of allScenarios) {
+      const first = timedPostsOf(scenario)[0];
+      expect(openingChannel(scenario.timeline, scenario.chat.channel), id).toBe(
+        first === undefined ? scenario.chat.channel : first.channel,
+      );
     }
   });
 
-  it('テックリードの発言は、どのページにも「# 問い合わせ対応」に出ない', () => {
-    for (const [id, scenario] of entries) {
-      const shown = postsOf(scenario).filter((post) => (post.channel ?? scenario.chat.channel) === '# 問い合わせ対応');
-      expect(shown.filter((post) => post.actor === 'techlead'), id).toEqual([]);
-      expect(scenario.chat.channels.map((channel) => channel.name), id).toContain('# dev');
-    }
+  it('第1章 2 ページ目は、テックリードの発言で始まるので、開いた時点のチャンネルが「# dev」である', () => {
+    const scenario = lessonScenarios['chapter-1/02'];
+    if (scenario === undefined) throw new Error('筋書きがありません');
+    expect(openingChannel(scenario.timeline, scenario.chat.channel)).toBe(devChannel);
   });
 
   it('参加者への問いかけ 6 件だけが kosui の発言である', () => {
@@ -345,7 +447,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     for (const [id, scenario] of entries) {
       const timed = timedPostsOf(scenario);
       const expected = timed.reduce<number[]>((times, item, index) => {
-        const previous = index === 0 ? scenario.chat.channel : timed[index - 1]?.channel;
+        const previous = index === 0 ? item.channel : timed[index - 1]?.channel;
         const gap = item.channel === previous ? 2 : 4.5;
         const last = times[index - 1];
         return [...times, last === undefined ? (gap === 2 ? 0 : gap) : last + gap];
