@@ -10,6 +10,13 @@ const postFiles: Record<string, string> = {
   'https://kosui.me/posts/2026/03/03/service-based-architecture':
     'apps/kosui-me/src/content/posts/2026-03-03-service-based-architecture.mdx',
 };
+const externalTexts: Record<string, { text: string; translation: string }> = {
+  'https://martinfowler.com/eaaDev/EventSourcing.html': {
+    text: 'Event Sourcing ensures that all changes to application state are stored as a sequence of events.',
+    translation:
+      'イベントソーシングは、アプリケーションの状態に対するすべての変更が、イベントの列として保存されることを保証する。',
+  },
+};
 const talkSource = 'SRE Kaigi 2026 の発表より';
 const talkFile = 'talks/2026/sre-kaigi-2026/slides.md';
 
@@ -31,12 +38,12 @@ const sentencesOf = (text: string): string[] => text.match(/[^。]+。/g) ?? [];
 describe('章の引用', () => {
   const quotes = chapterNames().flatMap((chapter) => quotesOf(readChapterText(chapter)));
 
-  it('引用を10件置いている', () => {
-    expect(quotes.length).toBe(10);
+  it('引用を11件置いている', () => {
+    expect(quotes.length).toBe(11);
   });
 
   it('引用文の各文が出典のファイルに一字一句含まれる', () => {
-    for (const quote of quotes) {
+    for (const quote of quotes.filter((quote) => quote.href === undefined || quote.href in postFiles)) {
       const file = quote.href === undefined ? talkFile : postFiles[quote.href];
       expect(file, `${quote.text} の出典`).toBeDefined();
       const origin = readRepo(file ?? '');
@@ -48,12 +55,21 @@ describe('章の引用', () => {
     }
   });
 
-  it('発表者ノートの引用は URL を付けず、記事の引用は記事の URL を付ける', () => {
+  it('外部の出典の引用文は、原文、空行、訳の順で対応表と完全に一致する', () => {
+    const externalQuotes = quotes.filter((quote) => quote.href !== undefined && quote.href in externalTexts);
+    expect(externalQuotes.length).toBe(1);
+    for (const quote of externalQuotes) {
+      const entry = externalTexts[quote.href ?? ''];
+      expect(quote.text).toBe(`${entry?.text}\n\n${entry?.translation}`);
+    }
+  });
+
+  it('発表者ノートの引用は URL を付けず、記事と外部の引用は出典の URL を付ける', () => {
     for (const quote of quotes) {
       if (quote.href === undefined) {
         expect(quote.source).toBe(talkSource);
       } else {
-        expect(Object.keys(postFiles)).toContain(quote.href);
+        expect([...Object.keys(postFiles), ...Object.keys(externalTexts)]).toContain(quote.href);
       }
     }
   });
