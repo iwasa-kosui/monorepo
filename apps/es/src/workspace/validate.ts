@@ -1,9 +1,10 @@
-import type { WorkspaceScenario } from './scenario';
+import type { Post, WorkspaceScenario } from './scenario';
 
 export const scenarioProblems = (scenario: WorkspaceScenario): string[] => {
   const problems: string[] = [];
   const tabKeys = scenario.tabs.map((tab) => tab.key);
   const actorIds = new Set(Object.keys(scenario.actors));
+  const channelNames = new Set(scenario.chat.channels.map((channel) => channel.name));
   const memoKeys = new Set(scenario.memo?.items.map((item) => item.key) ?? []);
   const buttons = new Set(scenario.chat.buttons.map((button) => button.name));
 
@@ -29,13 +30,21 @@ export const scenarioProblems = (scenario: WorkspaceScenario): string[] => {
   const checkActor = (actor: string, where: string): void => {
     if (!actorIds.has(actor)) problems.push(`${where} の発言者 ${actor} が actors にありません`);
   };
+  const checkChannel = (post: Post, where: string): void => {
+    if (post.channel !== undefined && !channelNames.has(post.channel)) {
+      problems.push(`${where} のチャンネル ${post.channel} が chat.channels にありません`);
+    }
+  };
   const checkTab = (key: string, where: string, kind?: string): void => {
     const tab = scenario.tabs.find((item) => item.key === key);
     if (tab === undefined) problems.push(`${where} のタブ ${key} がありません`);
     else if (kind !== undefined && tab.kind !== kind) problems.push(`${where} のタブ ${key} は ${kind} ではありません`);
   };
 
-  scenario.history.forEach((post, index) => checkActor(post.actor, `history[${index}]`));
+  scenario.history.forEach((post, index) => {
+    checkActor(post.actor, `history[${index}]`);
+    checkChannel(post, `history[${index}]`);
+  });
   scenario.reply?.followUps.forEach((item, index) => checkActor(item.actor, `reply.followUps[${index}]`));
 
   scenario.timeline.forEach((event, index) => {
@@ -43,7 +52,10 @@ export const scenarioProblems = (scenario: WorkspaceScenario): string[] => {
     if ((event.at === undefined) === (event.when === undefined)) {
       problems.push(`${where} は at と when のどちらか一方を持ちます`);
     }
-    if (event.kind === 'post') checkActor(event.post.actor, where);
+    if (event.kind === 'post') {
+      checkActor(event.post.actor, where);
+      checkChannel(event.post, where);
+    }
     if (event.kind === 'tab') checkTab(event.tab, where);
     if (event.kind === 'log' && event.tab !== undefined) checkTab(event.tab, where, 'logs');
     if (event.kind === 'sql' && event.tab !== undefined) checkTab(event.tab, where, 'console');

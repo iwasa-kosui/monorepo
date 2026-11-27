@@ -45,6 +45,7 @@ export type Post = {
   readonly actor: string;
   readonly text: string;
   readonly time?: string;
+  readonly channel?: string;
 };
 
 export type LogEntry = {

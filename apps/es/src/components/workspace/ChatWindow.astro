@@ -70,7 +70,12 @@ const railActors = railActorIds.flatMap((id) => {
     <ul class="chs">
       {
         chat.channels.map((channel) => (
-          <li class={channel.current ? 'on' : undefined}>{channel.name}</li>
+          <li
+            class={channel.current ? 'on' : undefined}
+            data-channel={channel.name}
+          >
+            {channel.name}
+          </li>
         ))
       }
     </ul>
@@ -78,7 +83,7 @@ const railActors = railActorIds.flatMap((id) => {
 
   <div class="chat-main" id={mainId}>
     <div class="chat-head">
-      <p class="channel">{chat.channel}</p>
+      <p class="channel" data-channel-title>{chat.channel}</p>
       {
         !timed && (
           <button
@@ -128,7 +133,11 @@ const railActors = railActorIds.flatMap((id) => {
               <slot name="composer" />
             </div>
           )
-            : <p class="ph" aria-hidden="true">{chat.placeholder}</p>
+            : (
+            <p class="ph" aria-hidden="true" data-placeholder>
+              {chat.placeholder}
+            </p>
+          )
         }
         {
           memo !== undefined && (

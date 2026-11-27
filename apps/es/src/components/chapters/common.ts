@@ -1,3 +1,4 @@
+import { openingSchedule } from '../../workspace/channel';
 import type {
   Actor,
   ChatButton,
@@ -9,12 +10,16 @@ import type {
   WorkspaceScenario,
 } from '../../workspace/scenario';
 
-export const actors: Readonly<Record<'support' | 'you' | 'techlead' | 'finance' | 'it', Actor>> = {
+const inquiryChannel = '# 問い合わせ対応';
+export const handsOnChannel = '# ハンズオン';
+
+export const actors: Readonly<Record<'support' | 'you' | 'techlead' | 'finance' | 'it' | 'kosui', Actor>> = {
   support: { name: 'カスタマーサポート', avatar: 'カ', tone: 'rose' },
   you: { name: 'あなた', avatar: 'あ', tone: 'blue', self: true },
   techlead: { name: 'テックリード', avatar: 'テ', tone: 'violet' },
   finance: { name: '経理', avatar: '経', tone: 'green' },
   it: { name: '情シス', avatar: '情', tone: 'amber' },
+  kosui: { name: 'kosui', avatar: 'k', tone: 'slate' },
 };
 
 const startedAt = Date.UTC(2026, 10, 9, 9, 30, 0);
@@ -42,6 +47,7 @@ export const answeredThanks: Post = {
 };
 
 const lead = (text: string): Post => ({ actor: 'techlead', text });
+const presenter = (text: string): Post => ({ actor: 'kosui', channel: handsOnChannel, text });
 const support = (text: string): Post => ({ actor: 'support', text });
 const finance = (text: string): Post => ({ actor: 'finance', text });
 const infoSys = (text: string): Post => ({ actor: 'it', text });
@@ -49,7 +55,7 @@ const you = (text: string): Post => ({ actor: 'you', text });
 
 export const posts = {
   afterIncident: lead('さっきの件、おつかれさまでした'),
-  ownQuestion: lead(
+  ownQuestion: presenter(
     '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？ 1つ書いてみてください。たとえば、こんなのです。',
   ),
   wantRecord: lead('再発防止で、キャンセルしたときに記録を残すようにしたいです'),
@@ -66,9 +72,8 @@ export const posts = {
   tamaAcknowledged: support('そうなんですね…了解です'),
   staffReply: { actor: 'you', text: '受付スタッフが、飼い主の都合でキャンセルしてます' },
   otherTeams: lead('記録の話、ほかのチームからも相談が来てます'),
-  threeConsultations: lead(
-    '3つあるので順番に見ていきましょう。自分が挙げた質問に近いのはどれか、考えながら見てもらえると',
-  ),
+  threeConsultations: lead('3つあるので順番に見ていきましょう'),
+  closestQuestion: presenter('自分が挙げた質問に近いのはどれか、考えながら見てもらえると'),
   financeGreeting: finance('お疲れ様です。昨日のキャンセル件数の件で質問です'),
   financeAsked: finance('集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？'),
   financeAnswer: you('記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです'),
@@ -84,13 +89,13 @@ export const posts = {
   auditAnswer: you('監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました'),
   auditThanks: infoSys('ありがとうございます。理由が無い分は別途確認します'),
   comparisonMade: lead('3つを同じ軸で並べた表を作りました'),
-  chooseOne: lead('自分のシステムに近いのを1つ選んでみてください'),
+  chooseOne: presenter('自分のシステムに近いのを1つ選んでみてください'),
   takeHome: lead('時間の関係で、実装は持ち帰りにします'),
   startingCodes: lead('開始コードを3つ置いておくので、選んだパターンで試してみてください'),
   goodWork: lead('おつかれさまでした！'),
   todayMemo: lead('今日やったことを設計メモにまとめました'),
-  decideLast: lead('最後に、自分のシステムで記録を足す更新処理を1つ決めて、ここに書いてみてください'),
-  skipIfNone: lead('答えたい質問が特に無ければ、足さなくて大丈夫です'),
+  decideLast: presenter('最後に、自分のシステムで記録を足す更新処理を1つ決めて、ここに書いてみてください'),
+  skipIfNone: presenter('答えたい質問が特に無ければ、足さなくて大丈夫です'),
 } as const satisfies Record<string, Post>;
 
 export const replyButton = (label: string): readonly ChatButton[] => [{ name: 'reply', label, primary: true }];
@@ -120,11 +125,12 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
     channels: [
       { name: '# general' },
       { name: '# dev' },
-      { name: '# 問い合わせ対応', current: true },
+      { name: inquiryChannel, current: true },
       { name: '# 障害対応' },
+      { name: handsOnChannel },
     ],
-    channel: '# 問い合わせ対応',
-    placeholder: '# 問い合わせ対応 へのメッセージ',
+    channel: inquiryChannel,
+    placeholder: `${inquiryChannel} へのメッセージ`,
     buttons: options.buttons ?? [],
     ...(options.collapsed === true || docsOnly(options.tabs) ? { collapsed: true as const } : {}),
   },
@@ -139,7 +145,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
 });
 
 export const opening = (...group: readonly Post[]): TimelineEvent[] =>
-  group.map((post, index) => ({ at: index * 2, kind: 'post', post }));
+  openingSchedule(group, inquiryChannel).map(({ post, at }) => ({ at, kind: 'post', post }));
 
 const documentTab = (key: string, title: string, path: string, config: DocConfig): TabDefinition => ({
   key,
