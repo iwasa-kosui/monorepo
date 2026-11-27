@@ -1,6 +1,6 @@
 import { inspect } from './inspect.ts';
 import { maxLogChars, maxLogLineChars, maxLogLines, truncate } from './limits.ts';
-import type { LogLine, LogSummary } from './types.ts';
+import type { LogLine, LogSummary, LogTable } from './types.ts';
 
 const isFullWidth = (code: number): boolean =>
   code >= 0x1100
@@ -49,20 +49,10 @@ const renderRow = (row: readonly string[], widths: readonly number[]): string =>
   return `│ ${cells.join(' │ ')} │`;
 };
 
-const renderTable = (head: readonly string[], columns: readonly (readonly (string | undefined)[])[]): string => {
-  const widths = head.map((title) => stringWidth(title));
-  const longest = Math.max(...columns.map((column) => column.length));
-  const rows: string[][] = [];
-  head.forEach((_, columnIndex) => {
-    const column = columns[columnIndex] ?? [];
-    for (let rowIndex = 0; rowIndex < longest; rowIndex += 1) {
-      const row = rows[rowIndex] ?? [];
-      rows[rowIndex] = row;
-      const value = column[rowIndex] ?? '';
-      row[columnIndex] = value;
-      widths[columnIndex] = Math.max(widths[columnIndex] ?? 0, stringWidth(value));
-    }
-  });
+const renderTable = ({ head, rows }: LogTable): string => {
+  const widths = head.map((title, columnIndex) =>
+    Math.max(stringWidth(title), ...rows.map((row) => stringWidth(row[columnIndex] ?? '')))
+  );
   const divider = widths.map((width) => '─'.repeat(width + 2));
   return [
     `┌${divider.join('┬')}┐`,
@@ -79,7 +69,7 @@ const inspectCell = (value: unknown): string => {
   return inspect(value, { depth, maxArrayLength: 3, breakLength: Infinity });
 };
 
-export const formatTable = (data: unknown, properties?: readonly string[]): string | undefined => {
+const buildTable = (data: unknown, properties?: readonly string[]): LogTable | undefined => {
   if (data === null || typeof data !== 'object') {
     return undefined;
   }
@@ -106,7 +96,17 @@ export const formatTable = (data: unknown, properties?: readonly string[]): stri
   });
   const head = ['(index)', ...map.keys(), ...(hasPrimitives ? ['Values'] : [])];
   const columns = [indexKeys, ...map.values(), ...(hasPrimitives ? [valuesColumn] : [])];
-  return renderTable(head, columns);
+  const longest = Math.max(...columns.map((column) => column.length));
+  const rows = Array.from(
+    { length: longest },
+    (_, rowIndex) => head.map((_, columnIndex) => columns[columnIndex]?.[rowIndex] ?? ''),
+  );
+  return { head, rows };
+};
+
+export const formatTable = (data: unknown, properties?: readonly string[]): string | undefined => {
+  const table = buildTable(data, properties);
+  return table === undefined ? undefined : renderTable(table);
 };
 
 const formatDirective = (directive: string, argument: unknown): string => {
@@ -193,19 +193,20 @@ export const createConsole = (): { console: RunConsole; lines: LogLine[]; summar
   let totalLines = 0;
   let totalChars = 0;
   let cutLines = 0;
-  const write = (stream: LogLine['stream'], format: () => string): void => {
+  const write = (stream: LogLine['stream'], format: () => string | { text: string; table: LogTable }): void => {
     totalLines += 1;
     if (lines.length >= maxLogLines || totalChars >= maxLogChars) {
       return;
     }
-    const text = format();
+    const formatted = format();
+    const { text, table } = typeof formatted === 'string' ? { text: formatted, table: undefined } : formatted;
     if (text.length > maxLogLineChars) {
       cutLines += 1;
     }
     const body = truncate(text, maxLogLineChars);
     const indented = indent === '' ? body : body.split('\n').map((line) => `${indent}${line}`).join('\n');
     totalChars += indented.length;
-    lines.push({ stream, text: indented });
+    lines.push(table !== undefined && body === text ? { stream, text: indented, table } : { stream, text: indented });
   };
   const toStdout = (...args: unknown[]): void => write('stdout', () => formatLog(args));
   const toStderr = (...args: unknown[]): void => write('stderr', () => formatLog(args));
@@ -224,7 +225,10 @@ export const createConsole = (): { console: RunConsole; lines: LogLine[]; summar
     trace: (...args) => write('stderr', () => `Trace: ${formatLog(args)}`),
     dir: (value) => write('stdout', () => inspect(value)),
     table: (data, properties) => {
-      write('stdout', () => formatTable(data, properties) ?? formatLog([data]));
+      write('stdout', () => {
+        const built = buildTable(data, properties);
+        return built === undefined ? formatLog([data]) : { text: renderTable(built), table: built };
+      });
     },
     assert: (condition, ...args) => {
       if (!condition) {

@@ -1,4 +1,6 @@
-export type LogLine = { stream: 'stdout' | 'stderr'; text: string };
+export type LogTable = { head: string[]; rows: string[][] };
+
+export type LogLine = { stream: 'stdout' | 'stderr'; text: string; table?: LogTable };
 
 export type TestResult = {
   name: string;
