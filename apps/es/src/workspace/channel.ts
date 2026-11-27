@@ -17,6 +17,9 @@ export const openingChannel = (timeline: readonly TimelineEvent[], defaultChanne
   return defaultChannel;
 };
 
+export const hasOpeningPost = (timeline: readonly TimelineEvent[]): boolean =>
+  timeline.some((event) => event.at === 0 && event.kind === 'post');
+
 export const postsInChannel = <T extends Channeled>(
   posts: readonly T[],
   channel: string,
@@ -62,17 +65,26 @@ const showing = (state: ChannelState, channel: string, pinned: boolean): Channel
 
 export const selectChannel = (state: ChannelState, channel: string): ChannelState => showing(state, channel, true);
 
+export const revealChannel = (state: ChannelState): ChannelState => showing(state, state.channel, state.pinned);
+
 export const receivePost = (
   state: ChannelState,
   post: { readonly channel: string; readonly self: boolean },
+  visible: boolean,
 ): ChannelState => {
-  if (post.self || !state.pinned) return showing(state, post.channel, false);
-  if (post.channel === state.channel) return state;
-  return { ...state, unread: { ...state.unread, [post.channel]: unreadOf(state, post.channel) + 1 } };
+  if (post.self) return showing(state, post.channel, false);
+  if (visible) {
+    if (!state.pinned) return showing(state, post.channel, false);
+    if (post.channel === state.channel) return state;
+  }
+  const counted = { ...state, unread: { ...state.unread, [post.channel]: unreadOf(state, post.channel) + 1 } };
+  return state.pinned ? counted : { ...counted, channel: post.channel };
 };
 
-export const receiveTyping = (state: ChannelState, channel: string): ChannelState =>
-  state.pinned ? state : showing(state, channel, false);
+export const receiveTyping = (state: ChannelState, channel: string, visible: boolean): ChannelState => {
+  if (state.pinned) return state;
+  return visible ? showing(state, channel, false) : { ...state, channel };
+};
 
 export const typingVisible = (state: ChannelState, channel: string): boolean =>
   !state.pinned || channel === state.channel;

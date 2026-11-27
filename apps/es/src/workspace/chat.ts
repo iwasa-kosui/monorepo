@@ -1,11 +1,13 @@
 import {
   channelOfPost,
+  hasOpeningPost,
   openingChannel,
   openingChannelState,
   placeholderOf,
   postsInChannel,
   receivePost,
   receiveTyping,
+  revealChannel,
   selectChannel,
   typingVisible,
   unreadOf,
@@ -62,6 +64,8 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const defaultChannel = scenario.chat.channel;
   const initialChannel = openingChannel(scenario.timeline, defaultChannel);
   const entries: { readonly post: Post; readonly element: HTMLElement }[] = [];
+  const awaitsOpeningPost = hasOpeningPost(scenario.timeline);
+  let awaiting = awaitsOpeningPost;
   let state = openingChannelState(initialChannel);
   let renderedChannel = initialChannel;
   let typingActor: string | null = null;
@@ -74,7 +78,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const visible = (): boolean => (tabbed ? front : rail === null || open);
 
   const renderEmpty = (): void => {
-    feed.toggleAttribute('data-empty', feed.childElementCount === 0);
+    feed.toggleAttribute('data-empty', feed.childElementCount === 0 && !awaiting);
   };
 
   const layoutFeed = (): void => {
@@ -133,7 +137,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
 
   const setTyping = (post: Pick<Post, 'actor' | 'channel'>): void => {
     typingChannel = channelOfPost(post, defaultChannel);
-    state = receiveTyping(state, typingChannel);
+    state = receiveTyping(state, typingChannel, visible());
     typingActor = post.actor;
     if (typingText !== null) typingText.textContent = `${scenario.actors[post.actor]?.name ?? post.actor} が入力中…`;
     syncChannel();
@@ -162,7 +166,11 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
 
   const setOpen = (next: boolean): void => {
     open = next;
-    if (open) unread = 0;
+    if (open) {
+      unread = 0;
+      state = revealChannel(state);
+      syncChannel();
+    }
     renderRail();
     if (open) feed.focus({ preventScroll: true });
   };
@@ -223,10 +231,15 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   };
 
   const addPost = (post: Post, atMs: number): void => {
-    state = receivePost(state, {
-      channel: channelOfPost(post, defaultChannel),
-      self: scenario.actors[post.actor]?.self === true,
-    });
+    awaiting = false;
+    state = receivePost(
+      state,
+      {
+        channel: channelOfPost(post, defaultChannel),
+        self: scenario.actors[post.actor]?.self === true,
+      },
+      visible(),
+    );
     syncChannel();
     append(post, atMs, true);
   };
@@ -242,6 +255,8 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
       if (tabbed) open = false;
       if (visible()) {
         unread = 0;
+        state = revealChannel(state);
+        syncChannel();
         feed.scrollTop = feed.scrollHeight;
       }
       renderRail();
@@ -271,12 +286,14 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
 
   renderPlaceholder();
   showHistory();
+  renderEmpty();
 
   return {
     addPost,
     showHistory,
     clear: () => {
       entries.splice(0);
+      awaiting = awaitsOpeningPost;
       state = openingChannelState(initialChannel);
       syncChannel();
       feed.replaceChildren();

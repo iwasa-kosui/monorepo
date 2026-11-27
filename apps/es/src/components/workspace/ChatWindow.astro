@@ -1,5 +1,10 @@
 ---
-import { openingChannel, placeholderOf } from '../../workspace/channel';
+import {
+  hasOpeningPost,
+  openingChannel,
+  placeholderOf,
+  postsInChannel,
+} from '../../workspace/channel';
 import { chatPanelIdOf } from '../../workspace/panel-props';
 import type { WorkspaceScenario } from '../../workspace/scenario';
 
@@ -16,6 +21,9 @@ const placeholder = placeholderOf(
   chat.channel,
   chat.placeholder,
 );
+const emptyOnOpen = !hasOpeningPost(scenario.timeline)
+  && postsInChannel(scenario.history, initialChannel, chat.channel).length
+    === 0;
 const timed = scenario.mode === 'timed';
 const memoId = `${scenario.id}-memo`;
 const reasonId = `${scenario.id}-reason`;
@@ -74,7 +82,7 @@ const railActors = railActorIds.flatMap((id) => {
   <div class="chat-side">
     <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
     <p class="ws">{chat.workspace}</p>
-    <ul class="chs">
+    <ul class="chs" aria-label="チャンネル">
       {
         chat.channels.map((channel) => (
           <li>
@@ -145,6 +153,7 @@ const railActors = railActorIds.flatMap((id) => {
       aria-label="チャットの投稿"
       tabindex="0"
       data-feed
+      data-empty={emptyOnOpen ? '' : undefined}
     >
     </ol>
 
@@ -389,7 +398,7 @@ const railActors = railActorIds.flatMap((id) => {
 :global(.scene[data-scenario]) .chat-channels {
   display: flex;
   flex: none;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin: 0;
   padding: var(--space-2) var(--space-4);
   flex-wrap: wrap;
@@ -400,9 +409,10 @@ const railActors = railActorIds.flatMap((id) => {
   margin: 0;
 }
 :global(.scene[data-scenario]) .chat-channels .ch {
+  gap: var(--space-1);
   min-height: var(--tap-min);
   background: var(--c-btn-off);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2);
   font-size: var(--text-note);
   color: var(--c-fg);
   white-space: nowrap;
