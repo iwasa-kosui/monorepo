@@ -271,6 +271,13 @@ const approvable = config.approvable === true;
   font-weight: var(--weight-bold);
   line-height: var(--leading-normal);
 }
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(h4) {
+  margin-block: var(--space-4) var(--space-1);
+  color: var(--dc-muted);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(p),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(ul),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(ol),
@@ -299,6 +306,9 @@ const approvable = config.approvable === true;
   :global(:not(pre) > code) {
   background: var(--dc-code);
   font-size: var(--text-code);
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(h4 code) {
+  font-size: inherit;
 }
 :global(.content)
   :global(.scene[data-scenario])
