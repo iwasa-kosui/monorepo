@@ -17,19 +17,40 @@ type Group = {
 const { view } = Astro.props;
 
 const label = view === 'mechanism'
-  ? 'ポチの来院のキャンセルを、状態を上書きする作りと、イベントソーシングとCQRSの作りで比べる図'
+  ? 'ポチの来院の受付とキャンセルを、状態を上書きする作りと、イベントソーシングとCQRSの作りで比べる図'
   : 'イベントソーシングとCQRSの作りのうち、既存システムへの導入で負担になる箇所を番号で示す図';
 
 const columns = ['id', 'pet_name', 'status'] as const;
-const sql =
-  'UPDATE visits SET status = \'cancelled\' WHERE id = \'visit-pochi\';';
+const sqls = [
+  [
+    'UPDATE visits',
+    'SET status = \'checked_in\'',
+    'WHERE id = \'visit-pochi\';',
+  ],
+  [
+    'UPDATE visits',
+    'SET status = \'cancelled\'',
+    'WHERE id = \'visit-pochi\';',
+  ],
+] as const;
 const events = [
-  { order: '1', target: 'visit-pochi', name: '来院を予約した', lit: 'first' },
+  {
+    order: '1',
+    target: 'visit-pochi',
+    name: ['来院を', '予約した'],
+    lit: 'first',
+  },
   {
     order: '2',
     target: 'visit-pochi',
-    name: '来院をキャンセルした',
-    lit: 'append',
+    name: ['来院を', '受け付けた'],
+    lit: 'append-second',
+  },
+  {
+    order: '3',
+    target: 'visit-pochi',
+    name: ['来院を', 'キャンセルした'],
+    lit: 'append-third',
   },
 ] as const;
 
@@ -124,9 +145,17 @@ const focus = (n: number): Record<string, string> =>
       <div class="stage">
         <p class="stage-label">状態を上書きする（いまの予約システム）</p>
         <div class="flow-a">
-          <div class="box">キャンセルの操作</div>
+          <div class="box">受付と<wbr />キャンセルの操作</div>
           <div class="link link-h" data-link="sql">
-            <code class="sql">{sql}</code>
+            <div class="sqls">
+              {
+                sqls.map((sql) => (
+                  <code class="sql">
+                    {sql.map((line) => <span class="sql-line">{line}</span>)}
+                  </code>
+                ))
+              }
+            </div>
             <span class="arrow"><Fragment set:html={sqlArrow} /></span>
           </div>
           <div class="tbl">
@@ -147,6 +176,7 @@ const focus = (n: number): Record<string, string> =>
                   <td class="keep">ポチ</td>
                   <td class="mono" {...lit('status')}>
                     <del class="before">reserved</del>
+                    <del class="before">checked_in</del>
                     <span class="after">cancelled</span>
                   </td>
                 </tr>
@@ -170,7 +200,7 @@ const focus = (n: number): Record<string, string> =>
     <div class="flow-b">
       <div class="zone zone-write">
         <span class="tag">変更する処理</span>
-        <div class="box">キャンセルの操作</div>
+        <div class="box">受付と<wbr />キャンセルの操作</div>
         <div class="link link-h" data-link="append">
           <span class="label">追記する</span>
           <span class="arrow">
@@ -214,7 +244,9 @@ const focus = (n: number): Record<string, string> =>
                   <tr>
                     <td class="mono" {...lit(event.lit)}>{event.order}</td>
                     <td class="mono" {...lit(event.lit)}>{event.target}</td>
-                    <td {...lit(event.lit)}>{event.name}</td>
+                    <td class="event-name" {...lit(event.lit)}>
+                      {event.name[0]}<wbr />{event.name[1]}
+                    </td>
                   </tr>
                 ))
               }
@@ -237,7 +269,9 @@ const focus = (n: number): Record<string, string> =>
           <div class="values">
             <span class="chip mono" {...lit('first')}>reserved</span>
             <span class="to" aria-hidden="true">→</span>
-            <span class="chip chip-now mono" {...lit('second')}>cancelled</span>
+            <span class="chip mono" {...lit('second')}>checked_in</span>
+            <span class="to" aria-hidden="true">→</span>
+            <span class="chip chip-now mono" {...lit('third')}>cancelled</span>
           </div>
         </div>
       </div>
@@ -365,6 +399,7 @@ const focus = (n: number): Record<string, string> =>
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
   text-align: center;
+  word-break: keep-all;
 }
 
 .zone {
@@ -437,12 +472,26 @@ const focus = (n: number): Record<string, string> =>
   fill: var(--role-accent);
   opacity: 0;
 }
+.sqls {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
+}
 .cfig.es .sql {
   flex: 0 1 auto;
   max-width: 100%;
   font-size: var(--fig-code);
-  overflow-wrap: anywhere;
   text-align: left;
+}
+.sql-line {
+  display: block;
+  white-space: nowrap;
+}
+.cfig.es .tbl .cfig-table td.event-name {
+  word-break: keep-all;
 }
 .label {
   min-width: 0;
@@ -602,6 +651,12 @@ const focus = (n: number): Record<string, string> =>
 }
 
 @container (min-width: 60rem) {
+  .cfig.es .tbl .cfig-table td:not(.mono, .keep, [data-lit="status"]) {
+    white-space: nowrap;
+  }
+  .cfig.es .tbl .cfig-table td.event-name wbr {
+    display: none;
+  }
   .flow-a {
     display: grid;
     grid-template-columns: 8rem 20rem minmax(0, 1fr);
@@ -656,30 +711,42 @@ const focus = (n: number): Record<string, string> =>
 
 @media (prefers-reduced-motion: no-preference) {
   .cfig.es[data-view="mechanism"] {
-    --cycle: 11s;
+    --cycle: 14s;
   }
   .cfig.es[data-view="burdens"] {
     --cycle: 15s;
   }
 
-  [data-link="sql"] .arrow :global(.dot),
   [data-link="append"] .arrow :global(.dot) {
     animation: travel var(--cycle) linear infinite;
   }
   [data-link="build"] .arrow :global(.dot) {
     animation: travel-late var(--cycle) linear infinite;
   }
+  .cfig.es[data-view="mechanism"] [data-link="sql"] .arrow :global(.dot),
+  .cfig.es[data-view="mechanism"] [data-link="append"] .arrow :global(.dot) {
+    animation: travel-twice var(--cycle) linear infinite;
+  }
+  .cfig.es[data-view="mechanism"] [data-link="build"] .arrow :global(.dot) {
+    animation: travel-build var(--cycle) linear infinite;
+  }
   [data-lit="status"] {
     animation: lit-status var(--cycle) linear infinite;
   }
-  [data-lit="append"] {
-    animation: lit-append var(--cycle) linear infinite;
+  [data-lit="append-second"] {
+    animation: lit-append-second var(--cycle) linear infinite;
+  }
+  [data-lit="append-third"] {
+    animation: lit-append-third var(--cycle) linear infinite;
   }
   [data-lit="first"] {
     animation: lit-first var(--cycle) linear infinite;
   }
   [data-lit="second"] {
     animation: lit-second var(--cycle) linear infinite;
+  }
+  [data-lit="third"] {
+    animation: lit-third var(--cycle) linear infinite;
   }
   [data-lit="read"] {
     animation: lit-read var(--cycle) linear infinite;
@@ -734,67 +801,155 @@ const focus = (n: number): Record<string, string> =>
     }
   }
 
+  @keyframes travel-twice {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    1% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    9% {
+      opacity: 1;
+      transform: translate(var(--dx), var(--dy));
+    }
+    10% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy));
+    }
+    21% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    22% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    30% {
+      opacity: 1;
+      transform: translate(var(--dx), var(--dy));
+    }
+    31%,
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy));
+    }
+  }
+  @keyframes travel-build {
+    0%,
+    74% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    75% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    83% {
+      opacity: 1;
+      transform: translate(var(--dx), var(--dy));
+    }
+    84%,
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy));
+    }
+  }
+
   @keyframes lit-status {
     0%,
-    12%,
-    24%,
+    10%,
+    19.4%,
+    31%,
+    40.4%,
     100% {
       background-color: var(--base);
     }
-    13.5%,
-    22.5% {
+    11.2%,
+    18.2%,
+    32.2%,
+    39.2% {
       background-color: var(--lit);
     }
   }
-  @keyframes lit-append {
+  @keyframes lit-append-second {
     0%,
-    12%,
-    24%,
-    38%,
-    50%,
+    10%,
+    19.4%,
+    51.8%,
+    61.2%,
     100% {
       background-color: var(--base);
     }
-    13.5%,
-    22.5%,
-    39.5%,
-    48.5% {
+    11.2%,
+    18.2%,
+    53%,
+    60% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes lit-append-third {
+    0%,
+    31%,
+    40.4%,
+    61.2%,
+    70.6%,
+    100% {
+      background-color: var(--base);
+    }
+    32.2%,
+    39.2%,
+    62.4%,
+    69.4% {
       background-color: var(--lit);
     }
   }
   @keyframes lit-first {
     0%,
-    26%,
-    38%,
+    42.4%,
+    51.8%,
     100% {
       background-color: var(--base);
     }
-    27.5%,
-    36.5% {
+    43.6%,
+    50.6% {
       background-color: var(--lit);
     }
   }
   @keyframes lit-second {
     0%,
-    38%,
-    50%,
+    51.8%,
+    61.2%,
     100% {
       background-color: var(--base);
     }
-    39.5%,
-    48.5% {
+    53%,
+    60% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes lit-third {
+    0%,
+    61.2%,
+    70.6%,
+    100% {
+      background-color: var(--base);
+    }
+    62.4%,
+    69.4% {
       background-color: var(--lit);
     }
   }
   @keyframes lit-read {
     0%,
-    66%,
-    78%,
+    84%,
+    93.4%,
     100% {
       background-color: var(--base);
     }
-    67.5%,
-    76.5% {
+    85.2%,
+    92.2% {
       background-color: var(--lit);
     }
   }
