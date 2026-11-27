@@ -118,7 +118,9 @@ const inquiry = 'ポチちゃんの来院です（visit-pochi）。誰がいつ�
 const whyNotRecorded = 'なんで記録取ってないんですか';
 const afterIncident = 'さっきの件、おつかれさまでした';
 const ownQuestion =
-  '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？ 1つ書いてみてください。たとえば、こんなのです。';
+  '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときにあなたが聞かれた質問を、下の入力欄に1つ書いてみてください。たとえば、こんなのです。';
+const afterOwnQuestion =
+  '質問を書けたら、次のことを考えてみてください。あなたが普段の業務で運用しているシステムは、あなたが書いた質問に答えるための情報を、データベースに保持していますか？\n質問を思いつかない人は、何も書かなくて大丈夫です。何も書かない人は、画面の上の右向きの矢印のボタンを押して、次のページへ進んでください。何も書かなかった人には、この後のページが、質問の代わりに、カスタマーサポートから届いた問い合わせを表示します。ポチの来院を、誰が、いつ、なぜキャンセルしたのかを尋ねる問い合わせです。';
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
@@ -172,6 +174,7 @@ const earlier: readonly (readonly [string, string])[] = [
   ['support', whyNotRecorded],
   ['techlead', afterIncident],
   ['kosui', ownQuestion],
+  ['kosui', afterOwnQuestion],
   ['techlead', wantRecord],
   ['techlead', runTests],
   ['techlead', failedFour],
@@ -351,8 +354,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(openingChannel(scenario.timeline, scenario.chat.channel)).toBe(devChannel);
   });
 
-  it('参加者への問いかけ 5 件だけが kosui の発言である', () => {
-    const asked = new Set([ownQuestion, closestQuestion, chooseOne, decideLast, skipIfNone]);
+  it('参加者への問いかけ 6 件だけが kosui の発言である', () => {
+    const asked = new Set([ownQuestion, afterOwnQuestion, closestQuestion, chooseOne, decideLast, skipIfNone]);
     const found = new Set<string>();
     for (const [, scenario] of entries) {
       for (const post of postsOf(scenario)) {
@@ -390,6 +393,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       whyNotRecorded,
       afterIncident,
       ownQuestion,
+      afterOwnQuestion,
       wantRecord,
       runTests,
       failedFour,
@@ -419,8 +423,10 @@ describe('第1章から第4章とまとめの筋書き', () => {
       const source = mdxOf(id);
       const sentences = source.split(/[。\n]/).map((line) => line.trim()).filter((line) => line.length >= 12);
       for (const post of postsOf(scenario)) {
-        for (const sentence of sentences) {
-          expect(post.text, `${id}: ${sentence}`).not.toContain(sentence);
+        for (const text of [post.text, ...(post.list ?? [])]) {
+          for (const sentence of sentences) {
+            expect(text, `${id}: ${sentence}`).not.toContain(sentence);
+          }
         }
       }
     }
@@ -462,7 +468,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
   });
 
   describe('第1章', () => {
-    it('1 ページ目は、導入のやり取りを履歴に持ち、開いた時点でテックリードと kosui が 1 件ずつ投稿する', () => {
+    it('1 ページ目は、導入のやり取りを履歴に持ち、開いた時点でテックリードが 1 件、kosui が 2 件投稿する', () => {
       const scenario = lessonScenarios['chapter-1/01'];
       expect(scenario).toBeDefined();
       if (scenario === undefined) return;
@@ -470,8 +476,19 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['support', inquiry],
         ['support', whyNotRecorded],
       ]);
-      expect(opened(scenario)).toEqual([['techlead', afterIncident], ['kosui', ownQuestion]]);
+      expect(opened(scenario)).toEqual([
+        ['techlead', afterIncident],
+        ['kosui', ownQuestion],
+        ['kosui', afterOwnQuestion],
+      ]);
       expect(summary(scenario)).toEqual(['memo:doc:データ変更の記録について']);
+      const question = postsOf(scenario).find((post) => post.text === ownQuestion);
+      expect(question?.list).toEqual([
+        'この予約は、誰がキャンセルしましたか。',
+        'この金額は、いつ変わりましたか。なぜ変わりましたか。',
+        'このアカウントは、なぜ止まっていますか。',
+        '先月末の時点では、どうなっていましたか。',
+      ]);
     });
 
     it('2 ページ目は、1 ページ目の投稿を履歴に持ち、テスト実行の合図で投稿する', () => {
@@ -482,6 +499,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['support', whyNotRecorded],
         ['techlead', afterIncident],
         ['kosui', ownQuestion],
+        ['kosui', afterOwnQuestion],
       ]);
       expect(opened(scenario)).toEqual([['techlead', wantRecord], ['techlead', runTests]]);
       const waiting = scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]));

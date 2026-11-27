@@ -7,6 +7,7 @@ const earlier: readonly Post[] = [
   whyNotRecorded,
   posts.afterIncident,
   posts.ownQuestion,
+  posts.afterOwnQuestion,
   posts.wantRecord,
   posts.runTests,
   posts.failedFour,

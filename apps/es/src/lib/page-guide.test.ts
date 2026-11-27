@@ -44,12 +44,12 @@ describe('elapsedMinutes', () => {
   });
 
   it('章の分数を、章のページ数で均等に割った時刻にする', () => {
-    expect(elapsedMinutes(evenRows, 'chapter-2', 4, 6)).toBe(10 + 7);
+    expect(elapsedMinutes(evenRows, 'chapter-2', 4, 6)).toBe(12 + 7);
   });
 
   it('pageStarts がある章は、その分を章の開始時刻に足す', () => {
-    expect(elapsedMinutes(schedule, 'chapter-2', 2, 5)).toBe(10 + 1);
-    expect(elapsedMinutes(schedule, 'chapter-2', 4, 5)).toBe(10 + 7);
+    expect(elapsedMinutes(schedule, 'chapter-2', 2, 5)).toBe(12 + 1);
+    expect(elapsedMinutes(schedule, 'chapter-2', 4, 5)).toBe(12 + 7);
   });
 
   it('pageStarts の長さがページ数と合わないときはエラーにする', () => {
@@ -84,12 +84,12 @@ describe('schedule の pageStarts', () => {
     });
   }
 
-  it('第2章のステップ1（2ページ目）は 0:11、ステップ2（4ページ目）は 0:17 になる', () => {
-    expect(formatElapsed(elapsedMinutes(schedule, 'chapter-2', 2, 5))).toBe('0:11');
-    expect(formatElapsed(elapsedMinutes(schedule, 'chapter-2', 4, 5))).toBe('0:17');
+  it('第2章のステップ1（2ページ目）は 0:13、ステップ2（4ページ目）は 0:19 になる', () => {
+    expect(formatElapsed(elapsedMinutes(schedule, 'chapter-2', 2, 5))).toBe('0:13');
+    expect(formatElapsed(elapsedMinutes(schedule, 'chapter-2', 4, 5))).toBe('0:19');
   });
 
-  it('第4章の判断表のページ（5ページ目）は、実演7分の後に始まる', () => {
+  it('第4章の判断表のページ（5ページ目）は、実演6分の後に始まる', () => {
     expect(formatElapsed(elapsedMinutes(schedule, 'chapter-4', 5, 6))).toBe('0:35');
   });
 });

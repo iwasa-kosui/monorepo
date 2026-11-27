@@ -21,7 +21,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/01': {
     flow: 'problem',
     mode: 'listen',
-    role: '社会を支えるシステム',
+    role: '生成AIにも復元できないデータ',
   },
   'intro/02': {
     flow: 'try',
@@ -35,21 +35,26 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     role: '求められる品質',
   },
   'intro/04': {
-    flow: 'problem',
+    flow: 'explain',
     mode: 'listen',
-    role: 'イベントソーシングの段階的な適用',
+    role: 'イベントソーシングとCQRS',
   },
   'intro/05': {
     flow: 'problem',
     mode: 'listen',
-    role: 'このハンズオンの目的',
+    role: 'イベントソーシングが敬遠される理由',
   },
   'intro/06': {
+    flow: 'problem',
+    mode: 'listen',
+    role: '段階的な適用とこのハンズオンの目的',
+  },
+  'intro/07': {
     flow: 'try',
     mode: 'do',
     role: 'アクセスログとDBバックアップで、ポチのキャンセルを調べる',
   },
-  'intro/07': {
+  'intro/08': {
     flow: 'problem',
     mode: 'listen',
     role: 'コードを見ない開発と品質の保証',
@@ -57,7 +62,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-1/01': {
     flow: 'problem',
     mode: 'do',
-    role: '自分のシステムで、DB を見ても分からなかったことを1つ書く',
+    role: '普段の業務で運用しているシステムについて聞かれて、DB を見ても分からなかった質問を1つ書く',
   },
   'chapter-1/02': {
     flow: 'try',

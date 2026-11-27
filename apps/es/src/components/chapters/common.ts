@@ -48,7 +48,12 @@ export const answeredThanks: Post = {
 };
 
 const lead = (text: string): Post => ({ actor: 'techlead', channel: devChannel, text });
-const presenter = (text: string): Post => ({ actor: 'kosui', channel: handsOnChannel, text });
+const presenter = (text: string, list?: readonly string[]): Post => ({
+  actor: 'kosui',
+  channel: handsOnChannel,
+  text,
+  ...(list === undefined ? {} : { list }),
+});
 const support = (text: string): Post => ({ actor: 'support', text });
 const finance = (text: string): Post => ({ actor: 'finance', text });
 const infoSys = (text: string): Post => ({ actor: 'it', text });
@@ -57,7 +62,16 @@ const you = (text: string): Post => ({ actor: 'you', text });
 export const posts = {
   afterIncident: lead('さっきの件、おつかれさまでした'),
   ownQuestion: presenter(
-    '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？ 1つ書いてみてください。たとえば、こんなのです。',
+    '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときにあなたが聞かれた質問を、下の入力欄に1つ書いてみてください。たとえば、こんなのです。',
+    [
+      'この予約は、誰がキャンセルしましたか。',
+      'この金額は、いつ変わりましたか。なぜ変わりましたか。',
+      'このアカウントは、なぜ止まっていますか。',
+      '先月末の時点では、どうなっていましたか。',
+    ],
+  ),
+  afterOwnQuestion: presenter(
+    '質問を書けたら、次のことを考えてみてください。あなたが普段の業務で運用しているシステムは、あなたが書いた質問に答えるための情報を、データベースに保持していますか？\n質問を思いつかない人は、何も書かなくて大丈夫です。何も書かない人は、画面の上の右向きの矢印のボタンを押して、次のページへ進んでください。何も書かなかった人には、この後のページが、質問の代わりに、カスタマーサポートから届いた問い合わせを表示します。ポチの来院を、誰が、いつ、なぜキャンセルしたのかを尋ねる問い合わせです。',
   ),
   wantRecord: lead('再発防止で、キャンセルしたときに記録を残すようにしたいです'),
   runTests: lead('先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです'),

@@ -22,7 +22,7 @@ const explainSelected: SignalRef = { name: 'tab:selected', key: 'explain' };
 const restoredQueried: SignalRef = { name: 'sql:executed', key: 'restored' };
 const bothFound: Condition = { all: [logOpened, restoredQueried] };
 
-const lead = (text: string): Post => ({ actor: 'techlead', channel: devChannel, text });
+const lead = (text: string): Post => ({ actor: 'techlead', channel: devChannel, text, time: '18:25' });
 
 export const accessLogLimit = lead(
   'アクセスログで分かるのは、キャンセルの API が 18:11:58 に呼ばれたことまでです。IP と User-Agent は載ってますが、誰が呼んだのかと理由は載ってないです',
