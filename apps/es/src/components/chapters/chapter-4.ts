@@ -260,6 +260,7 @@ export const chapter4ExternalSync: WorkspaceScenario = consultation({
   doc: { title: '相談2: 予約サイトのキャンセルが反映されたか分からない', path: 'consultations/external-sync' },
   pattern: externalSync,
   thanksDelay: 0.6,
+  laterPosts: [{ post: posts.externalSyncMigration, delay: 4.5 }],
 });
 
 export const chapter4AuditLog: WorkspaceScenario = consultation({
@@ -271,6 +272,7 @@ export const chapter4AuditLog: WorkspaceScenario = consultation({
   thanks: posts.auditThanks,
   doc: { title: '相談3: 監査ログに理由がない', path: 'consultations/audit-log' },
   pattern: auditLog,
+  laterPosts: [{ post: posts.auditLogMigration, delay: 4.5 }],
 });
 
 export const chapter4Compare: WorkspaceScenario = lessonScenario({

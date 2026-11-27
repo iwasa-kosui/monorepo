@@ -110,10 +110,16 @@ export const posts = {
     '取り込みの記録を見ました。予約サイトのキャンセルは届いてますが、届いたのが診察の後だったので取り込んでいません',
   ),
   siteThanks: support('ありがとうございます、飼い主さんにそう伝えます！'),
+  externalSyncMigration: lead(
+    '導入前に予約サイトから届いたキャンセルは、取り込みの記録に出てきません。ADR 3 のとおり VisitMigrated で取り込んでも、予約サイトから来たのか、いつ届いたのかは分からないままです',
+  ),
   auditGreeting: infoSys('お疲れ様です、監査対応で確認させてください'),
   auditAsked: infoSys('監査ログに reserved → cancelled の変更は残ってるんですが、理由が載ってなくて。分かりますか？'),
   auditAnswer: you('監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました'),
   auditThanks: infoSys('ありがとうございます。理由が無い分は別途確認します'),
+  auditLogMigration: lead(
+    '導入前の監査ログの変更は、業務イベントが無いので理由が分かりません。ADR 3 のとおり VisitMigrated で取り込んでも、理由は埋まりません',
+  ),
   comparisonMade: lead('3つを同じ軸で並べた表を作りました'),
   chooseOne: presenter('あなたが普段の業務で運用しているシステムに近いパターンを、1つ選んでみてください'),
   takeHome: lead('時間の関係で、実装は持ち帰りにします'),
