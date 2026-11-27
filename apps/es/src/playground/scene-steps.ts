@@ -12,6 +12,7 @@ export type SceneStep = {
   readonly table: string;
   readonly label: string;
   readonly answers: readonly SceneAnswer[];
+  readonly layout: 'grid' | 'record';
   readonly sources: Readonly<Record<SceneAnswerKey, AnswerSource | null>>;
 };
 
@@ -29,6 +30,7 @@ export const sceneSteps: Readonly<Record<1 | 2, SceneStep>> = {
     table: 'visit_cancellations',
     label: 'ステップ1: キャンセルの記録を1行足す',
     answers: [who, when, why],
+    layout: 'grid',
     sources: {
       who: { column: 'operated_by' },
       when: { column: 'cancelled_at' },
@@ -44,6 +46,7 @@ export const sceneSteps: Readonly<Record<1 | 2, SceneStep>> = {
     table: 'business_events',
     label: 'ステップ2: 記録を business_events に移す',
     answers: [who, when, what, why],
+    layout: 'record',
     sources: {
       who: { column: 'payload', field: 'operatedBy' },
       when: { column: 'event_at' },

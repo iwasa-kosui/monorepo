@@ -569,9 +569,40 @@
   white-space: normal;
 }
 .content .play .play-grid-table tr[data-new] > th,
-.content .play .play-grid-table tr[data-new] > td {
+.content .play .play-grid-table tr[data-new] > td,
+.content .play .play-record-table tbody[data-new] > tr > th,
+.content .play .play-record-table tbody[data-new] > tr > td {
   background: var(--role-marker);
   color: var(--role-on-highlight);
+}
+.content .play .play-record-table {
+  display: table;
+  width: 100%;
+}
+.content .play .play-record-table th.play-field-name {
+  background: var(--db-head);
+  color: var(--db-muted);
+  font-family: var(--font-code);
+  font-weight: var(--weight-bold);
+}
+.content .play .play-record-table th.play-field-name .play-col-name {
+  display: inline;
+  margin-right: var(--space-2);
+}
+.content .play .play-record-table th,
+.content .play .play-record-table td {
+  padding-block: 0;
+}
+.content .play .play-record-table .play-chip {
+  line-height: var(--leading-tight);
+}
+.content .play .play-record-table .play-field-value {
+  width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.content .play .play-record-table tbody + tbody > tr:first-child > * {
+  border-top-width: 2px;
 }
 .content .play .play-grid-table td.play-empty {
   color: var(--db-muted);
@@ -623,12 +654,12 @@
   display: flex;
   flex: 1 0 100%;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
+  gap: 0 var(--space-3);
 }
 .play-answer > div {
   display: flex;
   align-items: center;
-  gap: 0 var(--space-2);
+  gap: 0 var(--space-1);
 }
 .play-answer dd {
   min-width: 0;
@@ -815,7 +846,8 @@
 .play-visit-list td[data-changed] .play-badge {
   animation: play-badge-flash 1.2s ease-out;
 }
-.play-grid-table tr[data-new] {
+.play-grid-table tr[data-new],
+.play-record-table tbody[data-new] {
   animation: play-row-in 0.5s 0.15s ease-out both;
 }
 .play-answer dd[data-filled] {
@@ -830,6 +862,7 @@
   .play-status-cell[data-changed]::before,
   .play-visit-list td[data-changed] .play-badge,
   .play-grid-table tr[data-new],
+  .play-record-table tbody[data-new],
   .play-answer dd[data-filled],
   .play-empty[data-ran] {
     animation: none;

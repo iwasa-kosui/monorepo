@@ -351,6 +351,64 @@ const mount = (root: HTMLElement): void => {
     );
   };
 
+  const renderRecords = (container: HTMLElement, spec: GridSpec): void => {
+    const span = String(spec.columns.length);
+    const fields = (row: Row | null): HTMLElement[] =>
+      spec.columns.map((column) => {
+        const name = element('th', { className: 'play-field-name', attributes: { scope: 'row' } }, [
+          element('span', { className: 'play-col-name', text: column }),
+          ...(spec.chips
+            ? answersOfColumn(scene, column).map((answer) =>
+              element('span', { className: 'play-chip', text: answer.label })
+            )
+            : []),
+        ]);
+        return element('tr', {}, [
+          name,
+          element('td', { className: 'play-field-value', text: row === null ? '' : text(row[column]) }),
+        ]);
+      });
+    const block = (row: Row | null, index: number): HTMLElement => {
+      const added = row !== null && index >= spec.addedFrom;
+      const lines = fields(row);
+      const number = element(
+        row === null ? 'td' : 'th',
+        {
+          className: 'play-rownum',
+          attributes: row === null ? { rowspan: span } : { rowspan: span, scope: 'rowgroup' },
+        },
+        row === null ? [] : [
+          String(index + 1),
+          ...(added ? [element('span', { className: 'play-sr', text: '追加された行' })] : []),
+        ],
+      );
+      lines[0]?.prepend(number);
+      const body = element('tbody', {}, lines);
+      if (added) {
+        body.dataset.new = '';
+      }
+      return body;
+    };
+    const blocks = spec.rows.length === 0 ? [block(null, 0)] : spec.rows.map(block);
+    if (spec.rows.length === 0) {
+      const empty = element('td', {
+        className: 'play-empty',
+        text: '行がありません',
+        attributes: { colspan: '3', 'data-role': spec.emptyRole },
+      });
+      if (spec.ran) {
+        empty.dataset.ran = '';
+      }
+      blocks.push(element('tbody', {}, [element('tr', {}, [empty])]));
+    }
+    container.replaceChildren(
+      element('table', {
+        className: 'play-grid-table play-record-table',
+        attributes: { 'aria-label': spec.label },
+      }, blocks),
+    );
+  };
+
   const renderAppVisits = (before: Row[], after: Row[]): void => {
     appVisits.replaceChildren(...after.map((row) => {
       const old = before.find((candidate) => candidate.id === row.id);
@@ -415,7 +473,7 @@ const mount = (root: HTMLElement): void => {
   const renderEvents = (before: Row[], after: Row[], columns: string[], phase: 'before' | 'after'): void => {
     eventsBadge.dataset.phase = phase;
     eventsBadge.textContent = phase === 'before' ? '実行前' : '実行後';
-    renderGrid(events, {
+    (scene.layout === 'record' ? renderRecords : renderGrid)(events, {
       label: `${table} の行`,
       columns,
       rows: after,
