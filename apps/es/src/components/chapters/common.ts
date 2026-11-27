@@ -11,6 +11,7 @@ import type {
 } from '../../workspace/scenario';
 
 const inquiryChannel = '# 問い合わせ対応';
+export const devChannel = '# dev';
 export const handsOnChannel = '# ハンズオン';
 
 export const actors: Readonly<Record<'support' | 'you' | 'techlead' | 'finance' | 'it' | 'kosui', Actor>> = {
@@ -124,7 +125,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
     workspace: 'clinic-dev',
     channels: [
       { name: '# general' },
-      { name: '# dev' },
+      { name: devChannel },
       { name: inquiryChannel, current: true },
       { name: '# 障害対応' },
       { name: handsOnChannel },
@@ -147,7 +148,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
 export const opening = (...group: readonly Post[]): TimelineEvent[] =>
   openingSchedule(group, inquiryChannel).map(({ post, at }) => ({ at, kind: 'post', post }));
 
-const documentTab = (key: string, title: string, path: string, config: DocConfig): TabDefinition => ({
+export const documentTab = (key: string, title: string, path: string, config: DocConfig): TabDefinition => ({
   key,
   kind: 'doc',
   title,

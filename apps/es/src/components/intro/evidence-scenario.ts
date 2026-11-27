@@ -1,5 +1,5 @@
-import type { Condition, SignalRef, TabDefinition, WorkspaceScenario } from '../../workspace/scenario';
-import { inquiry, lessonScenario, whyNotRecorded } from '../chapters/common';
+import type { Condition, Post, SignalRef, TabDefinition, WorkspaceScenario } from '../../workspace/scenario';
+import { devChannel, documentTab, inquiry, lessonScenario, whyNotRecorded } from '../chapters/common';
 import { earlierLogs, startedAt } from './incident-scenario';
 
 const visitsSql = (status: string): string =>
@@ -18,8 +18,19 @@ export const restoredVisitsSql = visitsSql('reserved');
 
 const logOpened: SignalRef = 'log:target-opened';
 const consoleSelected: SignalRef = { name: 'tab:selected', key: 'console' };
+const explainSelected: SignalRef = { name: 'tab:selected', key: 'explain' };
 const restoredQueried: SignalRef = { name: 'sql:executed', key: 'restored' };
 const bothFound: Condition = { all: [logOpened, restoredQueried] };
+
+const lead = (text: string): Post => ({ actor: 'techlead', channel: devChannel, text });
+
+export const accessLogLimit = lead(
+  'アクセスログで分かるのは、キャンセルの API が 18:11:58 に呼ばれたことまでです。IP と User-Agent は載ってますが、誰が呼んだのかと理由は載ってないです',
+);
+
+export const backupLimit = lead(
+  'バックアップを復元すると、status が reserved だったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いんですよね',
+);
 
 const tabs: readonly TabDefinition[] = [
   {
@@ -66,6 +77,14 @@ const tabs: readonly TabDefinition[] = [
     favicon: { tone: 'blue', shape: 'rounded' },
     seen: restoredQueried,
   },
+  {
+    ...documentTab('explain', '解説', 'notes/access-log-and-db-backup', {
+      title: 'アクセスログとDBバックアップでは何が解決できないのか',
+      updatedAt: '2026-11-06',
+      updatedBy: 'テックリード',
+    }),
+    seen: explainSelected,
+  },
 ];
 
 export const evidenceScenario: WorkspaceScenario = {
@@ -74,6 +93,10 @@ export const evidenceScenario: WorkspaceScenario = {
     label: '来院のキャンセル理由の調査',
     tabs,
     history: [inquiry, whyNotRecorded],
+    timeline: [
+      { when: 'log:target-opened', kind: 'post', post: accessLogLimit },
+      { when: 'sql:executed', key: 'restored', kind: 'post', post: backupLimit },
+    ],
     memo: {
       title: '調査メモ',
       unknown: 'まだ分からない',
