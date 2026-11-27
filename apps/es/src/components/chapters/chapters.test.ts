@@ -235,11 +235,20 @@ describe('第1章から第4章とまとめの筋書き', () => {
     }
   });
 
-  it('kosui の発言はすべて「# ハンズオン」に属し、他の発言者の発言はチャンネルを指定しない', () => {
+  it('kosui の発言は「# ハンズオン」、テックリードの発言は「# dev」に属し、他の発言者の発言はチャンネルを指定しない', () => {
+    const channels: Readonly<Record<string, string>> = { kosui: '# ハンズオン', techlead: '# dev' };
     for (const [id, scenario] of entries) {
       for (const post of postsOf(scenario)) {
-        expect(post.channel, `${id}: ${post.text}`).toBe(post.actor === 'kosui' ? '# ハンズオン' : undefined);
+        expect(post.channel, `${id}: ${post.text}`).toBe(channels[post.actor]);
       }
+    }
+  });
+
+  it('テックリードの発言は、どのページにも「# 問い合わせ対応」に出ない', () => {
+    for (const [id, scenario] of entries) {
+      const shown = postsOf(scenario).filter((post) => (post.channel ?? scenario.chat.channel) === '# 問い合わせ対応');
+      expect(shown.filter((post) => post.actor === 'techlead'), id).toEqual([]);
+      expect(scenario.chat.channels.map((channel) => channel.name), id).toContain('# dev');
     }
   });
 

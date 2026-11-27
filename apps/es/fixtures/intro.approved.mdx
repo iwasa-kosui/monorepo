@@ -130,6 +130,23 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Fragment slot="backup">
 <BackupRestore />
 </Fragment>
+<Fragment slot="explain">
+
+アクセスログとDBバックアップから分かるのは、キャンセルの日時と、`status` が `reserved` から `cancelled` に変わったことだけです。キャンセルした人と理由は、どちらにも残っていません。
+
+### アクセスログの限界
+
+アクセスログは、リクエストごとに日時、メソッド、URL、ステータスコード、所要時間、IP アドレス、User-Agent を記録しています。そのため、`POST /visits/visit-pochi/cancel` が 2026-11-06 18:11:58 に呼ばれたことは分かります。
+
+しかし、このアクセスログには、リクエストを送った人とキャンセルの理由を記録する項目がありません。
+
+### DBバックアップの限界
+
+定期バックアップを復元すると、`visit-pochi` の `status` は `reserved` です。現在の DB の `status` は `cancelled` なので、`status` が `reserved` から `cancelled` に変わったことは分かります。
+
+しかし、バックアップで戻るのは残っていた値だけです。`visits` テーブルには、キャンセルした人と理由を保存する列がありません。誰がなぜ変えたのかは、残していなければどこにもありません。
+
+</Fragment>
 </Workspace>
 <div class="grid gap-4 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
