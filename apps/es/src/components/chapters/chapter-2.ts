@@ -17,7 +17,14 @@ export const chapter2Explain: WorkspaceScenario = lessonScenario({
   label: '更新処理の中で記録する方針',
   history: earlier,
   timeline: opening(posts.decisionRecord),
-  tabs: [docTab('memo', 'ADR 1: 更新処理の中で記録する', 'adr/1-record-in-update', true)],
+  tabs: [
+    docTab(
+      'memo',
+      'ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する',
+      'adr/1-record-in-update',
+      true,
+    ),
+  ],
 });
 
 const stepTab = (step: 1 | 2): TabDefinition =>
