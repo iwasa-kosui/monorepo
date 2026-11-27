@@ -2,19 +2,26 @@ import type { Condition, Post, SignalRef, TabDefinition, WorkspaceScenario } fro
 import { devChannel, documentTab, inquiry, lessonScenario, whyNotRecorded } from '../chapters/common';
 import { earlierLogs, startedAt } from './incident-scenario';
 
-const visitsSql = (status: string): string =>
+const visitsSql = (pochi: string, tama: string): string =>
   `CREATE TABLE visits (
   id TEXT PRIMARY KEY,
   pet_name TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('reserved', 'checked_in', 'completed', 'cancelled'))
 );
 INSERT INTO visits (id, pet_name, status) VALUES
-  ('visit-pochi', 'ポチ', '${status}'),
-  ('visit-tama', 'タマ', '${status}');`;
+  ('visit-pochi', 'ポチ', '${pochi}'),
+  ('visit-tama', 'タマ', '${tama}');`;
 
-export const currentVisitsSql = visitsSql('cancelled');
+export const currentVisitsSql = visitsSql('cancelled', 'cancelled');
 
-export const restoredVisitsSql = visitsSql('reserved');
+export const backups: readonly { readonly label: string; readonly sql: string }[] = [
+  { label: '2026-06-01 00:00', sql: visitsSql('reserved', 'reserved') },
+  { label: '2026-07-01 00:00', sql: visitsSql('reserved', 'reserved') },
+  { label: '2026-08-01 00:00', sql: visitsSql('reserved', 'reserved') },
+  { label: '2026-09-01 00:00', sql: visitsSql('checked_in', 'reserved') },
+  { label: '2026-10-01 00:00', sql: visitsSql('checked_in', 'reserved') },
+  { label: '2026-11-01 00:00', sql: visitsSql('checked_in', 'reserved') },
+];
 
 const logOpened: SignalRef = 'log:target-opened';
 const consoleSelected: SignalRef = { name: 'tab:selected', key: 'console' };
@@ -29,11 +36,15 @@ export const accessLogLimit = lead(
 );
 
 export const backupLimit = lead(
-  'バックアップを復元すると、status が reserved だったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いです',
+  'バックアップを復元すると、status が予約済みから受付済み、キャンセル済みの順に変わったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いです',
 );
 
 export const backupRestoreLimit = lead(
-  '状態が A → B → C のように変わっていく場合、C になった日時は分かります。B になった日時も、バックアップから復元すれば確かめられます。ただ、復元はとても時間がかかりますし、バックアップ間隔の間に起きたことは分からないです',
+  'キャンセル済みになった日時は分かります。受付済みになった日時も、バックアップから復元すれば確かめられます。8月1日のバックアップは予約済みで、9月1日は受付済みなので、その間です。ただ、復元はとても時間がかかりますし、バックアップ間隔の間に起きたことは分からないです',
+);
+
+export const accessLogArchive = lead(
+  '一週間以上前のアクセスログは、S3 Glacier Deep Archive に退避してあります。読み取りを滅多にしない想定のストレージクラスなので、ダウンロードにむっちゃ時間がかかります。標準の取り出しで、通常 12 時間以内です',
 );
 
 const tabs: readonly TabDefinition[] = [
@@ -45,6 +56,8 @@ const tabs: readonly TabDefinition[] = [
     url: 'https://logs.internal.example/logs',
     favicon: { tone: 'violet', shape: 'square' },
     seen: logOpened,
+    note:
+      '7日より前のログは、S3 Glacier Deep Archive にアーカイブしています。復元は、標準取り出しで通常 12 時間以内に完了します。',
     config: {
       service: 'clinic-api',
       host: 'clinic-api-1',
@@ -100,9 +113,10 @@ export const evidenceScenario: WorkspaceScenario = {
     history: [inquiry, whyNotRecorded],
     timeline: [
       { when: 'log:target-opened', kind: 'post', post: accessLogLimit },
+      { when: 'log:target-opened', kind: 'post', post: accessLogArchive, delay: 6 },
       { when: 'log:target-opened', kind: 'tab', tab: 'explain', action: 'add' },
       { when: 'sql:executed', key: 'restored', kind: 'post', post: backupLimit },
-      { when: 'sql:executed', key: 'restored', kind: 'post', post: backupRestoreLimit },
+      { when: 'sql:executed', key: 'restored', kind: 'post', post: backupRestoreLimit, delay: 6 },
       { when: 'sql:executed', key: 'restored', kind: 'tab', tab: 'explain', action: 'add' },
     ],
     memo: {
@@ -111,7 +125,13 @@ export const evidenceScenario: WorkspaceScenario = {
       items: [
         { key: 'who', label: '誰が', text: 'どこにも残っていない', result: 'missing', fill: bothFound },
         { key: 'when', label: 'いつ', text: '2026-11-06 18:11:58', result: 'found', fill: logOpened },
-        { key: 'what', label: '何を', text: 'reserved から cancelled', result: 'found', fill: restoredQueried },
+        {
+          key: 'what',
+          label: '何を',
+          text: '予約済み、受付済み、キャンセル済みの順',
+          result: 'found',
+          fill: restoredQueried,
+        },
         { key: 'why', label: 'なぜ', text: 'どこにも残っていない', result: 'missing', fill: bothFound },
       ],
     },
