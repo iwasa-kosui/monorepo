@@ -1,4 +1,4 @@
-import type { Post, TabDefinition, TableInfo, WorkspaceScenario } from '../../workspace/scenario';
+import type { Post, TabDefinition, TableInfo, TimelineEvent, WorkspaceScenario } from '../../workspace/scenario';
 import { docTab, editorTab, lessonScenario, opening, posts, replyButton } from './common';
 
 const overviewPosts: readonly Post[] = [
@@ -100,6 +100,9 @@ type Consultation = {
   readonly doc: { readonly title: string; readonly path: string };
   readonly pattern: Pattern;
   readonly thanksDelay?: number;
+  readonly laterPosts?: readonly { readonly post: Post; readonly delay: number }[];
+  readonly afterReply?: readonly TimelineEvent[];
+  readonly extraTabs?: readonly TabDefinition[];
 };
 
 const consultation = (options: Consultation): WorkspaceScenario =>
@@ -107,7 +110,7 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     id: options.id,
     label: options.label,
     history: options.history,
-    timeline: opening(...options.opened),
+    timeline: [...opening(...options.opened), ...(options.afterReply ?? [])],
     buttons: replyButton('返信する'),
     gates: {
       reply: {
@@ -117,12 +120,21 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     },
     reply: {
       lines: [{ text: options.answer.text }],
-      followUps: [{ actor: options.thanks.actor, delay: options.thanksDelay ?? 1.2, text: options.thanks.text }],
+      followUps: [
+        { actor: options.thanks.actor, delay: options.thanksDelay ?? 1.2, text: options.thanks.text },
+        ...(options.laterPosts ?? []).map(({ post, delay }) => ({
+          actor: post.actor,
+          delay,
+          text: post.text,
+          ...(post.channel === undefined ? {} : { channel: post.channel }),
+        })),
+      ],
     },
     tabs: [
       docTab('memo', options.doc.title, options.doc.path),
       editorTab('editor', 'visits.ts', { snapshot: options.pattern.exercise }),
       consoleTab(options.pattern),
+      ...(options.extraTabs ?? []),
     ],
   });
 
@@ -221,6 +233,22 @@ export const chapter4SummaryTable: WorkspaceScenario = consultation({
   thanks: posts.financeThanks,
   doc: { title: '相談1: 集計の件数が合わない', path: 'consultations/summary-table' },
   pattern: summaryTable,
+  laterPosts: [
+    { post: posts.migrateOldData, delay: 1.2 },
+    { post: posts.migrationRecord, delay: 1.0 },
+  ],
+  afterReply: [{ when: 'chat:replied', kind: 'tab', tab: 'adr', action: 'add' }],
+  extraTabs: [
+    {
+      ...docTab(
+        'adr',
+        'ADR 3: 業務イベントを導入する前のデータを、移行用のイベントとして取り込む',
+        'adr/3-migrate-existing-data',
+        true,
+      ),
+      initial: false,
+    },
+  ],
 });
 
 export const chapter4ExternalSync: WorkspaceScenario = consultation({
