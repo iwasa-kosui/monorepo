@@ -47,7 +47,12 @@ export const answeredThanks: Post = {
 };
 
 const lead = (text: string): Post => ({ actor: 'techlead', text });
-const presenter = (text: string): Post => ({ actor: 'kosui', channel: handsOnChannel, text });
+const presenter = (text: string, list?: readonly string[]): Post => ({
+  actor: 'kosui',
+  channel: handsOnChannel,
+  text,
+  ...(list === undefined ? {} : { list }),
+});
 const support = (text: string): Post => ({ actor: 'support', text });
 const finance = (text: string): Post => ({ actor: 'finance', text });
 const infoSys = (text: string): Post => ({ actor: 'it', text });
@@ -56,7 +61,16 @@ const you = (text: string): Post => ({ actor: 'you', text });
 export const posts = {
   afterIncident: lead('さっきの件、おつかれさまでした'),
   ownQuestion: presenter(
-    '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？ 1つ書いてみてください。たとえば、こんなのです。',
+    '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときに聞かれた質問を、ここに1つ書いてみてください。たとえば、こんなのです。',
+    [
+      'この予約は、誰がキャンセルしましたか。',
+      'この金額は、いつ変わりましたか。なぜ変わりましたか。',
+      'このアカウントは、なぜ止まっていますか。',
+      '先月末の時点では、どうなっていましたか。',
+    ],
+  ),
+  afterOwnQuestion: presenter(
+    '書けたら、その質問の答えを記録する列が、自分のシステムのテーブルにあるかを考えてみてください。\n質問を思いつかないときは、書かなくて大丈夫です。そのときは、ポチの来院のキャンセルの問い合わせを、自分の質問の代わりに使ってください。',
   ),
   wantRecord: lead('再発防止で、キャンセルしたときに記録を残すようにしたいです'),
   runTests: lead('先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです'),

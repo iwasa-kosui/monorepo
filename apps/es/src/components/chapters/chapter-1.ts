@@ -7,7 +7,7 @@ export const chapter1Question: WorkspaceScenario = lessonScenario({
   id: 'chapter-1-question',
   label: '自分のシステムの問いを1つ挙げる',
   history: introduction,
-  timeline: opening(posts.afterIncident, posts.ownQuestion),
+  timeline: opening(posts.afterIncident, posts.ownQuestion, posts.afterOwnQuestion),
   done: 'question:written',
   tabs: [docTab('memo', 'データ変更の記録について', 'records/data-change-history')],
 });
@@ -15,7 +15,7 @@ export const chapter1Question: WorkspaceScenario = lessonScenario({
 export const chapter1RunTests: WorkspaceScenario = lessonScenario({
   id: 'chapter-1-run-tests',
   label: 'テストを実行する',
-  history: [...introduction, posts.afterIncident, posts.ownQuestion],
+  history: [...introduction, posts.afterIncident, posts.ownQuestion, posts.afterOwnQuestion],
   timeline: [
     ...opening(posts.wantRecord, posts.runTests),
     { when: 'tests:ran', kind: 'post', post: posts.failedFour },
