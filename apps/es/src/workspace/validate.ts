@@ -58,6 +58,9 @@ export const scenarioProblems = (scenario: WorkspaceScenario): string[] => {
       if (event.at !== undefined && event.delay !== undefined) {
         problems.push(`${where} は at 指定なので、delay は使われません`);
       }
+      if (event.delay !== undefined && (!Number.isFinite(event.delay) || event.delay < 0)) {
+        problems.push(`${where} の delay は 0 以上の有限の数にします`);
+      }
     }
     if (event.kind === 'tab') checkTab(event.tab, where);
     if (event.kind === 'log' && event.tab !== undefined) checkTab(event.tab, where, 'logs');
