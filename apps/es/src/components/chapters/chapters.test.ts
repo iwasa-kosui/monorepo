@@ -95,12 +95,13 @@ const auditAsked = '監査ログに reserved → cancelled の変更は残って
 const auditAnswer = '監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました';
 const auditThanks = 'ありがとうございます。理由が無い分は別途確認します';
 const comparisonMade = '3つを同じ軸で並べた表を作りました';
-const chooseOne = '自分のシステムに近いのを1つ選んでみてください';
+const chooseOne = 'あなたが普段の業務で運用しているシステムに近いパターンを、1つ選んでみてください';
 const takeHome = '時間の関係で、実装は持ち帰りにします';
 const startingCodes = '開始コードを3つ置いておくので、選んだパターンで試してみてください';
 const goodWork = 'おつかれさまでした！';
 const todayMemo = '今日やったことを設計メモにまとめました';
-const decideLast = '最後に、自分のシステムで記録を足す更新処理を1つ決めて、ここに書いてみてください';
+const decideLast =
+  '最後に、あなたが普段の業務で運用しているシステムの更新処理から、記録を足す更新処理を1つ決めて、下の入力欄に書いてみてください';
 const skipIfNone = '答えたい質問が特に無ければ、足さなくて大丈夫です';
 
 const answered: readonly (readonly [string, string])[] = [

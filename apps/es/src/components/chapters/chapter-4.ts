@@ -241,7 +241,7 @@ export const chapter4AuditLog: WorkspaceScenario = consultation({
 
 export const chapter4Compare: WorkspaceScenario = lessonScenario({
   id: 'chapter-4-compare',
-  label: '3つのパターンを表で比べて、自分のシステムに近いものを1つ選ぶ',
+  label: '3つのパターンを表で比べて、普段の業務で運用しているシステムに近いものを1つ選ぶ',
   history: auditExchange,
   timeline: opening(...comparisonPosts),
   tabs: [docTab('memo', '3つのパターンの比較', 'consultations/comparison')],
