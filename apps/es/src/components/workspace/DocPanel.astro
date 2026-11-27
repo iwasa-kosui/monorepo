@@ -281,22 +281,37 @@ const approvable = config.approvable === true;
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(p),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(ul),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(ol),
-:global(.content) :global(.scene[data-scenario]) .doc-paper :global(table),
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(table:not(.playground-console-table)),
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(details) {
   margin-block: var(--space-2);
 }
 :global(.scene[data-scenario]) .doc-paper :global(li + li) {
   margin-top: var(--space-1);
 }
-:global(.content) :global(.scene[data-scenario]) .doc-paper :global(table) {
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(table:not(.playground-console-table)) {
   font-size: var(--text-body);
   line-height: var(--leading-normal);
 }
-:global(.content) :global(.scene[data-scenario]) .doc-paper :global(th),
-:global(.content) :global(.scene[data-scenario]) .doc-paper :global(td) {
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(th:not(.playground-console-table th)),
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(td:not(.playground-console-table td)) {
   padding: var(--space-1) var(--space-3);
 }
-:global(.content) :global(.scene[data-scenario]) .doc-paper :global(thead th) {
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(thead th:not(.playground-console-table th)) {
   font-size: var(--text-note);
   font-weight: var(--weight-bold);
 }

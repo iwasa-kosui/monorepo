@@ -475,3 +475,30 @@ body:not(.chapter-page):has(.top-page) .content {
     gap: var(--space-4);
   }
 }
+
+.playground-table-scroll {
+  max-width: 100%;
+  margin-block: var(--space-2);
+  overflow-x: auto;
+}
+.content .playground-table-scroll .playground-console-table {
+  display: table;
+  width: max-content;
+  min-width: 0;
+  margin: 0;
+  border-collapse: collapse;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  white-space: nowrap;
+}
+.content .playground-table-scroll .playground-console-table th,
+.content .playground-table-scroll .playground-console-table td {
+  border: 1px solid var(--role-rail);
+  padding: 2px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.content .playground-table-scroll .playground-console-table th {
+  position: static;
+  font-weight: var(--weight-regular);
+}
