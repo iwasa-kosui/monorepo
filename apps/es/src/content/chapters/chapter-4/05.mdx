@@ -20,7 +20,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 普段の業務で運用しているシステムに近いパターンを1つ選びます。選んだパターンの「活用するもの」と「記録しないもの」を読みます。選んだパターンは、判断表の下の入力欄に書きます。まとめの章で、この入力欄の内容を表示します。
 
-更新処理の行数は、`cancelVisit` と、`cancelVisit` から呼ぶ補助関数の差分です。読み取り関数の行数は、未実装の関数を完成させた差分です。この行数は、業務イベントの導入全体の変更量を示しません。
+更新処理の行数は、`cancelVisit` と、`cancelVisit` から呼ぶ補助関数の差分です。外部システム同期では、`importExternalCancellation` と、`importExternalCancellation` から呼ぶ補助関数の差分です。読み取り関数の行数は、未実装の関数を完成させた差分です。この行数は、業務イベントの導入全体の変更量を示しません。
 
 <DecisionTable heading="比較" byAxis>
   <OwnQuestionView />
