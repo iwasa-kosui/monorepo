@@ -29,21 +29,21 @@ const explainSelected: SignalRef = { name: 'tab:selected', key: 'explain' };
 const restoredQueried: SignalRef = { name: 'sql:executed', key: 'restored' };
 const bothFound: Condition = { all: [logOpened, restoredQueried] };
 
-const lead = (text: string): Post => ({ actor: 'techlead', channel: devChannel, text, time: '18:25' });
+const colleague = (text: string): Post => ({ actor: 'colleague', channel: devChannel, text, time: '18:25' });
 
-export const accessLogLimit = lead(
+export const accessLogLimit = colleague(
   'アクセスログで分かるのは、キャンセルの API が 18:11:58 に呼ばれたことまでです。IP と User-Agent は載ってますが、誰が呼んだのかと理由は載ってないです',
 );
 
-export const backupLimit = lead(
+export const backupLimit = colleague(
   'バックアップを復元すると、status が予約済みから受付済み、キャンセル済みの順に変わったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いです',
 );
 
-export const backupRestoreLimit = lead(
+export const backupRestoreLimit = colleague(
   'キャンセル済みになった日時は分かります。受付済みになった日時も、バックアップから復元すれば確かめられます。8月1日のバックアップは予約済みで、9月1日は受付済みなので、その間です。ただ、復元はとても時間がかかりますし、バックアップ間隔の間に起きたことは分からないです',
 );
 
-export const accessLogArchive = lead(
+export const accessLogArchive = colleague(
   '一週間以上前のアクセスログは、S3 Glacier Deep Archive に退避してあります。読み取りを滅多にしない想定のストレージクラスなので、ダウンロードにむっちゃ時間がかかります。標準の取り出しで、通常 12 時間以内です',
 );
 
@@ -98,7 +98,7 @@ const tabs: readonly TabDefinition[] = [
     ...documentTab('explain', '解説', 'notes/access-log-and-db-backup', {
       title: 'アクセスログとDBバックアップでは何が解決できないのか',
       updatedAt: '2026-11-06',
-      updatedBy: 'テックリード',
+      updatedBy: '同僚',
     }),
     initial: false,
     seen: explainSelected,

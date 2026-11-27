@@ -91,22 +91,22 @@ const spokenOf = (scenario: WorkspaceScenario): Spoken[] => [
 const channelProblems = (id: string, scenario: WorkspaceScenario): string[] => {
   const nameOf = (actor: string): string => scenario.actors[actor]?.name ?? actor;
   const expectedChannel = (actor: string): string =>
-    nameOf(actor) === 'テックリード' ? devChannel : nameOf(actor) === 'kosui' ? handsOnChannel : scenario.chat.channel;
+    nameOf(actor) === '同僚' ? devChannel : nameOf(actor) === 'kosui' ? handsOnChannel : scenario.chat.channel;
   const problems: string[] = [];
   for (const item of spokenOf(scenario)) {
     const head = `${id} ${item.where} ${nameOf(item.actor)}「${item.text.slice(0, 16)}」`;
     const expected = expectedChannel(item.actor);
     if (item.channel !== expected) problems.push(`${head}は「${item.channel}」にあるが、「${expected}」にあるべき`);
-    if (item.channel === devChannel && nameOf(item.actor) !== 'テックリード') {
-      problems.push(`${head}は「${devChannel}」にあるが、テックリード以外の発言者である`);
+    if (item.channel === devChannel && nameOf(item.actor) !== '同僚') {
+      problems.push(`${head}は「${devChannel}」にあるが、同僚以外の発言者である`);
     }
-    if (item.channel === inquiryChannel && ['テックリード', 'kosui'].includes(nameOf(item.actor))) {
+    if (item.channel === inquiryChannel && ['同僚', 'kosui'].includes(nameOf(item.actor))) {
       problems.push(`${head}は「${inquiryChannel}」にあるが、${nameOf(item.actor)}の発言である`);
     }
   }
-  const hasTechlead = spokenOf(scenario).some((item) => nameOf(item.actor) === 'テックリード');
-  if (hasTechlead && !scenario.chat.channels.some((channel) => channel.name === devChannel)) {
-    problems.push(`${id} はテックリードの発言があるが、chat.channels に「${devChannel}」がない`);
+  const hasColleague = spokenOf(scenario).some((item) => nameOf(item.actor) === '同僚');
+  if (hasColleague && !scenario.chat.channels.some((channel) => channel.name === devChannel)) {
+    problems.push(`${id} は同僚の発言があるが、chat.channels に「${devChannel}」がない`);
   }
   return problems;
 };
@@ -186,12 +186,12 @@ const answered: readonly (readonly [string, string])[] = [
 const earlier: readonly (readonly [string, string])[] = [
   ['support', inquiry],
   ['support', whyNotRecorded],
-  ['techlead', afterIncident],
+  ['colleague', afterIncident],
   ['kosui', ownQuestion],
   ['kosui', afterOwnQuestion],
-  ['techlead', wantRecord],
-  ['techlead', runTests],
-  ['techlead', failedFour],
+  ['colleague', wantRecord],
+  ['colleague', runTests],
+  ['colleague', failedFour],
 ];
 
 const chapter4Texts = [
@@ -284,13 +284,13 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(slots.filter((slot) => slot !== 'composer').sort()).toEqual(slotted.sort());
   });
 
-  it('発言者は、カスタマーサポート、あなた、テックリード、経理、情シス、kosui の 6 人で、頭文字と色が異なる', () => {
+  it('発言者は、カスタマーサポート、あなた、同僚、経理、情シス、kosui の 6 人で、頭文字と色が異なる', () => {
     for (const [, scenario] of entries) {
       const actors = Object.values(scenario.actors);
       expect(actors.map((actor) => [actor.name, actor.avatar, actor.tone])).toEqual([
         ['カスタマーサポート', 'カ', 'rose'],
         ['あなた', 'あ', 'blue'],
-        ['テックリード', 'テ', 'violet'],
+        ['同僚', '同', 'violet'],
         ['経理', '経', 'green'],
         ['情シス', '情', 'amber'],
         ['kosui', 'k', 'slate'],
@@ -308,7 +308,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(Object.values(evidenceScenario.actors).map((actor) => actor.name)).toEqual([
       'カスタマーサポート',
       'あなた',
-      'テックリード',
+      '同僚',
       '経理',
       '情シス',
       'kosui',
@@ -328,7 +328,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     }
   });
 
-  it('テックリードの発言は「# dev」、kosui の発言は「# ハンズオン」、他の発言者の発言は既定のチャンネルに出る', () => {
+  it('同僚の発言は「# dev」、kosui の発言は「# ハンズオン」、他の発言者の発言は既定のチャンネルに出る', () => {
     expect(allScenarios.flatMap(([id, scenario]) => channelProblems(id, scenario))).toEqual([]);
   });
 
@@ -337,40 +337,40 @@ describe('第1章から第4章とまとめの筋書き', () => {
     if (base === undefined) throw new Error('筋書きがありません');
     const followUp = { actor: 'support', delay: 1.2, text: answeredThanks };
 
-    it('返信の発言者がテックリードだと、既定のチャンネルに出てしまうので検出する', () => {
+    it('返信の発言者が同僚だと、既定のチャンネルに出てしまうので検出する', () => {
       const wrong: WorkspaceScenario = {
         ...base,
-        reply: { lines: [], followUps: [{ ...followUp, actor: 'techlead' }] },
+        reply: { lines: [], followUps: [{ ...followUp, actor: 'colleague' }] },
       };
       const problems = channelProblems('wrong', wrong);
       expect(problems).toHaveLength(2);
       expect(problems[0]).toBe(
-        `wrong reply.followUps[0] テックリード「${
+        `wrong reply.followUps[0] 同僚「${
           answeredThanks.slice(0, 16)
         }」は「${inquiryChannel}」にあるが、「${devChannel}」にあるべき`,
       );
     });
 
-    it('テックリードの発言がチャンネルを指定していないと、検出する', () => {
-      const wrong: WorkspaceScenario = { ...base, history: [{ actor: 'techlead', text: afterIncident }] };
+    it('同僚の発言がチャンネルを指定していないと、検出する', () => {
+      const wrong: WorkspaceScenario = { ...base, history: [{ actor: 'colleague', text: afterIncident }] };
       expect(channelProblems('wrong', wrong)[0]).toContain(
-        `wrong history[0] テックリード「${afterIncident}」は「${inquiryChannel}」にある`,
+        `wrong history[0] 同僚「${afterIncident}」は「${inquiryChannel}」にある`,
       );
     });
 
-    it('テックリード以外の発言が「# dev」にあると、検出する', () => {
+    it('同僚以外の発言が「# dev」にあると、検出する', () => {
       const wrong: WorkspaceScenario = { ...base, history: [{ actor: 'support', channel: devChannel, text: inquiry }] };
       expect(channelProblems('wrong', wrong)).toHaveLength(2);
     });
 
-    it('テックリードの発言があるのに、チャンネルの一覧に「# dev」がないと、検出する', () => {
+    it('同僚の発言があるのに、チャンネルの一覧に「# dev」がないと、検出する', () => {
       const wrong: WorkspaceScenario = {
         ...base,
-        history: [{ actor: 'techlead', channel: devChannel, text: afterIncident }],
+        history: [{ actor: 'colleague', channel: devChannel, text: afterIncident }],
         chat: { ...base.chat, channels: base.chat.channels.filter((channel) => channel.name !== devChannel) },
       };
       expect(channelProblems('wrong', wrong)).toEqual([
-        `wrong はテックリードの発言があるが、chat.channels に「${devChannel}」がない`,
+        `wrong は同僚の発言があるが、chat.channels に「${devChannel}」がない`,
       ]);
     });
   });
@@ -384,7 +384,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     }
   });
 
-  it('第1章 3 ページ目は、テックリードの発言で始まるので、開いた時点のチャンネルが「# dev」である', () => {
+  it('第1章 3 ページ目は、同僚の発言で始まるので、開いた時点のチャンネルが「# dev」である', () => {
     const scenario = lessonScenarios['chapter-1/03'];
     if (scenario === undefined) throw new Error('筋書きがありません');
     expect(openingChannel(scenario.timeline, scenario.chat.channel)).toBe(devChannel);
@@ -534,7 +534,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
   });
 
   describe('第1章', () => {
-    it('2 ページ目は、導入のやり取りを履歴に持ち、開いた時点でテックリードが 1 件、kosui が 2 件投稿する', () => {
+    it('2 ページ目は、導入のやり取りを履歴に持ち、開いた時点で同僚が 1 件、kosui が 2 件投稿する', () => {
       const scenario = lessonScenarios['chapter-1/02'];
       expect(scenario).toBeDefined();
       if (scenario === undefined) return;
@@ -543,7 +543,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['support', whyNotRecorded],
       ]);
       expect(opened(scenario)).toEqual([
-        ['techlead', afterIncident],
+        ['colleague', afterIncident],
         ['kosui', ownQuestion],
         ['kosui', afterOwnQuestion],
       ]);
@@ -563,32 +563,32 @@ describe('第1章から第4章とまとめの筋書き', () => {
       expect(scenario.history.map((post) => [post.actor, post.text])).toEqual([
         ['support', inquiry],
         ['support', whyNotRecorded],
-        ['techlead', afterIncident],
+        ['colleague', afterIncident],
         ['kosui', ownQuestion],
         ['kosui', afterOwnQuestion],
       ]);
-      expect(opened(scenario)).toEqual([['techlead', wantRecord], ['techlead', runTests]]);
+      expect(opened(scenario)).toEqual([['colleague', wantRecord], ['colleague', runTests]]);
       const waiting = scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]));
       expect(waiting).toMatchObject([{
         when: 'tests:ran',
         kind: 'post',
-        post: { actor: 'techlead', text: failedFour },
+        post: { actor: 'colleague', text: failedFour },
       }]);
       expect(summary(scenario)).toEqual(['editor:editor:visits.test.ts — clinic-api', 'guide:doc:テストの読み方']);
     });
   });
 
   describe('第2章', () => {
-    it('ADR の 2 ページは、それまでの投稿を履歴に持ち、テックリードが1件投稿する', () => {
+    it('ADR の 2 ページは、それまでの投稿を履歴に持ち、同僚が1件投稿する', () => {
       const expected: [string, readonly (readonly [string, string])[], string][] = [
         ['chapter-2/01', earlier, decisionRecord],
-        ['chapter-2/03', [...earlier, ['techlead', decisionRecord]], tableRecord],
+        ['chapter-2/03', [...earlier, ['colleague', decisionRecord]], tableRecord],
       ];
       for (const [id, history, post] of expected) {
         const scenario = lessonScenarios[id];
         if (scenario === undefined) throw new Error(id);
         expect(scenario.history.map((item) => [item.actor, item.text]), id).toEqual(history);
-        expect(opened(scenario), id).toEqual([['techlead', post]]);
+        expect(opened(scenario), id).toEqual([['colleague', post]]);
       }
     });
 
@@ -659,7 +659,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         context: 3,
       });
       expect(tab.config.status).toBe('Open');
-      expect(opened(scenario as WorkspaceScenario)).toEqual([['techlead', prSeen], ['techlead', prRemaining]]);
+      expect(opened(scenario as WorkspaceScenario)).toEqual([['colleague', prSeen], ['colleague', prRemaining]]);
     });
   });
 
@@ -733,7 +733,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       return scenario.history.map((post) => [post.actor, post.text] as const);
     };
 
-    it('1 ページ目は、第3章 4 ページ目の最後のやり取りを履歴に持ち、開いた時点でテックリードが 2 件、kosui が 2 件投稿する', () => {
+    it('1 ページ目は、第3章 4 ページ目の最後のやり取りを履歴に持ち、開いた時点で同僚が 2 件、kosui が 2 件投稿する', () => {
       const scenario = lessonScenarios['chapter-4/01'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       expect(history('chapter-4/01')).toEqual([
@@ -742,8 +742,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['support', tamaAcknowledged],
       ]);
       expect(opened(scenario)).toEqual([
-        ['techlead', otherTeams],
-        ['techlead', threeConsultations],
+        ['colleague', otherTeams],
+        ['colleague', threeConsultations],
         ['kosui', pastExperience],
         ['kosui', closestQuestion],
       ]);
@@ -753,45 +753,45 @@ describe('第1章から第4章とまとめの筋書き', () => {
     });
 
     const migrationAdrHistory = [
-      ['techlead', otherTeams],
-      ['techlead', threeConsultations],
+      ['colleague', otherTeams],
+      ['colleague', threeConsultations],
       ['kosui', pastExperience],
       ['kosui', closestQuestion],
       ['finance', financeGreeting],
       ['finance', financeAsked],
       ['you', financeAnswer],
       ['finance', financeThanks],
-      ['techlead', migrateOldData],
+      ['colleague', migrateOldData],
     ] as const;
     const externalSyncAdrHistory = [
       ...migrationAdrHistory,
-      ['techlead', migrationRecord],
+      ['colleague', migrationRecord],
       ['support', siteGreeting],
       ['support', siteAsked],
       ['you', siteAnswer],
       ['support', siteThanks],
-      ['techlead', externalSyncMigration],
+      ['colleague', externalSyncMigration],
     ] as const;
     const auditLogAdrHistory = [
       ...externalSyncAdrHistory,
-      ['techlead', externalSyncRecord],
+      ['colleague', externalSyncRecord],
       ['it', auditGreeting],
       ['it', auditAsked],
       ['you', auditAnswer],
       ['it', auditThanks],
-      ['techlead', auditLogMigration],
+      ['colleague', auditLogMigration],
     ] as const;
 
     const consultations = [
       {
         id: 'chapter-4/02',
-        history: [['techlead', otherTeams], ['techlead', threeConsultations], ['kosui', pastExperience], [
+        history: [['colleague', otherTeams], ['colleague', threeConsultations], ['kosui', pastExperience], [
           'kosui',
           closestQuestion,
         ]],
         opened: [['finance', financeGreeting], ['finance', financeAsked]],
         answer: financeAnswer,
-        follows: [['finance', financeThanks], ['techlead', migrateOldData]],
+        follows: [['finance', financeThanks], ['colleague', migrateOldData]],
         tabs: [
           'memo:doc:相談1: 集計の件数が合わない',
           'editor:editor:visits.ts — clinic-api',
@@ -805,10 +805,10 @@ describe('第1章から第4章とまとめの筋書き', () => {
       },
       {
         id: 'chapter-4/04',
-        history: [...migrationAdrHistory, ['techlead', migrationRecord]],
+        history: [...migrationAdrHistory, ['colleague', migrationRecord]],
         opened: [['support', siteGreeting], ['support', siteAsked]],
         answer: siteAnswer,
-        follows: [['support', siteThanks], ['techlead', externalSyncMigration]],
+        follows: [['support', siteThanks], ['colleague', externalSyncMigration]],
         tabs: [
           'memo:doc:相談2: 予約サイトのキャンセルが反映されたか分からない',
           'editor:editor:visits.ts — clinic-api',
@@ -822,10 +822,10 @@ describe('第1章から第4章とまとめの筋書き', () => {
       },
       {
         id: 'chapter-4/06',
-        history: [...externalSyncAdrHistory, ['techlead', externalSyncRecord]],
+        history: [...externalSyncAdrHistory, ['colleague', externalSyncRecord]],
         opened: [['it', auditGreeting], ['it', auditAsked]],
         answer: auditAnswer,
-        follows: [['it', auditThanks], ['techlead', auditLogMigration]],
+        follows: [['it', auditThanks], ['colleague', auditLogMigration]],
         tabs: [
           'memo:doc:相談3: 監査ログに理由がない',
           'editor:editor:visits.ts — clinic-api',
@@ -872,7 +872,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       },
     );
 
-    it('chapter-4/02 の返信の後のテックリードの発言は、「# dev」に届く', () => {
+    it('chapter-4/02 の返信の後の同僚の発言は、「# dev」に届く', () => {
       const scenario = lessonScenarios['chapter-4/02'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       const channels = (scenario.reply?.followUps ?? []).map((followUp) => [followUp.text, followUp.channel]);
@@ -885,7 +885,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ['chapter-4/04', siteThanks, externalSyncMigration],
         ['chapter-4/06', auditThanks, auditLogMigration],
       ] as const,
-    )('%s の返信の後のテックリードの発言は、「# dev」に届く', (id, thanks, migration) => {
+    )('%s の返信の後の同僚の発言は、「# dev」に届く', (id, thanks, migration) => {
       const scenario = lessonScenarios[id];
       if (scenario === undefined) throw new Error('筋書きがありません');
       const channels = (scenario.reply?.followUps ?? []).map((followUp) => [followUp.text, followUp.channel]);
@@ -919,7 +919,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         const scenario = lessonScenarios[item.id];
         if (scenario === undefined) throw new Error('筋書きがありません');
         expect(history(item.id)).toEqual(item.history);
-        expect(opened(scenario)).toEqual([['techlead', item.record]]);
+        expect(opened(scenario)).toEqual([['colleague', item.record]]);
         const post = scenario.timeline.flatMap((event) => (event.kind === 'post' ? [event.post] : []));
         expect(post.map((opened) => opened.channel)).toEqual([devChannel]);
         expect(summary(scenario)).toEqual([`memo:doc:${item.title}`]);
@@ -930,19 +930,19 @@ describe('第1章から第4章とまとめの筋書き', () => {
       },
     );
 
-    it('8 ページ目は、ADR 5 のページまでのやり取りを履歴に持ち、開いた時点でテックリードと kosui が 1 件ずつ投稿する', () => {
+    it('8 ページ目は、ADR 5 のページまでのやり取りを履歴に持ち、開いた時点で同僚と kosui が 1 件ずつ投稿する', () => {
       const scenario = lessonScenarios['chapter-4/08'];
       if (scenario === undefined) throw new Error('筋書きがありません');
-      expect(history('chapter-4/08')).toEqual([...auditLogAdrHistory, ['techlead', auditLogRecord]]);
-      expect(opened(scenario)).toEqual([['techlead', comparisonMade], ['kosui', chooseOne]]);
+      expect(history('chapter-4/08')).toEqual([...auditLogAdrHistory, ['colleague', auditLogRecord]]);
+      expect(opened(scenario)).toEqual([['colleague', comparisonMade], ['kosui', chooseOne]]);
       expect(summary(scenario)).toEqual(['memo:doc:3つのパターンの比較']);
     });
 
     it('9 ページ目は、文書を最初のタブにし、3 つの開始コードを別々のエディタのタブにする', () => {
       const scenario = lessonScenarios['chapter-4/09'];
       if (scenario === undefined) throw new Error('筋書きがありません');
-      expect(history('chapter-4/09')).toEqual([['techlead', comparisonMade], ['kosui', chooseOne]]);
-      expect(opened(scenario)).toEqual([['techlead', takeHome], ['techlead', startingCodes]]);
+      expect(history('chapter-4/09')).toEqual([['colleague', comparisonMade], ['kosui', chooseOne]]);
+      expect(opened(scenario)).toEqual([['colleague', takeHome], ['colleague', startingCodes]]);
       expect(summary(scenario)).toEqual([
         'guide:doc:持ち帰りの演習',
         'summary-table:editor:集計テーブル（chapter-4-summary-table-start）',
@@ -954,18 +954,18 @@ describe('第1章から第4章とまとめの筋書き', () => {
   });
 
   describe('まとめ', () => {
-    it('1 ページ目は、第4章 9 ページ目のテックリードの 2 件を履歴に持ち、開いた時点でテックリードが 2 件投稿する', () => {
+    it('1 ページ目は、第4章 9 ページ目の同僚の 2 件を履歴に持ち、開いた時点で同僚が 2 件投稿する', () => {
       const scenario = lessonScenarios['summary/01'];
       if (scenario === undefined) throw new Error('筋書きがありません');
-      expect(pairs({ ...scenario, timeline: [] })).toEqual([['techlead', takeHome], ['techlead', startingCodes]]);
-      expect(opened(scenario)).toEqual([['techlead', goodWork], ['techlead', todayMemo]]);
+      expect(pairs({ ...scenario, timeline: [] })).toEqual([['colleague', takeHome], ['colleague', startingCodes]]);
+      expect(opened(scenario)).toEqual([['colleague', goodWork], ['colleague', todayMemo]]);
       expect(summary(scenario)).toEqual(['memo:doc:本日の実施内容']);
     });
 
-    it('2 ページ目は、1 ページ目のテックリードの 2 件を履歴に持ち、開いた時点で kosui が 2 件投稿し、入力欄と文書だけを持つ', () => {
+    it('2 ページ目は、1 ページ目の同僚の 2 件を履歴に持ち、開いた時点で kosui が 2 件投稿し、入力欄と文書だけを持つ', () => {
       const scenario = lessonScenarios['summary/02'];
       if (scenario === undefined) throw new Error('筋書きがありません');
-      expect(pairs({ ...scenario, timeline: [] })).toEqual([['techlead', goodWork], ['techlead', todayMemo]]);
+      expect(pairs({ ...scenario, timeline: [] })).toEqual([['colleague', goodWork], ['colleague', todayMemo]]);
       expect(opened(scenario)).toEqual([['kosui', decideLast], ['kosui', skipIfNone]]);
       expect(summary(scenario)).toEqual(['memo:doc:持ち帰る手順']);
       expect(scenario.chat.buttons).toEqual([]);

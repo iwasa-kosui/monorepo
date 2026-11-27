@@ -75,36 +75,36 @@ describe('チャンネルで表示する発言', () => {
 
 describe('ページを開いた時点のチャンネル', () => {
   const arriving = (post: Post, at = 0): TimelineEvent => ({ at, kind: 'post', post });
-  const lead: Post = { actor: 'techlead', channel: '# dev', text: 'lead' };
+  const colleague: Post = { actor: 'colleague', channel: '# dev', text: 'colleague' };
 
   it('開いた時点で届く発言が無ければ、既定のチャンネルで開く', () => {
     expect(openingChannel([], inquiryChannel)).toBe(inquiryChannel);
   });
 
   it('開いた時点で届く最初の発言が別のチャンネルなら、そのチャンネルで開く', () => {
-    expect(openingChannel([arriving(lead), arriving(support('a'), 2)], inquiryChannel)).toBe('# dev');
+    expect(openingChannel([arriving(colleague), arriving(support('a'), 2)], inquiryChannel)).toBe('# dev');
   });
 
   it('開いた時点で届く最初の発言がチャンネルを指定していなければ、既定のチャンネルで開く', () => {
-    expect(openingChannel([arriving(support('a')), arriving(lead, 2)], inquiryChannel)).toBe(inquiryChannel);
+    expect(openingChannel([arriving(support('a')), arriving(colleague, 2)], inquiryChannel)).toBe(inquiryChannel);
   });
 
   it('合図を待つ発言と、発言以外の出来事は、開いた時点のチャンネルを決めない', () => {
-    const waiting: TimelineEvent = { when: 'tests:ran', kind: 'post', post: lead };
+    const waiting: TimelineEvent = { when: 'tests:ran', kind: 'post', post: colleague };
     const affected: TimelineEvent = { at: 0, kind: 'affected', count: 1 };
     expect(openingChannel([waiting], inquiryChannel)).toBe(inquiryChannel);
     expect(openingChannel([waiting, affected, arriving(presenter('a'))], inquiryChannel)).toBe(handsOn);
   });
 
   it('開いてから時間が経って届く発言は、開いた時点のチャンネルを決めない', () => {
-    expect(openingChannel([arriving(lead, 3)], inquiryChannel)).toBe(inquiryChannel);
-    expect(openingChannel([arriving(lead, 3), arriving(presenter('a'))], inquiryChannel)).toBe(handsOn);
+    expect(openingChannel([arriving(colleague, 3)], inquiryChannel)).toBe(inquiryChannel);
+    expect(openingChannel([arriving(colleague, 3), arriving(presenter('a'))], inquiryChannel)).toBe(handsOn);
   });
 
   it('開いた時点で届く発言があるかを答える', () => {
-    const waiting: TimelineEvent = { when: 'tests:ran', kind: 'post', post: lead };
+    const waiting: TimelineEvent = { when: 'tests:ran', kind: 'post', post: colleague };
     expect(hasOpeningPost([arriving(support('a'))])).toBe(true);
-    expect(hasOpeningPost([arriving(lead, 3), waiting])).toBe(false);
+    expect(hasOpeningPost([arriving(colleague, 3), waiting])).toBe(false);
     expect(hasOpeningPost([])).toBe(false);
   });
 });
