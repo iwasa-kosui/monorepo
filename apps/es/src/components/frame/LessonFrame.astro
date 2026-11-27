@@ -8,7 +8,7 @@ import {
   type ChapterPage,
   pagePath,
 } from '../../lib/chapter-routes';
-import { groupPages } from '../../lib/lesson-frame';
+import { groupPages, overallPosition } from '../../lib/lesson-frame';
 import {
   elapsedMinutes,
   firstHeading,
@@ -33,13 +33,12 @@ const pages = buildChapterPages(
   await getCollection('chapters'),
   schedule.map((row) => row.id),
 );
-const index = pages.findIndex((page) =>
-  page.chapter === chapter && page.number === number
-);
-const page = pages[index];
-if (page === undefined) {
+const overall = overallPosition(pages, chapter, number);
+if (overall === undefined) {
   throw new Error(`ページが見つかりません: ${chapter} ${number}`);
 }
+const index = overall.number - 1;
+const page = overall.page;
 const rows = withTimeRanges(schedule);
 const rowOf = (id: string) => {
   const row = rows.find((candidate) => candidate.id === id);
@@ -113,11 +112,10 @@ const nextHref = hrefOf(pages[index + 1]);
     <LessonBar
       title={row.title}
       segments={segments}
-      progressLabel={`全体 ${index + 1}/${pages.length}`}
       estimate={elapsed}
       limit={limit}
-      number={page.number}
-      total={page.total}
+      overallNumber={overall.number}
+      overallTotal={overall.total}
       previousHref={hrefOf(pages[index - 1])}
       nextHref={nextHref}
       groups={groups}
