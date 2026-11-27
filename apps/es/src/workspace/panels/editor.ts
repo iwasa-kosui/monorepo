@@ -22,6 +22,9 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
 
   const remPx = (): number => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
+  const sidebarOpenRemScale = (): number =>
+    Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-open-rem-scale')) || 1;
+
   const isDrawer = (): boolean => ide.getBoundingClientRect().width < drawerMaxRem * remPx();
 
   let decided = false;
@@ -30,7 +33,10 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
     const { width } = ide.getBoundingClientRect();
     if (width === 0) return;
     decided = true;
-    if (ide.querySelector('[data-play="add-record"]') === null && width >= sidebarOpenMinRem * remPx()) {
+    if (
+      ide.querySelector('[data-play="add-record"]') === null
+      && width >= sidebarOpenMinRem * remPx() * sidebarOpenRemScale()
+    ) {
       ide.dataset.sidebar = 'open';
     }
   };

@@ -5,13 +5,28 @@
 @source not "../playground";
 
 html {
-  font-size: 90%;
+  --root-text-size: 90%;
+  font-size: var(--root-text-size);
+}
+/* PC の幅では文字が小さく見えるため上げる。1279px 以下は2列の幅が狭いので据え置く */
+@media (min-width: 1280px) {
+  html {
+    --root-text-size: 100%;
+    /* EXPLORER を開いた状態で始める幅を、文字を上げる前と同じにする */
+    --sidebar-open-rem-scale: 0.9;
+  }
+  html[data-text-size="small"] {
+    --sidebar-open-rem-scale: 0.8889;
+  }
+  html[data-text-size="large"] {
+    --sidebar-open-rem-scale: 0.9167;
+  }
 }
 html[data-text-size="small"] {
-  font-size: 80%;
+  font-size: calc(var(--root-text-size) - 10%);
 }
 html[data-text-size="large"] {
-  font-size: 110%;
+  font-size: calc(var(--root-text-size) + 20%);
 }
 
 body {
