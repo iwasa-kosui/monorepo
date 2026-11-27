@@ -1,6 +1,6 @@
 ---
 import SqlPlayground from '../SqlPlayground.astro';
-import { restoredVisitsSql } from './evidence-scenario';
+import { backups } from './evidence-scenario';
 
 interface Props {
   duration?: number;
@@ -8,7 +8,6 @@ interface Props {
 
 const { duration = 6000 } = Astro.props;
 
-const backups = ['2026-11-04 00:00', '2026-11-05 00:00', '2026-11-06 00:00'];
 const initial = 'SELECT * FROM visits;';
 ---
 
@@ -19,17 +18,18 @@ const initial = 'SELECT * FROM visits;';
   data-initial-sql={initial}
 >
   <fieldset class="backups">
-    <legend>毎日 0:00 の定期バックアップ</legend>
+    <legend>毎月1日 0:00 の定期バックアップ</legend>
     {
       backups.map((backup, index) => (
         <label>
           <input
             type="radio"
             name="backup"
-            value={backup}
+            value={backup.label}
+            data-setup-sql={backup.sql}
             checked={index === backups.length - 1}
           />
-          {backup}
+          {backup.label}
         </label>
       ))
     }
@@ -40,7 +40,7 @@ const initial = 'SELECT * FROM visits;';
   <h3 class="restored" data-heading hidden></h3>
   <SqlPlayground
     id="intro-evidence-restored"
-    setup={restoredVisitsSql}
+    setup={backups[backups.length - 1].sql}
     initial={initial}
     hidden={true}
   />
@@ -232,7 +232,7 @@ for (
     for (const radio of radios) radio.disabled = locked;
   };
 
-  const finish = (label: string): void => {
+  const finish = (label: string, setupSql: string): void => {
     status.textContent = '';
     bar.hidden = true;
     heading.textContent = `復元した DB（${label} 時点）`;
@@ -246,6 +246,16 @@ for (
       );
       playground.querySelector('[data-role="results"]')?.replaceChildren();
     }
+    const config = JSON.parse(playground.dataset.config ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    playground.dataset.config = JSON.stringify({ ...config, setupSql });
+    playground.dispatchEvent(
+      new CustomEvent('playground:set-setup-sql', {
+        detail: { sql: setupSql },
+      }),
+    );
     playground.hidden = false;
     restoredOnce = true;
     lock(false);
@@ -260,7 +270,8 @@ for (
     bar.style.setProperty('--duration', `${duration}ms`);
     bar.hidden = false;
     status.textContent = '復元しています';
-    setTimeout(() => finish(chosen.value), duration);
+    const setupSql = chosen.dataset.setupSql ?? '';
+    setTimeout(() => finish(chosen.value, setupSql), duration);
   });
 }
 </script>

@@ -311,6 +311,10 @@ const mount = (root: HTMLElement): void => {
     execQueue.push((event as CustomEvent<{ sql: string }>).detail.sql);
     flushExec();
   });
+  root.addEventListener('playground:set-setup-sql', (event) => {
+    config.setupSql = (event as CustomEvent<{ sql: string }>).detail.sql;
+    preparedGeneration = -1;
+  });
   root.addEventListener('playground:discard-state', () => {
     execQueue.length = 0;
     preparedGeneration = -1;

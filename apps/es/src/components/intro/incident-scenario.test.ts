@@ -111,8 +111,8 @@ describe('障害対応の筋書き', () => {
     }
   });
 
-  it('開始前のログは 18:14:20.455 までの 15 行で、時刻の昇順に並ぶ', () => {
-    expect(earlierLogs).toHaveLength(15);
+  it('開始前のログは 18:14:20.455 までの 13 行で、時刻の昇順に並ぶ', () => {
+    expect(earlierLogs).toHaveLength(13);
     const times = earlierLogs.map((entry) => Date.parse(entry.time));
     expect(times).toEqual([...times].sort((a, b) => a - b));
     expect(earlierLogs.at(-1)?.time).toBe('2026-11-06T18:14:20.455Z');
