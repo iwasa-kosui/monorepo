@@ -5,6 +5,7 @@ immersive: true
 
 import CodeBlock from '../../../components/CodeBlock.astro';
 import CodePlayground from '../../../components/CodePlayground.astro';
+import ConsoleTable from '../../../components/ConsoleTable.astro';
 import { chapter4SummaryTable } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
 import { readFunctionsOf } from '../../../lib/snapshots';
@@ -46,19 +47,20 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 <details>
 <summary>出力例を見る</summary>
 
-```text
-┌─────────┬─────────┬────────────────────────────┬───────────┬────────────────────────┬────────────────┐
-│ (index) │ eventId │ eventAt                    │ visitId   │ reason                 │ operatedBy     │
-├─────────┼─────────┼────────────────────────────┼───────────┼────────────────────────┼────────────────┤
-│ 0       │ 1       │ '2026-11-06T10:14:12.540Z' │ 'visit-1' │ '飼い主の都合'         │ '受付スタッフ' │
-│ 1       │ 2       │ '2026-11-06T10:14:12.541Z' │ 'visit-2' │ '来院前に回復したため' │ '院長'         │
-└─────────┴─────────┴────────────────────────────┴───────────┴────────────────────────┴────────────────┘
-┌─────────┬───────────────┬───────────────────┬────────────┐
-│ (index) │ recordedCount │ recalculatedCount │ difference │
-├─────────┼───────────────┼───────────────────┼────────────┤
-│ 0       │ 3             │ 2                 │ 1          │
-└─────────┴───────────────┴───────────────────┴────────────┘
-```
+<ConsoleTable
+  head={['(index)', 'eventId', 'eventAt', 'visitId', 'reason', 'operatedBy']}
+  rows={[
+    ['0', '1', "'2026-11-06T10:14:12.540Z'", "'visit-1'", "'飼い主の都合'", "'受付スタッフ'"],
+    ['1', '2', "'2026-11-06T10:14:12.541Z'", "'visit-2'", "'来院前に回復したため'", "'院長'"],
+  ]}
+/>
+
+<ConsoleTable
+  head={['(index)', 'recordedCount', 'recalculatedCount', 'difference']}
+  rows={[
+    ['0', '3', '2', '1'],
+  ]}
+/>
 
 </details>
 
