@@ -35,6 +35,22 @@ const COLORS = {
 
 type FontWeight = 500 | 700;
 
+const WIDTH = 1200;
+const HEIGHT = 630;
+
+/** 文字を置く位置と、背景の画像 */
+type Layout = Readonly<{
+  /** 文字の左端（px） */
+  textLeft: number;
+  /** 文字の幅（px） */
+  textWidth: number;
+  /** 背景の画像（data URL） */
+  shore: string;
+}>;
+
+/** 中央の正方形の内側に取る余白（px） */
+const SQUARE_PADDING = 32;
+
 const FONT_FILE_NAMES: Record<FontWeight, string> = {
   500: 'NotoSansJP-Medium.ttf',
   700: 'NotoSansJP-Bold.ttf',
@@ -127,17 +143,35 @@ const getTitleFontSize = (title: string): number => {
   return 44;
 };
 
-const loadShoreDataUrl = (): string => {
-  const png = fs.readFileSync(path.join(process.cwd(), 'scripts', 'og-assets', 'shore.png'));
+const loadShoreDataUrl = (fileName: string): string => {
+  const png = fs.readFileSync(path.join(process.cwd(), 'scripts', 'og-assets', fileName));
   return `data:image/png;base64,${png.toString('base64')}`;
 };
 
-const createFrame = (shore: string, children: SatoriNode[]): SatoriNode => ({
+/** 通常の配置。文字は左に寄せ、海と海老を右に置く */
+const createStandardLayout = (): Layout => ({
+  textLeft: 64,
+  textWidth: 620,
+  shore: loadShoreDataUrl('shore.png'),
+});
+
+/**
+ * はてなブックマーク向けの配置。はてなブックマークは og:image の中央を正方形に切り抜くので、
+ * 文字を中央の正方形（1 辺は画像の高さ）に収め、海と海老をその右外に置く。
+ * はてなのクローラーにだけ返す（public/_worker.js）。
+ */
+const createHatenaLayout = (): Layout => ({
+  textLeft: (WIDTH - HEIGHT) / 2 + SQUARE_PADDING,
+  textWidth: HEIGHT - SQUARE_PADDING * 2,
+  shore: loadShoreDataUrl('shore-hatena.png'),
+});
+
+const createFrame = (layout: Layout, children: SatoriNode[]): SatoriNode => ({
   type: 'div',
   props: {
     style: {
-      width: '1200px',
-      height: '630px',
+      width: `${WIDTH}px`,
+      height: `${HEIGHT}px`,
       position: 'relative',
       display: 'flex',
       backgroundColor: COLORS.sand,
@@ -147,10 +181,10 @@ const createFrame = (shore: string, children: SatoriNode[]): SatoriNode => ({
       {
         type: 'img',
         props: {
-          src: shore,
-          width: 1200,
-          height: 630,
-          style: { position: 'absolute', top: 0, left: 0, width: '1200px', height: '630px' },
+          src: layout.shore,
+          width: WIDTH,
+          height: HEIGHT,
+          style: { position: 'absolute', top: 0, left: 0, width: `${WIDTH}px`, height: `${HEIGHT}px` },
         },
       },
       ...children,
@@ -158,13 +192,13 @@ const createFrame = (shore: string, children: SatoriNode[]): SatoriNode => ({
   },
 });
 
-const createSiteName = (): SatoriNode => ({
+const createSiteName = (layout: Layout): SatoriNode => ({
   type: 'div',
   props: {
     style: {
       position: 'absolute',
       top: '60px',
-      left: '64px',
+      left: `${layout.textLeft}px`,
       display: 'flex',
       fontSize: '28px',
       fontWeight: 500,
@@ -220,14 +254,14 @@ const createMetaRow = (date: string, label?: string): SatoriNode => ({
   },
 });
 
-const createBodyBlock = (children: SatoriNode[]): SatoriNode => ({
+const createBodyBlock = (layout: Layout, children: SatoriNode[]): SatoriNode => ({
   type: 'div',
   props: {
     style: {
       position: 'absolute',
-      left: '64px',
+      left: `${layout.textLeft}px`,
       bottom: '64px',
-      width: '620px',
+      width: `${layout.textWidth}px`,
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'flex-start',
@@ -240,7 +274,6 @@ const budouxParser = loadDefaultJapaneseParser();
 const graphemeSegmenter = new Intl.Segmenter('ja', { granularity: 'grapheme' });
 const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
 const WORD_JOINER = String.fromCharCode(0x2060);
-const TITLE_BLOCK_WIDTH = 620;
 const TITLE_LETTER_SPACING = 0.01;
 const LEADING_PUNCTUATION = /^[:;,.!?、。，．：；！？)）」』】]*\s*/;
 
@@ -253,9 +286,9 @@ const estimateWidth = (text: string, fontSize: number, face: FontFace): number =
     return sum + (advance / face.unitsPerEm) * fontSize + letterSpacing;
   }, 0);
 
-const joinRun = (run: string, fontSize: number, face: FontFace): string => {
+const joinRun = (run: string, fontSize: number, face: FontFace, width: number): string => {
   const graphemes = [...graphemeSegmenter.segment(run)].map((s) => s.segment);
-  const overlong = estimateWidth(run, fontSize, face) > TITLE_BLOCK_WIDTH;
+  const overlong = estimateWidth(run, fontSize, face) > width;
   const glue = overlong ? ZERO_WIDTH_SPACE : WORD_JOINER;
   return graphemes.reduce((acc, g, i) => {
     if (i === 0) return g;
@@ -272,7 +305,7 @@ const splitPhrases = (line: string): string[] =>
     return [...phrases.slice(0, -1), phrases[phrases.length - 1] + lead, ...(rest === '' ? [] : [rest])];
   }, []);
 
-const breakTitle = (title: string, fontSize: number, face: FontFace): string =>
+const breakTitle = (title: string, fontSize: number, face: FontFace, width: number): string =>
   title
     .split('\n')
     .map((line) =>
@@ -280,7 +313,7 @@ const breakTitle = (title: string, fontSize: number, face: FontFace): string =>
         .map((phrase) =>
           phrase
             .split(/(\s+)/)
-            .map((part, i) => (i % 2 === 1 ? part : joinRun(part, fontSize, face)))
+            .map((part, i) => (i % 2 === 1 ? part : joinRun(part, fontSize, face, width)))
             .join('')
         )
         .join(ZERO_WIDTH_SPACE)
@@ -290,8 +323,8 @@ const breakTitle = (title: string, fontSize: number, face: FontFace): string =>
 const TITLE_FONT_SIZES = [68, 58, 50, 44, 38];
 const TITLE_LINE_HEIGHT = 1.4;
 
-const estimateLineCount = (title: string, fontSize: number, face: FontFace): number =>
-  breakTitle(title, fontSize, face)
+const estimateLineCount = (title: string, fontSize: number, face: FontFace, width: number): number =>
+  breakTitle(title, fontSize, face, width)
     .split('\n')
     .reduce((total, line) => {
       const units = line.split(/(?<=\u200b)/).flatMap((phrase) => phrase.split(/(?<=\s)/));
@@ -299,7 +332,7 @@ const estimateLineCount = (title: string, fontSize: number, face: FontFace): num
         const current = acc[acc.length - 1];
         if (
           current !== undefined
-          && estimateWidth((current + unit).replace(/[\s\u200b]+$/, ''), fontSize, face) <= TITLE_BLOCK_WIDTH
+          && estimateWidth((current + unit).replace(/[\s\u200b]+$/, ''), fontSize, face) <= width
         ) {
           return [...acc.slice(0, -1), current + unit];
         }
@@ -308,18 +341,18 @@ const estimateLineCount = (title: string, fontSize: number, face: FontFace): num
       return total + lines.length;
     }, 0);
 
-const getFittingFontSize = (title: string, face: FontFace, maxHeight: number): number => {
+const getFittingFontSize = (title: string, face: FontFace, width: number, maxHeight: number): number => {
   const initial = getTitleFontSize(title);
   const candidates = [initial, ...TITLE_FONT_SIZES.filter((size) => size < initial)];
   const specifiedLines = title.includes('\n') ? title.split('\n').length : Infinity;
   return candidates.find((size) => {
-    const lineCount = estimateLineCount(title, size, face);
+    const lineCount = estimateLineCount(title, size, face, width);
     return lineCount * size * TITLE_LINE_HEIGHT <= maxHeight && lineCount <= specifiedLines;
   }) ?? candidates[candidates.length - 1];
 };
 
-const createTitle = (title: string, face: FontFace, maxHeight: number): SatoriNode => {
-  const fontSize = getFittingFontSize(title, face, maxHeight);
+const createTitle = (title: string, face: FontFace, width: number, maxHeight: number): SatoriNode => {
+  const fontSize = getFittingFontSize(title, face, width, maxHeight);
   return {
     type: 'div',
     props: {
@@ -333,29 +366,32 @@ const createTitle = (title: string, face: FontFace, maxHeight: number): SatoriNo
         textAlign: 'left',
         whiteSpace: 'pre-line',
       },
-      children: breakTitle(title, fontSize, face),
+      children: breakTitle(title, fontSize, face, width),
     },
   };
 };
 
-const createOgImage = (post: PostMeta, shore: string, face: FontFace): SatoriNode =>
-  createFrame(shore, [
-    createSiteName(),
-    createBodyBlock([createMetaRow(post.date), createTitle(post.ogTitle ?? post.title, face, 376)]),
-  ]);
-
-const createReportOgImage = (report: PostMeta, shore: string, face: FontFace): SatoriNode =>
-  createFrame(shore, [
-    createSiteName(),
-    createBodyBlock([
-      createMetaRow(report.date, '🤖 生成AIレポート'),
-      createTitle(report.ogTitle ?? report.title, face, 376),
+const createOgImage = (post: PostMeta, layout: Layout, face: FontFace): SatoriNode =>
+  createFrame(layout, [
+    createSiteName(layout),
+    createBodyBlock(layout, [
+      createMetaRow(post.date),
+      createTitle(post.ogTitle ?? post.title, face, layout.textWidth, 376),
     ]),
   ]);
 
-const createDefaultOgImage = (shore: string): SatoriNode =>
-  createFrame(shore, [
-    createBodyBlock([
+const createReportOgImage = (report: PostMeta, layout: Layout, face: FontFace): SatoriNode =>
+  createFrame(layout, [
+    createSiteName(layout),
+    createBodyBlock(layout, [
+      createMetaRow(report.date, '🤖 生成AIレポート'),
+      createTitle(report.ogTitle ?? report.title, face, layout.textWidth, 376),
+    ]),
+  ]);
+
+const createDefaultOgImage = (layout: Layout): SatoriNode =>
+  createFrame(layout, [
+    createBodyBlock(layout, [
       {
         type: 'div',
         props: {
@@ -414,8 +450,8 @@ type OgFont = { data: ArrayBuffer; weight: FontWeight };
 
 const generateImage = async (element: SatoriNode, fonts: OgFont[]): Promise<Buffer> => {
   const svg = await satori(element, {
-    width: 1200,
-    height: 630,
+    width: WIDTH,
+    height: HEIGHT,
     fonts: fonts.map(({ data, weight }) => ({
       name: 'Noto Sans JP',
       data,
@@ -432,7 +468,7 @@ const generateImage = async (element: SatoriNode, fonts: OgFont[]): Promise<Buff
 
   const resvg = new Resvg(svg, {
     background: 'rgba(0, 0, 0, 0)',
-    fitTo: { mode: 'width', value: 1200 },
+    fitTo: { mode: 'width', value: WIDTH },
   });
 
   const pngData = resvg.render();
@@ -447,34 +483,38 @@ const main = async (): Promise<void> => {
   const bold = await loadFont(700);
   const fonts: OgFont[] = [{ data: medium, weight: 500 }, { data: bold, weight: 700 }];
   const face = opentype.parse(bold);
-  const shore = loadShoreDataUrl();
   const posts = loadPosts();
-
-  const outputDir = path.join(process.cwd(), 'public', 'og');
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
-
-  console.log('Generating default.png...');
-  const defaultPng = await generateImage(createDefaultOgImage(shore), fonts);
-  fs.writeFileSync(path.join(outputDir, 'default.png'), defaultPng);
-
-  for (const post of posts) {
-    const fileName = `${slugToFileName(post.slug)}.png`;
-    console.log(`Generating ${fileName}...`);
-    const png = await generateImage(createOgImage(post, shore, face), fonts);
-    fs.writeFileSync(path.join(outputDir, fileName), png);
-  }
-
   const reports = loadReports();
-  for (const report of reports) {
-    const fileName = `${slugToFileName(report.slug)}.png`;
-    console.log(`Generating report ${fileName}...`);
-    const png = await generateImage(createReportOgImage(report, shore, face), fonts);
-    fs.writeFileSync(path.join(outputDir, fileName), png);
+
+  // 通常の画像は public/og に、はてなブックマーク向けの画像は同じファイル名で public/og/hatena に置く
+  const variants = [
+    { label: 'standard', layout: createStandardLayout(), outputDir: path.join(process.cwd(), 'public', 'og') },
+    { label: 'hatena', layout: createHatenaLayout(), outputDir: path.join(process.cwd(), 'public', 'og', 'hatena') },
+  ];
+
+  for (const { label, layout, outputDir } of variants) {
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    console.log(`Generating default.png (${label})...`);
+    const defaultPng = await generateImage(createDefaultOgImage(layout), fonts);
+    fs.writeFileSync(path.join(outputDir, 'default.png'), defaultPng);
+
+    for (const post of posts) {
+      const fileName = `${slugToFileName(post.slug)}.png`;
+      console.log(`Generating ${fileName} (${label})...`);
+      const png = await generateImage(createOgImage(post, layout, face), fonts);
+      fs.writeFileSync(path.join(outputDir, fileName), png);
+    }
+
+    for (const report of reports) {
+      const fileName = `${slugToFileName(report.slug)}.png`;
+      console.log(`Generating report ${fileName} (${label})...`);
+      const png = await generateImage(createReportOgImage(report, layout, face), fonts);
+      fs.writeFileSync(path.join(outputDir, fileName), png);
+    }
   }
 
-  console.log(`Done! Generated ${posts.length + reports.length + 1} OG images.`);
+  console.log(`Done! Generated ${(posts.length + reports.length + 1) * variants.length} OG images.`);
 };
 
 main().catch(console.error);
