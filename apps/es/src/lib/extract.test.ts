@@ -81,7 +81,7 @@ describe('readFunctionsOf', () => {
       'explainCancellationCount',
       'verifyCancellationCount',
     ]],
-    ['chapter-4-external-sync-done', 'findSendRecords', ['findSendRecords', 'findUnconfirmedSends']],
+    ['chapter-4-external-sync-done', 'findImportRecords', ['findImportRecords', 'findUnappliedImports']],
     ['chapter-4-audit-log-done', 'explainChange', ['explainChange', 'findChangesWithoutReason']],
   ])('%s の読み取り関数を切り出す', (snapshot, first, names) => {
     const code = readFunctionsOf(snapshot, first);

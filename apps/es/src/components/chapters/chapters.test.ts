@@ -145,11 +145,12 @@ const financeGreeting = 'お疲れ様です。昨日のキャンセル件数の�
 const financeAsked = '集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？';
 const financeAnswer = '記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです';
 const financeThanks = 'なるほど、助かります！';
-const reminderGreeting = 'すみません、また1件お願いします🙏';
-const reminderAsked =
-  'キャンセルしたのにリマインドの通知が届いた、って飼い主さんから連絡があって…取り消しって送れてますか？';
-const reminderAnswer = '送信の記録を見ました。取り消しを送ったあと、結果が確認できてない送信が1件あります';
-const reminderThanks = 'ありがとうございます、飼い主さんに確認してみます！';
+const siteGreeting = 'すみません、また1件お願いします🙏';
+const siteAsked =
+  'コタロウの飼い主さんから、予約サイトではキャンセルになってるのに、こっちでは診察済みになってるって連絡があって…どっちが正しいですか？';
+const siteAnswer =
+  '取り込みの記録を見ました。予約サイトのキャンセルは届いてますが、届いたのが診察の後だったので取り込んでいません';
+const siteThanks = 'ありがとうございます、飼い主さんにそう伝えます！';
 const auditGreeting = 'お疲れ様です、監査対応で確認させてください';
 const auditAsked = '監査ログに reserved → cancelled の変更は残ってるんですが、理由が載ってなくて。分かりますか？';
 const auditAnswer = '監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました';
@@ -192,10 +193,10 @@ const chapter4Texts = [
   financeAsked,
   financeAnswer,
   financeThanks,
-  reminderGreeting,
-  reminderAsked,
-  reminderAnswer,
-  reminderThanks,
+  siteGreeting,
+  siteAsked,
+  siteAnswer,
+  siteThanks,
   auditGreeting,
   auditAsked,
   auditAnswer,
@@ -480,7 +481,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     for (const [id, scenario] of entries) {
       for (const post of postsOf(scenario)) {
         if (emoji.test(post.text)) {
-          expect([failedFour, thanks, answeredThanks, reminderGreeting], id).toContain(post.text);
+          expect([failedFour, thanks, answeredThanks, siteGreeting], id).toContain(post.text);
         }
       }
     }
@@ -757,26 +758,26 @@ describe('第1章から第4章とまとめの筋書き', () => {
           ['you', financeAnswer],
           ['finance', financeThanks],
         ],
-        opened: [['support', reminderGreeting], ['support', reminderAsked]],
-        answer: reminderAnswer,
-        follow: ['support', reminderThanks],
+        opened: [['support', siteGreeting], ['support', siteAsked]],
+        answer: siteAnswer,
+        follow: ['support', siteThanks],
         tabs: [
-          'memo:doc:相談2: 外部への送信が届いたか分からない',
+          'memo:doc:相談2: 予約サイトのキャンセルが反映されたか分からない',
           'editor:editor:visits.ts — clinic-api',
           'console:console:DB Console',
         ],
         storageId: 'chapter-4-external-sync',
         exercise: 'chapter-4-external-sync-done',
-        entry: 'what-was-sent.ts',
-        sqlHead: 'SELECT\n  requested.target_id AS visit_id,',
+        entry: 'what-was-imported.ts',
+        sqlHead: 'SELECT\n  received.target_id AS visit_id,',
       },
       {
         id: 'chapter-4/04',
         history: [
-          ['support', reminderGreeting],
-          ['support', reminderAsked],
-          ['you', reminderAnswer],
-          ['support', reminderThanks],
+          ['support', siteGreeting],
+          ['support', siteAsked],
+          ['you', siteAnswer],
+          ['support', siteThanks],
         ],
         opened: [['it', auditGreeting], ['it', auditAsked]],
         answer: auditAnswer,

@@ -1,8 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { withTransaction } from './db.ts';
 
-export type ReminderCancellationMessage = { visitId: string; petName: string };
-export type SendReminderCancellation = (message: ReminderCancellationMessage) => Promise<void>;
+export type ExternalCancellationMessage = { visitId: string; operatedAt: string; reason: string };
+
+const completedVisitError = '診察が終わった来院はキャンセルできません';
 
 export const reserveVisit = (db: DatabaseSync, input: { visitId: string; petName: string }): void => {
   db.prepare(`INSERT INTO visits (id, pet_name, status) VALUES (?, ?, 'reserved')`).run(input.visitId, input.petName);
@@ -34,49 +35,66 @@ const recordEvent = (
   return Number(result.lastInsertRowid);
 };
 
-export const cancelVisit = async (
+const cancelInTransaction = (
   db: DatabaseSync,
-  sendReminderCancellation: SendReminderCancellation,
   input: { visitId: string; reason: string; operatedBy: string },
-): Promise<void> => {
-  const message = withTransaction(db, (): ReminderCancellationMessage => {
-    const visit = db.prepare(`SELECT status, pet_name FROM visits WHERE id = ?`).get(input.visitId);
-    if (visit === undefined) {
-      throw new Error('来院が見つかりません');
-    }
-    if (visit.status === 'completed') {
-      throw new Error('診察が終わった来院はキャンセルできません');
-    }
-    db.prepare(`UPDATE visits SET status = 'cancelled' WHERE id = ?`).run(input.visitId);
-    const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);
-    recordEvent(db, {
-      eventName: 'VisitCancelled',
-      payload: { reason: input.reason, operatedBy: input.operatedBy },
-      visitId: input.visitId,
-      row: cancelled,
-    });
-    return { visitId: input.visitId, petName: String(visit.pet_name) };
+): void => {
+  const visit = db.prepare(`SELECT status FROM visits WHERE id = ?`).get(input.visitId);
+  if (visit === undefined) {
+    throw new Error('来院が見つかりません');
+  }
+  if (visit.status === 'completed') {
+    throw new Error(completedVisitError);
+  }
+  db.prepare(`UPDATE visits SET status = 'cancelled' WHERE id = ?`).run(input.visitId);
+  const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);
+  recordEvent(db, {
+    eventName: 'VisitCancelled',
+    payload: { reason: input.reason, operatedBy: input.operatedBy },
+    visitId: input.visitId,
+    row: cancelled,
   });
-  await sendReminderCancellation(message);
 };
 
-export const findSendRecords = (
+export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: string; operatedBy: string }): void => {
+  withTransaction(db, () => {
+    cancelInTransaction(db, input);
+  });
+};
+
+export const importExternalCancellation = (db: DatabaseSync, message: ExternalCancellationMessage): void => {
+  withTransaction(db, () => {
+    const visit = db.prepare(`SELECT status FROM visits WHERE id = ?`).get(message.visitId);
+    if (visit?.status === 'completed') {
+      return;
+    }
+    cancelInTransaction(db, { visitId: message.visitId, reason: message.reason, operatedBy: '予約サイト' });
+  });
+};
+
+export const findImportRecords = (
   db: DatabaseSync,
-  visitId: string,
 ): {
-  requestedAt: string;
-  finishedAt: string | null;
-  message: ReminderCancellationMessage;
-  reason: string;
-  operatedBy: string;
-  result: 'sent' | 'failed' | 'unconfirmed';
-  error: string | null;
+  visitId: string;
+  petName: string;
+  operatedAt: string;
+  receivedAt: string;
+  cancelReason: string;
+  result: 'applied' | 'rejected';
+  reason: string | null;
 }[] => {
   throw new Error('第4章で実装します');
 };
 
-export const findUnconfirmedSends = (
+export const findUnappliedImports = (
   db: DatabaseSync,
-): { visitId: string; requestedAt: string; message: ReminderCancellationMessage }[] => {
+): {
+  visitId: string;
+  petName: string;
+  operatedAt: string;
+  receivedAt: string;
+  cancelReason: string;
+  reason: string;
+}[] => {
   throw new Error('第4章で実装します');
 };

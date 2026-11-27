@@ -131,7 +131,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     flow: 'demo',
     mode: 'do',
     role:
-      'カスタマーサポートからの質問について、外部へいつ何を送ったかを業務イベントに残す方法を、エディタの完成コードと DB コンソールの SQL で確かめて返信する',
+      'カスタマーサポートからの質問について、予約サイトから届いたキャンセルと取り込んだ結果を業務イベントに残す方法を、エディタの完成コードと DB コンソールの SQL で確かめて返信する',
   },
   'chapter-4/04': {
     flow: 'demo',

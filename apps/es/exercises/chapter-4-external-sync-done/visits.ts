@@ -1,8 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { withTransaction } from './db.ts';
 
-export type ReminderCancellationMessage = { visitId: string; petName: string };
-export type SendReminderCancellation = (message: ReminderCancellationMessage) => Promise<void>;
+export type ExternalCancellationMessage = { visitId: string; operatedAt: string; reason: string };
+
+const completedVisitError = '診察が終わった来院はキャンセルできません';
 
 export const reserveVisit = (db: DatabaseSync, input: { visitId: string; petName: string }): void => {
   db.prepare(`INSERT INTO visits (id, pet_name, status) VALUES (?, ?, 'reserved')`).run(input.visitId, input.petName);
@@ -34,116 +35,133 @@ const recordEvent = (
   return Number(result.lastInsertRowid);
 };
 
-export const cancelVisit = async (
+const cancelInTransaction = (
   db: DatabaseSync,
-  sendReminderCancellation: SendReminderCancellation,
   input: { visitId: string; reason: string; operatedBy: string },
-): Promise<void> => {
-  const { message, cancelled, requestedEventId } = withTransaction(db, () => {
-    const visit = db.prepare(`SELECT status, pet_name FROM visits WHERE id = ?`).get(input.visitId);
-    if (visit === undefined) {
-      throw new Error('来院が見つかりません');
-    }
-    if (visit.status === 'completed') {
-      throw new Error('診察が終わった来院はキャンセルできません');
-    }
-    db.prepare(`UPDATE visits SET status = 'cancelled' WHERE id = ?`).run(input.visitId);
-    const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);
-    const cancelledEventId = recordEvent(db, {
-      eventName: 'VisitCancelled',
-      payload: { reason: input.reason, operatedBy: input.operatedBy },
-      visitId: input.visitId,
-      row: cancelled,
-    });
-    const message: ReminderCancellationMessage = { visitId: input.visitId, petName: String(visit.pet_name) };
-    const requestedEventId = recordEvent(db, {
-      eventName: 'ReminderCancellationRequested',
-      payload: { causationEventId: cancelledEventId, message },
-      visitId: input.visitId,
-      row: cancelled,
-    });
-    return { message, cancelled, requestedEventId };
-  });
-  try {
-    await sendReminderCancellation(message);
-  } catch (error) {
-    recordEvent(db, {
-      eventName: 'ReminderCancellationFailed',
-      payload: { causationEventId: requestedEventId, error: error instanceof Error ? error.message : String(error) },
-      visitId: input.visitId,
-      row: cancelled,
-    });
-    throw error;
+  receivedEventId?: number,
+): void => {
+  const visit = db.prepare(`SELECT status FROM visits WHERE id = ?`).get(input.visitId);
+  if (visit === undefined) {
+    throw new Error('来院が見つかりません');
   }
+  if (visit.status === 'completed') {
+    throw new Error(completedVisitError);
+  }
+  db.prepare(`UPDATE visits SET status = 'cancelled' WHERE id = ?`).run(input.visitId);
+  const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);
   recordEvent(db, {
-    eventName: 'ReminderCancellationSent',
-    payload: { causationEventId: requestedEventId },
+    eventName: 'VisitCancelled',
+    payload: { reason: input.reason, operatedBy: input.operatedBy, receivedEventId },
     visitId: input.visitId,
     row: cancelled,
   });
 };
 
-export const findSendRecords = (
+export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: string; operatedBy: string }): void => {
+  withTransaction(db, () => {
+    cancelInTransaction(db, input);
+  });
+};
+
+export const importExternalCancellation = (db: DatabaseSync, message: ExternalCancellationMessage): void => {
+  withTransaction(db, () => {
+    const visit = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(message.visitId);
+    if (visit === undefined) {
+      throw new Error('来院が見つかりません');
+    }
+    const receivedEventId = recordEvent(db, {
+      eventName: 'ExternalCancellationReceived',
+      payload: { operatedAt: message.operatedAt, reason: message.reason },
+      visitId: message.visitId,
+      row: visit,
+    });
+    if (visit.status === 'completed') {
+      recordEvent(db, {
+        eventName: 'ExternalCancellationRejected',
+        payload: { receivedEventId, reason: completedVisitError },
+        visitId: message.visitId,
+        row: visit,
+      });
+      return;
+    }
+    cancelInTransaction(
+      db,
+      { visitId: message.visitId, reason: message.reason, operatedBy: '予約サイト' },
+      receivedEventId,
+    );
+  });
+};
+
+export const findImportRecords = (
   db: DatabaseSync,
-  visitId: string,
 ): {
-  requestedAt: string;
-  finishedAt: string | null;
-  message: ReminderCancellationMessage;
-  reason: string;
-  operatedBy: string;
-  result: 'sent' | 'failed' | 'unconfirmed';
-  error: string | null;
+  visitId: string;
+  petName: string;
+  operatedAt: string;
+  receivedAt: string;
+  cancelReason: string;
+  result: 'applied' | 'rejected';
+  reason: string | null;
 }[] =>
   db.prepare(`
     SELECT
-      requested.event_at AS requestedAt,
-      finished.event_at AS finishedAt,
-      requested.payload ->> '$.message' AS message,
-      cancelled.payload ->> '$.reason' AS reason,
-      cancelled.payload ->> '$.operatedBy' AS operatedBy,
-      CASE finished.event_name
-        WHEN 'ReminderCancellationSent' THEN 'sent'
-        WHEN 'ReminderCancellationFailed' THEN 'failed'
-        ELSE 'unconfirmed'
+      received.target_id AS visitId,
+      received.target_state ->> '$.pet_name' AS petName,
+      received.payload ->> '$.operatedAt' AS operatedAt,
+      received.event_at AS receivedAt,
+      received.payload ->> '$.reason' AS cancelReason,
+      CASE outcome.event_name
+        WHEN 'VisitCancelled' THEN 'applied'
+        ELSE 'rejected'
       END AS result,
-      finished.payload ->> '$.error' AS error
-    FROM business_events AS requested
-    JOIN business_events AS cancelled
-      ON cancelled.event_id = requested.payload ->> '$.causationEventId'
-    LEFT JOIN business_events AS finished
-      ON finished.payload ->> '$.causationEventId' = requested.event_id
-      AND finished.event_name IN ('ReminderCancellationSent', 'ReminderCancellationFailed')
-    WHERE requested.event_name = 'ReminderCancellationRequested' AND requested.target_id = ?
-    ORDER BY requested.event_id
-  `).all(visitId).map((row) => ({ ...row, message: JSON.parse(String(row.message)) })) as {
-    requestedAt: string;
-    finishedAt: string | null;
-    message: ReminderCancellationMessage;
-    reason: string;
-    operatedBy: string;
-    result: 'sent' | 'failed' | 'unconfirmed';
-    error: string | null;
+      CASE outcome.event_name
+        WHEN 'ExternalCancellationRejected' THEN outcome.payload ->> '$.reason'
+      END AS reason
+    FROM business_events AS received
+    JOIN business_events AS outcome
+      ON outcome.payload ->> '$.receivedEventId' = received.event_id
+      AND outcome.event_name IN ('VisitCancelled', 'ExternalCancellationRejected')
+    WHERE received.event_name = 'ExternalCancellationReceived'
+    ORDER BY received.event_id
+  `).all() as {
+    visitId: string;
+    petName: string;
+    operatedAt: string;
+    receivedAt: string;
+    cancelReason: string;
+    result: 'applied' | 'rejected';
+    reason: string | null;
   }[];
 
-export const findUnconfirmedSends = (
+export const findUnappliedImports = (
   db: DatabaseSync,
-): { visitId: string; requestedAt: string; message: ReminderCancellationMessage }[] =>
+): {
+  visitId: string;
+  petName: string;
+  operatedAt: string;
+  receivedAt: string;
+  cancelReason: string;
+  reason: string;
+}[] =>
   db.prepare(`
     SELECT
-      requested.target_id AS visitId,
-      requested.event_at AS requestedAt,
-      requested.payload ->> '$.message' AS message
-    FROM business_events AS requested
-    WHERE requested.event_name = 'ReminderCancellationRequested'
-      AND NOT EXISTS (
-        SELECT 1 FROM business_events AS finished
-        WHERE finished.event_name IN ('ReminderCancellationSent', 'ReminderCancellationFailed')
-          AND finished.payload ->> '$.causationEventId' = requested.event_id
-      )
-    ORDER BY requested.event_id
-  `).all().map((row) => ({ ...row, message: JSON.parse(String(row.message)) })) as {
+      received.target_id AS visitId,
+      received.target_state ->> '$.pet_name' AS petName,
+      received.payload ->> '$.operatedAt' AS operatedAt,
+      received.event_at AS receivedAt,
+      received.payload ->> '$.reason' AS cancelReason,
+      rejected.payload ->> '$.reason' AS reason
+    FROM business_events AS received
+    JOIN business_events AS rejected
+      ON rejected.event_name = 'ExternalCancellationRejected'
+      AND rejected.payload ->> '$.receivedEventId' = received.event_id
+    WHERE received.event_name = 'ExternalCancellationReceived'
+    ORDER BY received.event_id
+  `).all() as {
     visitId: string;
-    requestedAt: string;
-    message: ReminderCancellationMessage;
+    petName: string;
+    operatedAt: string;
+    receivedAt: string;
+    cancelReason: string;
+    reason: string;
   }[];

@@ -96,12 +96,14 @@ export const posts = {
   financeAsked: finance('集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？'),
   financeAnswer: you('記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです'),
   financeThanks: finance('なるほど、助かります！'),
-  reminderGreeting: support('すみません、また1件お願いします🙏'),
-  reminderAsked: support(
-    'キャンセルしたのにリマインドの通知が届いた、って飼い主さんから連絡があって…取り消しって送れてますか？',
+  siteGreeting: support('すみません、また1件お願いします🙏'),
+  siteAsked: support(
+    'コタロウの飼い主さんから、予約サイトではキャンセルになってるのに、こっちでは診察済みになってるって連絡があって…どっちが正しいですか？',
   ),
-  reminderAnswer: you('送信の記録を見ました。取り消しを送ったあと、結果が確認できてない送信が1件あります'),
-  reminderThanks: support('ありがとうございます、飼い主さんに確認してみます！'),
+  siteAnswer: you(
+    '取り込みの記録を見ました。予約サイトのキャンセルは届いてますが、届いたのが診察の後だったので取り込んでいません',
+  ),
+  siteThanks: support('ありがとうございます、飼い主さんにそう伝えます！'),
   auditGreeting: infoSys('お疲れ様です、監査対応で確認させてください'),
   auditAsked: infoSys('監査ログに reserved → cancelled の変更は残ってるんですが、理由が載ってなくて。分かりますか？'),
   auditAnswer: you('監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました'),
