@@ -5,7 +5,7 @@ const introduction = [inquiry, whyNotRecorded] as const;
 
 export const chapter1Question: WorkspaceScenario = lessonScenario({
   id: 'chapter-1-question',
-  label: '自分のシステムの問いを1つ挙げる',
+  label: '普段の業務で運用しているシステムの問いを1つ挙げる',
   history: introduction,
   timeline: opening(posts.afterIncident, posts.ownQuestion, posts.afterOwnQuestion),
   done: 'question:written',
