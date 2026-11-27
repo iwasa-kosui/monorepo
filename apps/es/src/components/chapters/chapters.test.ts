@@ -399,7 +399,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
 
     it('タブの種類と名前', () => {
       expect(summary(lessonScenarios['chapter-2/01'] as WorkspaceScenario)).toEqual([
-        'memo:doc:ADR 1: 更新処理の中で記録する',
+        'memo:doc:ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する',
       ]);
       expect(summary(lessonScenarios['chapter-2/02'] as WorkspaceScenario)).toEqual([
         'editor:editor:visits.ts — clinic-api',
