@@ -155,10 +155,14 @@ const siteAsked =
 const siteAnswer =
   'こっちの診察済みが正しいです。予約サイトのキャンセルは届いていて、記録に残ってます。ただ、診察が終わった来院だったので、状態は変えていません';
 const siteThanks = 'ありがとうございます、飼い主さんにそう伝えます！';
+const externalSyncMigration =
+  '導入前に予約サイトから届いたキャンセルは、取り込みの記録に出てきません。ADR 3 のとおり VisitMigrated で取り込んでも、予約サイトから来たのか、いつ届いたのかは分からないままです';
 const auditGreeting = 'お疲れ様です、監査対応で確認させてください';
 const auditAsked = '監査ログに reserved → cancelled の変更は残ってるんですが、理由が載ってなくて。分かりますか？';
 const auditAnswer = '監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました';
 const auditThanks = 'ありがとうございます。理由が無い分は別途確認します';
+const auditLogMigration =
+  '導入前の監査ログの変更は、業務イベントが無いので理由が分かりません。ADR 3 のとおり VisitMigrated で取り込んでも、監査ログに無い理由は埋まりません';
 const comparisonMade = '3つを同じ軸で並べた表を作りました';
 const chooseOne = 'あなたが普段の業務で運用しているシステムに近いパターンを、1つ選んでみてください';
 const takeHome = '時間の関係で、実装は持ち帰りにします';
@@ -203,10 +207,12 @@ const chapter4Texts = [
   siteAsked,
   siteAnswer,
   siteThanks,
+  externalSyncMigration,
   auditGreeting,
   auditAsked,
   auditAnswer,
   auditThanks,
+  auditLogMigration,
   comparisonMade,
   chooseOne,
   takeHome,
@@ -421,10 +427,11 @@ describe('第1章から第4章とまとめの筋書き', () => {
   it('返信の後のカスタマーサポートの発言は 0.6 秒で届き、経理と情シスの発言は 1.2 秒で届く', () => {
     const followUpDelays = (id: string): (number | undefined)[] =>
       lessonScenarios[id]?.reply?.followUps.map((item) => item.delay) ?? [];
-    for (const id of ['chapter-3/01', 'chapter-3/04', 'chapter-4/03']) {
+    for (const id of ['chapter-3/01', 'chapter-3/04']) {
       expect(followUpDelays(id), id).toEqual([0.6]);
     }
-    expect(followUpDelays('chapter-4/04')).toEqual([1.2]);
+    expect(followUpDelays('chapter-4/03')).toEqual([0.6, 4.5]);
+    expect(followUpDelays('chapter-4/04')).toEqual([1.2, 4.5]);
     expect(followUpDelays('chapter-4/02')).toEqual([1.2, 4.5, 1.0]);
   });
 
@@ -767,7 +774,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ],
         opened: [['support', siteGreeting], ['support', siteAsked]],
         answer: siteAnswer,
-        follows: [['support', siteThanks]],
+        follows: [['support', siteThanks], ['techlead', externalSyncMigration]],
         tabs: [
           'memo:doc:相談2: 予約サイトのキャンセルが反映されたか分からない',
           'editor:editor:visits.ts — clinic-api',
@@ -789,7 +796,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ],
         opened: [['it', auditGreeting], ['it', auditAsked]],
         answer: auditAnswer,
-        follows: [['it', auditThanks]],
+        follows: [['it', auditThanks], ['techlead', auditLogMigration]],
         tabs: [
           'memo:doc:相談3: 監査ログに理由がない',
           'editor:editor:visits.ts — clinic-api',
@@ -852,6 +859,18 @@ describe('第1章から第4章とまとめの筋書き', () => {
         migrationRecord,
         devChannel,
       ]]);
+    });
+
+    it.each(
+      [
+        ['chapter-4/03', siteThanks, externalSyncMigration],
+        ['chapter-4/04', auditThanks, auditLogMigration],
+      ] as const,
+    )('%s の返信の後のテックリードの発言は、「# dev」に届く', (id, thanks, migration) => {
+      const scenario = lessonScenarios[id];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      const channels = (scenario.reply?.followUps ?? []).map((followUp) => [followUp.text, followUp.channel]);
+      expect(channels).toEqual([[thanks, undefined], [migration, devChannel]]);
     });
 
     it('5 ページ目は、情シスとのやり取りを履歴に持ち、開いた時点でテックリードと kosui が 1 件ずつ投稿する', () => {

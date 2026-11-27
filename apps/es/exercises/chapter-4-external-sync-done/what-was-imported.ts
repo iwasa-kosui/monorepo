@@ -2,6 +2,8 @@ import { createDatabase } from './db.ts';
 import { completeVisit, findImportRecords, importExternalCancellation, reserveVisit } from './visits.ts';
 
 const db = createDatabase();
+db.prepare(`INSERT INTO visits (id, pet_name, status) VALUES ('visit-3', 'タマ', 'cancelled')`).run();
+
 reserveVisit(db, { visitId: 'visit-1', petName: 'ポチ' });
 reserveVisit(db, { visitId: 'visit-2', petName: 'コタロウ' });
 
