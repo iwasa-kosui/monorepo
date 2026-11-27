@@ -57,6 +57,9 @@ export const openingChannelState = (channel: string): ChannelState => ({ channel
 
 export const unreadOf = (state: ChannelState, channel: string): number => state.unread[channel] ?? 0;
 
+export const totalUnread = (state: ChannelState): number =>
+  Object.values(state.unread).reduce((sum, count) => sum + count, 0);
+
 const showing = (state: ChannelState, channel: string, pinned: boolean): ChannelState => ({
   channel,
   pinned,

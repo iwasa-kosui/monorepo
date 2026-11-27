@@ -13,6 +13,7 @@ import {
   receiveTyping,
   revealChannel,
   selectChannel,
+  totalUnread,
   typingLeadMs,
   typingStartMs,
   typingVisible,
@@ -323,6 +324,29 @@ describe('参加者が選んだチャンネルの状態', () => {
   describe('未読の件数', () => {
     it('届いていないチャンネルの未読は 0 である', () => {
       expect(unreadOf(openingChannelState(dev), general)).toBe(0);
+    });
+
+    it('チャット全体の未読は、チャンネルごとの未読の合計である', () => {
+      expect(totalUnread(reading(dev, { [dev]: 2, [handsOn]: 1, [general]: 4 }))).toBe(7);
+    });
+
+    it('どのチャンネルにも未読が無いときの、チャット全体の未読は 0 である', () => {
+      expect(totalUnread(openingChannelState(dev))).toBe(0);
+    });
+
+    it('チャットが見えるようになると、表示中のチャンネルの分だけ合計から減る', () => {
+      const next = revealChannel(reading(dev, { [dev]: 1, [handsOn]: 3 }));
+      expect(totalUnread(next)).toBe(3);
+    });
+
+    it('チャットが見えていて別のチャンネルに届いた発言も、合計に入る', () => {
+      const next = receivePost(reading(dev), arrive(handsOn), true);
+      expect(totalUnread(next)).toBe(1);
+    });
+
+    it('チャンネルを選ぶと、選んだチャンネルの分だけ合計から減る', () => {
+      const next = selectChannel(reading(dev, { [dev]: 1, [handsOn]: 3 }), handsOn);
+      expect(totalUnread(next)).toBe(1);
     });
   });
 });
