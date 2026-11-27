@@ -101,7 +101,7 @@ export const findImportRecords = (
   receivedAt: string;
   cancelReason: string;
   result: 'applied' | 'rejected';
-  reason: string | null;
+  rejectedReason: string | null;
 }[] =>
   db.prepare(`
     SELECT
@@ -116,7 +116,7 @@ export const findImportRecords = (
       END AS result,
       CASE outcome.event_name
         WHEN 'ExternalCancellationRejected' THEN outcome.payload ->> '$.reason'
-      END AS reason
+      END AS rejectedReason
     FROM business_events AS received
     JOIN business_events AS outcome
       ON outcome.payload ->> '$.receivedEventId' = received.event_id
@@ -130,7 +130,7 @@ export const findImportRecords = (
     receivedAt: string;
     cancelReason: string;
     result: 'applied' | 'rejected';
-    reason: string | null;
+    rejectedReason: string | null;
   }[];
 
 export const findUnappliedImports = (
@@ -141,7 +141,7 @@ export const findUnappliedImports = (
   operatedAt: string;
   receivedAt: string;
   cancelReason: string;
-  reason: string;
+  rejectedReason: string;
 }[] =>
   db.prepare(`
     SELECT
@@ -150,7 +150,7 @@ export const findUnappliedImports = (
       received.payload ->> '$.operatedAt' AS operatedAt,
       received.event_at AS receivedAt,
       received.payload ->> '$.reason' AS cancelReason,
-      rejected.payload ->> '$.reason' AS reason
+      rejected.payload ->> '$.reason' AS rejectedReason
     FROM business_events AS received
     JOIN business_events AS rejected
       ON rejected.event_name = 'ExternalCancellationRejected'
@@ -163,5 +163,5 @@ export const findUnappliedImports = (
     operatedAt: string;
     receivedAt: string;
     cancelReason: string;
-    reason: string;
+    rejectedReason: string;
   }[];

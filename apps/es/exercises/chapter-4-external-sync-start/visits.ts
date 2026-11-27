@@ -81,7 +81,7 @@ export const findImportRecords = (
   receivedAt: string;
   cancelReason: string;
   result: 'applied' | 'rejected';
-  reason: string | null;
+  rejectedReason: string | null;
 }[] => {
   throw new Error('第4章で実装します');
 };
@@ -94,7 +94,7 @@ export const findUnappliedImports = (
   operatedAt: string;
   receivedAt: string;
   cancelReason: string;
-  reason: string;
+  rejectedReason: string;
 }[] => {
   throw new Error('第4章で実装します');
 };

@@ -162,7 +162,7 @@ describe('第4章 予約サイトからの取り込みの記録', () => {
     assert.equal(record.operatedAt, message.operatedAt);
     assert.equal(record.cancelReason, message.reason);
     assert.equal(record.result, 'applied');
-    assert.equal(record.reason, null);
+    assert.equal(record.rejectedReason, null);
     assert.ok(!Number.isNaN(Date.parse(record.receivedAt)), '届いた時刻を答えられません');
   });
 
@@ -172,7 +172,7 @@ describe('第4章 予約サイトからの取り込みの記録', () => {
     const record = findImportRecords(db)[0];
     assert.ok(record, missingImport);
     assert.equal(record.result, 'rejected');
-    assert.equal(record.reason, '診察が終わった来院はキャンセルできません');
+    assert.equal(record.rejectedReason, '診察が終わった来院はキャンセルできません');
     assert.equal(record.operatedAt, message.operatedAt);
     assert.equal(record.cancelReason, message.reason);
     assert.deepEqual(findUnappliedImports(db).map((unapplied) => unapplied.visitId), [visitId]);
