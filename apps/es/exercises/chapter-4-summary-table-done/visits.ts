@@ -12,6 +12,10 @@ export const reserveVisit = (
   );
 };
 
+export const checkInVisit = (db: DatabaseSync, input: { visitId: string }): void => {
+  db.prepare(`UPDATE visits SET status = 'checked_in' WHERE id = ?`).run(input.visitId);
+};
+
 export const completeVisit = (db: DatabaseSync, input: { visitId: string }): void => {
   db.prepare(`UPDATE visits SET status = 'completed' WHERE id = ?`).run(input.visitId);
 };

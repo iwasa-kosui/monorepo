@@ -16,6 +16,22 @@ export const recordAuditLog = (
   return Number(result.lastInsertRowid);
 };
 
+export const checkInVisit = (db: DatabaseSync, input: { visitId: string; operatedBy: string }): void => {
+  withTransaction(db, () => {
+    const visit = db.prepare(`SELECT status FROM visits WHERE id = ?`).get(input.visitId);
+    if (visit === undefined) {
+      throw new Error('来院が見つかりません');
+    }
+    db.prepare(`UPDATE visits SET status = 'checked_in' WHERE id = ?`).run(input.visitId);
+    recordAuditLog(db, {
+      rowId: input.visitId,
+      oldValue: String(visit.status),
+      newValue: 'checked_in',
+      operatedBy: input.operatedBy,
+    });
+  });
+};
+
 export const completeVisit = (db: DatabaseSync, input: { visitId: string; operatedBy: string }): void => {
   withTransaction(db, () => {
     const visit = db.prepare(`SELECT status FROM visits WHERE id = ?`).get(input.visitId);
