@@ -861,10 +861,12 @@ describe('第1章から第4章とまとめの筋書き', () => {
       ]]);
     });
 
-    it.each([
-      ['chapter-4/03', siteThanks, externalSyncMigration],
-      ['chapter-4/04', auditThanks, auditLogMigration],
-    ] as const)('%s の返信の後のテックリードの発言は、「# dev」に届く', (id, thanks, migration) => {
+    it.each(
+      [
+        ['chapter-4/03', siteThanks, externalSyncMigration],
+        ['chapter-4/04', auditThanks, auditLogMigration],
+      ] as const,
+    )('%s の返信の後のテックリードの発言は、「# dev」に届く', (id, thanks, migration) => {
       const scenario = lessonScenarios[id];
       if (scenario === undefined) throw new Error('筋書きがありません');
       const channels = (scenario.reply?.followUps ?? []).map((followUp) => [followUp.text, followUp.channel]);
