@@ -94,7 +94,9 @@ export const posts = {
   closestQuestion: presenter('普段の業務で運用しているシステムに近いのはどれか、考えながら見てもらえると'),
   financeGreeting: finance('お疲れ様です。昨日のキャンセル件数の件で質問です'),
   financeAsked: finance('集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？'),
-  financeAnswer: you('記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです'),
+  financeAnswer: you(
+    '集計の3件が正しいと思います。ただ、業務イベントで内訳まで確かめられるのは2件で、残りの1件は業務イベントを入れる前のキャンセルなので確かめられません。業務イベントから正しい件数を出すには、導入前のキャンセルも業務イベントとして残す必要があります',
+  ),
   financeThanks: finance('なるほど、助かります！'),
   siteGreeting: support('すみません、また1件お願いします🙏'),
   siteAsked: support(
