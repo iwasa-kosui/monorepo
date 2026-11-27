@@ -254,7 +254,7 @@ const focus = (n: number): Record<string, string> =>
           </table>
         </div>
         <div class="link link-h" data-link="apply">
-          <span class="label">先頭から順に適用する</span>
+          <span class="label keep-words">先頭から順に<wbr />適用する</span>
           <span class="arrow">
             <Fragment set:html={midArrow} />
             {
@@ -268,10 +268,15 @@ const focus = (n: number): Record<string, string> =>
           <div class="cap">現在の状態</div>
           <div class="values">
             <span class="chip mono" {...lit('first')}>reserved</span>
-            <span class="to" aria-hidden="true">→</span>
-            <span class="chip mono" {...lit('second')}>checked_in</span>
-            <span class="to" aria-hidden="true">→</span>
-            <span class="chip chip-now mono" {...lit('third')}>cancelled</span>
+            <span class="step">
+              <span class="to" aria-hidden="true">→</span>
+              <span class="chip mono" {...lit('second')}>checked_in</span>
+            </span>
+            <span class="step">
+              <span class="to" aria-hidden="true">→</span>
+              <span class="chip chip-now mono" {...lit('third')}
+              >cancelled</span>
+            </span>
           </div>
         </div>
       </div>
@@ -496,6 +501,9 @@ const focus = (n: number): Record<string, string> =>
 .label {
   min-width: 0;
 }
+.keep-words {
+  word-break: keep-all;
+}
 
 .tbl {
   --base: var(--face);
@@ -567,6 +575,12 @@ const focus = (n: number): Record<string, string> =>
 .chip-now {
   --base: var(--role-highlight-soft);
   font-weight: var(--weight-bold);
+}
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
 }
 .to {
   color: var(--role-muted);
