@@ -35,6 +35,17 @@ const COLORS = {
 
 type FontWeight = 500 | 700;
 
+const WIDTH = 1200;
+const HEIGHT = 630;
+
+/**
+ * はてなブックマークは og:image の中央を正方形に切り抜いて表示する。
+ * 文字はすべて、中央の正方形（1 辺は画像の高さ）から余白を引いた幅に収める。
+ */
+const SQUARE_PADDING = 32;
+const TEXT_LEFT = (WIDTH - HEIGHT) / 2 + SQUARE_PADDING;
+const TEXT_WIDTH = HEIGHT - SQUARE_PADDING * 2;
+
 const FONT_FILE_NAMES: Record<FontWeight, string> = {
   500: 'NotoSansJP-Medium.ttf',
   700: 'NotoSansJP-Bold.ttf',
@@ -136,8 +147,8 @@ const createFrame = (shore: string, children: SatoriNode[]): SatoriNode => ({
   type: 'div',
   props: {
     style: {
-      width: '1200px',
-      height: '630px',
+      width: `${WIDTH}px`,
+      height: `${HEIGHT}px`,
       position: 'relative',
       display: 'flex',
       backgroundColor: COLORS.sand,
@@ -148,9 +159,9 @@ const createFrame = (shore: string, children: SatoriNode[]): SatoriNode => ({
         type: 'img',
         props: {
           src: shore,
-          width: 1200,
-          height: 630,
-          style: { position: 'absolute', top: 0, left: 0, width: '1200px', height: '630px' },
+          width: WIDTH,
+          height: HEIGHT,
+          style: { position: 'absolute', top: 0, left: 0, width: `${WIDTH}px`, height: `${HEIGHT}px` },
         },
       },
       ...children,
@@ -164,7 +175,7 @@ const createSiteName = (): SatoriNode => ({
     style: {
       position: 'absolute',
       top: '60px',
-      left: '64px',
+      left: `${TEXT_LEFT}px`,
       display: 'flex',
       fontSize: '28px',
       fontWeight: 500,
@@ -225,9 +236,9 @@ const createBodyBlock = (children: SatoriNode[]): SatoriNode => ({
   props: {
     style: {
       position: 'absolute',
-      left: '64px',
+      left: `${TEXT_LEFT}px`,
       bottom: '64px',
-      width: '620px',
+      width: `${TEXT_WIDTH}px`,
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'flex-start',
@@ -240,7 +251,7 @@ const budouxParser = loadDefaultJapaneseParser();
 const graphemeSegmenter = new Intl.Segmenter('ja', { granularity: 'grapheme' });
 const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
 const WORD_JOINER = String.fromCharCode(0x2060);
-const TITLE_BLOCK_WIDTH = 620;
+const TITLE_BLOCK_WIDTH = TEXT_WIDTH;
 const TITLE_LETTER_SPACING = 0.01;
 const LEADING_PUNCTUATION = /^[:;,.!?、。，．：；！？)）」』】]*\s*/;
 
@@ -414,8 +425,8 @@ type OgFont = { data: ArrayBuffer; weight: FontWeight };
 
 const generateImage = async (element: SatoriNode, fonts: OgFont[]): Promise<Buffer> => {
   const svg = await satori(element, {
-    width: 1200,
-    height: 630,
+    width: WIDTH,
+    height: HEIGHT,
     fonts: fonts.map(({ data, weight }) => ({
       name: 'Noto Sans JP',
       data,
@@ -432,7 +443,7 @@ const generateImage = async (element: SatoriNode, fonts: OgFont[]): Promise<Buff
 
   const resvg = new Resvg(svg, {
     background: 'rgba(0, 0, 0, 0)',
-    fitTo: { mode: 'width', value: 1200 },
+    fitTo: { mode: 'width', value: WIDTH },
   });
 
   const pngData = resvg.render();
