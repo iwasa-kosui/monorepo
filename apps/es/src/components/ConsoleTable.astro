@@ -1,0 +1,39 @@
+---
+interface Props {
+  head: string[];
+  rows: string[][];
+}
+
+const { head, rows } = Astro.props;
+---
+
+<div class="playground-table-scroll">
+  <table class="playground-console-table">
+    <thead>
+      <tr>{head.map((title) => <th>{title}</th>)}</tr>
+    </thead>
+    <tbody>
+      {rows.map((row) => <tr>{row.map((cell) => <td>{cell}</td>)}</tr>)}
+    </tbody>
+  </table>
+</div>
+
+<style>
+.playground-table-scroll {
+  /* 親の details が flex の子で min-width: auto のため、表の幅で文書が広がらないようにする */
+  contain: inline-size;
+  width: 100%;
+}
+.playground-table-scroll .playground-console-table {
+  background: var(--role-ground);
+  color: var(--role-ink);
+}
+.playground-table-scroll .playground-console-table th,
+.playground-table-scroll .playground-console-table td {
+  background: transparent;
+  color: inherit;
+}
+.playground-table-scroll .playground-console-table th {
+  background: var(--role-surface);
+}
+</style>
