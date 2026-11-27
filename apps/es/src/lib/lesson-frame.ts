@@ -6,6 +6,12 @@ export type PageGroup<T> = {
   readonly hasCurrent: boolean;
 };
 
+export type OverallPosition<T> = {
+  readonly page: T;
+  readonly number: number;
+  readonly total: number;
+};
+
 const routeOf = (index: number, current: number): PageRoute =>
   index === current ? 'current' : index < current ? 'past' : 'future';
 
@@ -27,4 +33,14 @@ export const groupPages = <T extends { readonly chapter: string }>(
     ...group,
     hasCurrent: group.members.some((member) => member.route === 'current'),
   }));
+};
+
+export const overallPosition = <T extends { readonly chapter: string; readonly number: number }>(
+  pages: readonly T[],
+  chapter: string,
+  number: number,
+): OverallPosition<T> | undefined => {
+  const index = pages.findIndex((page) => page.chapter === chapter && page.number === number);
+  const page = pages[index];
+  return page === undefined ? undefined : { page, number: index + 1, total: pages.length };
 };
