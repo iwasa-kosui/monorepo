@@ -99,6 +99,9 @@ body:not(.chapter-page):has(.top-page) .content {
 .content figure.quote blockquote p {
   margin: 0;
 }
+.content figure.quote blockquote p + p {
+  margin-top: var(--space-2);
+}
 .content figure.quote figcaption {
   margin-top: var(--space-2);
   color: var(--role-muted);
