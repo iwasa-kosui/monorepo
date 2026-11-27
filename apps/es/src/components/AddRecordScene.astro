@@ -6,6 +6,12 @@ import '../playground/workbench.css';
 import { blankLabelsOf, blankValuesOf, insertTemplates } from '../lib/extract';
 import { insertTemplateOf, lessonFile, snapshotFiles } from '../lib/snapshots';
 import { agentLimits } from '../playground/agent-protocol';
+import {
+  cancelReasons,
+  defaultReason,
+  operatorName,
+  targetVisitId,
+} from '../playground/cancel-form';
 import { sceneSteps } from '../playground/scene-steps';
 
 interface Props {
@@ -32,6 +38,7 @@ const config = JSON.stringify({
     ...project,
     ...lessonFile('play-cancel.ts'),
     ...lessonFile('play-initial.ts'),
+    ...lessonFile('play-input.ts'),
   },
   project: Object.keys(project),
   initial: visitsOf(scene.snapshot),
@@ -75,9 +82,6 @@ const blanks = blankLabelsOf(template).map((
     </div>
     <div class="play-editor" data-role="editor"></div>
     <div class="play-actions">
-      <button type="button" class="btn btn--soft" data-role="run" disabled>
-        ポチの来院をキャンセルする
-      </button>
       <button type="button" class="btn btn--soft" data-role="template" disabled>
         {
           step === 1
@@ -93,77 +97,18 @@ const blanks = blankLabelsOf(template).map((
           )
         }
       </button>
-    </div>
-    <div class="play-message" data-role="message" aria-live="polite" hidden>
-    </div>
-  </section>
-  <section class="play-col play-result" aria-label="実行結果">
-    <div class="play-result-head">
       <button
         type="button"
-        class="btn btn--text"
+        class="btn btn--text play-hints-open"
         data-role="hints-open"
         aria-haspopup="dialog"
       >
         ヒントと解答
       </button>
-      <div class="play-status" data-role="status">
-        <span data-role="status-text" role="status"
-        >実行環境を読み込んでいます</span>
-        <button type="button" class="btn btn--soft" data-role="retry" hidden>
-          もう一度読み込む
-        </button>
-      </div>
     </div>
-    <section class="play-card play-inquiry" aria-labelledby="inquiry-title">
-      <div class="play-inquiry-head">
-        <span class="note">問い合わせ</span>
-        <span class="note play-step-label">{scene.label}</span>
-      </div>
-      <h2 id="inquiry-title">
-        この来院がキャンセルになっているのはなぜですか。
-      </h2>
-      <dl class="kv play-answer" aria-label="問い合わせへの答え">
-        {
-          scene.answers.map((
-            { key, label },
-          ) => (
-            <div data-answer={key}>
-              <dt>{label}</dt>
-              <dd data-role="answer-value">まだ実行していません</dd>
-            </div>
-          ))
-        }
-      </dl>
-    </section>
-    <section class="play-card" aria-labelledby="visits-title">
-      <header class="play-card-head">
-        <h2 id="visits-title"><code>visits</code></h2>
-        <span class="note" data-role="visits-badge" data-phase="before"
-        >実行前</span>
-      </header>
-      <table class="play-table" aria-label="visits テーブルの行">
-        <thead>
-          <tr>
-            <th>id</th>
-            <th>pet_name</th>
-            <th>status</th>
-          </tr>
-        </thead>
-        <tbody data-role="visits-body"></tbody>
-      </table>
-      <p class="note" data-role="visits-caption"></p>
-    </section>
-    <section class="play-card" aria-labelledby="events-title">
-      <header class="play-card-head">
-        <h2 id="events-title"><code>{scene.table}</code></h2>
-        <span class="note" data-role="events-badge" data-phase="before"
-        >実行前</span>
-      </header>
-      <div class="play-events" data-role="events"></div>
-      <p class="note" data-role="events-caption"></p>
-    </section>
-    <section class="play-card play-tests" aria-labelledby="tests-title">
+    <div class="play-message" data-role="message" aria-live="polite" hidden>
+    </div>
+    <section class="play-tests" aria-labelledby="tests-title">
       <div class="play-tests-row">
         <h2 id="tests-title">テスト</h2>
         <p class="play-summary" data-role="summary">まだ実行していません</p>
@@ -176,6 +121,166 @@ const blanks = blankLabelsOf(template).map((
       </p>
       <ul class="play-failed" data-role="failed" aria-label="失敗したテスト">
       </ul>
+    </section>
+  </section>
+  <section class="play-col play-side" aria-label="実行結果">
+    <section class="play-app" aria-label="予約管理アプリ">
+      <div class="play-window">
+        <div class="play-window-bar">
+          <span class="play-url">http://localhost:3000/visits/{
+              targetVisitId
+            }</span>
+          <div class="play-status" data-role="status">
+            <span data-role="status-text" role="status"
+            >実行環境を読み込んでいます</span>
+            <button
+              type="button"
+              class="btn btn--soft"
+              data-role="retry"
+              hidden
+            >
+              もう一度読み込む
+            </button>
+          </div>
+        </div>
+        <div class="play-app-body">
+          <header class="play-app-head">
+            <span class="play-app-brand">
+              <svg
+                class="play-app-mark"
+                viewBox="0 0 24 24"
+                width="24"
+                height="24"
+                fill="currentColor"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <ellipse cx="12" cy="16.5" rx="5.5" ry="4.5"></ellipse>
+                <ellipse cx="4.5" cy="11" rx="2.2" ry="2.8"></ellipse>
+                <ellipse cx="9" cy="5.8" rx="2.2" ry="2.9"></ellipse>
+                <ellipse cx="15" cy="5.8" rx="2.2" ry="2.9"></ellipse>
+                <ellipse cx="19.5" cy="11" rx="2.2" ry="2.8"></ellipse>
+              </svg>
+              clinic 予約管理
+            </span>
+            <span class="play-app-user">
+              <span class="play-avatar" aria-hidden="true">受</span>
+              {operatorName}
+            </span>
+          </header>
+          <div class="play-app-main">
+            <section
+              class="play-visits-pane"
+              aria-labelledby="visits-app-title"
+            >
+              <h2 class="play-app-title" id="visits-app-title">来院の予約</h2>
+              <table class="play-visit-list" aria-label="来院の一覧">
+                <thead>
+                  <tr>
+                    <th scope="col">ペット</th>
+                    <th scope="col">来院 ID</th>
+                    <th scope="col">状態</th>
+                  </tr>
+                </thead>
+                <tbody data-role="app-visits"></tbody>
+              </table>
+              <p class="play-banner" data-role="app-banner" role="status"></p>
+            </section>
+            <section
+              class="play-visit-detail"
+              aria-labelledby="visit-detail-title"
+            >
+              <h3 id="visit-detail-title" data-role="app-detail-title">
+                ポチの来院
+              </h3>
+              <div class="play-field">
+                <label for="cancel-reason">キャンセルの理由</label>
+                <select id="cancel-reason" data-role="cancel-reason">
+                  {
+                    cancelReasons.map((
+                      reason,
+                    ) => (
+                      <option
+                        value={reason}
+                        selected={reason === defaultReason}
+                      >
+                        {reason}
+                      </option>
+                    ))
+                  }
+                </select>
+              </div>
+              <div class="play-field play-field-row">
+                <span class="play-field-label">操作する人</span>
+                <p>{operatorName}</p>
+              </div>
+              <button
+                type="button"
+                class="btn play-danger"
+                data-role="run"
+                disabled
+              >
+                ポチの来院をキャンセルする
+              </button>
+            </section>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        ローカル環境です。押すたびに、DB
+        を最初の状態に戻してからキャンセルします。
+      </p>
+    </section>
+    <section class="play-db" aria-label="DB クライアント">
+      <div class="play-db-conn">
+        <span class="play-db-dot" aria-hidden="true"></span>
+        <span class="play-db-name">clinic_local（read-write）</span>
+        <span class="play-db-kind">SQLite</span>
+      </div>
+      <section
+        class="play-grid play-grid-visits"
+        aria-labelledby="visits-title"
+      >
+        <header class="play-grid-head">
+          <span class="play-tbl-icon" aria-hidden="true"></span>
+          <h2 id="visits-title"><code>visits</code></h2>
+          <span class="note" data-role="visits-badge" data-phase="before"
+          >実行前</span>
+          <span class="note" data-role="visits-count" aria-live="polite"></span>
+        </header>
+        <div class="play-grid-scroll" data-role="visits"></div>
+      </section>
+      <section
+        class="play-grid play-grid-events"
+        aria-labelledby="events-title"
+      >
+        <header class="play-grid-head">
+          <span class="play-tbl-icon" aria-hidden="true"></span>
+          <h2 id="events-title"><code>{scene.table}</code></h2>
+          <span class="note" data-role="events-badge" data-phase="before"
+          >実行前</span>
+          <span class="note" data-role="events-count" aria-live="polite"></span>
+        </header>
+        <div class="play-grid-scroll" data-role="events"></div>
+      </section>
+    </section>
+    <section class="play-inquiry" aria-labelledby="inquiry-title">
+      <span class="note">問い合わせ</span>
+      <h2 id="inquiry-title">
+        この来院がキャンセルになっているのはなぜですか。
+      </h2>
+      <dl class="play-answer" aria-label="問い合わせへの答え">
+        {
+          scene.answers.map((
+            { key, label },
+          ) => (
+            <div data-answer={key}>
+              <dt class="play-chip">{label}</dt>
+              <dd data-role="answer-value">まだ実行していません</dd>
+            </div>
+          ))
+        }
+      </dl>
     </section>
   </section>
   <dialog
