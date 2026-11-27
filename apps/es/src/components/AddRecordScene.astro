@@ -264,24 +264,26 @@ const blanks = blankLabelsOf(template).map((
         <div class="play-grid-scroll" data-role="events"></div>
       </section>
     </section>
-    <section class="play-inquiry" aria-labelledby="inquiry-title">
-      <span class="note">問い合わせ</span>
-      <h2 id="inquiry-title">
-        この来院がキャンセルになっているのはなぜですか。
-      </h2>
-      <dl class="play-answer" aria-label="問い合わせへの答え">
-        {
-          scene.answers.map((
-            { key, label },
-          ) => (
-            <div data-answer={key}>
-              <dt class="play-chip">{label}</dt>
-              <dd data-role="answer-value">まだ実行していません</dd>
-            </div>
-          ))
-        }
-      </dl>
-    </section>
+    <div class="play-inquiry-dock">
+      <section class="play-inquiry" aria-labelledby="inquiry-title">
+        <span class="note">問い合わせ</span>
+        <h2 id="inquiry-title">
+          この来院がキャンセルになっているのはなぜですか。
+        </h2>
+        <dl class="play-answer" aria-label="問い合わせへの答え">
+          {
+            scene.answers.map((
+              { key, label },
+            ) => (
+              <div data-answer={key}>
+                <dt class="play-chip">{label}</dt>
+                <dd data-role="answer-value">まだ実行していません</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </section>
+    </div>
   </section>
   <dialog
     class="play-dialog"
