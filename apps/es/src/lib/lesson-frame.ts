@@ -6,7 +6,11 @@ export type PageGroup<T> = {
   readonly hasCurrent: boolean;
 };
 
-export type OverallPosition = { readonly number: number; readonly total: number };
+export type OverallPosition<T> = {
+  readonly page: T;
+  readonly number: number;
+  readonly total: number;
+};
 
 const routeOf = (index: number, current: number): PageRoute =>
   index === current ? 'current' : index < current ? 'past' : 'future';
@@ -35,7 +39,8 @@ export const overallPosition = <T extends { readonly chapter: string; readonly n
   pages: readonly T[],
   chapter: string,
   number: number,
-): OverallPosition | undefined => {
+): OverallPosition<T> | undefined => {
   const index = pages.findIndex((page) => page.chapter === chapter && page.number === number);
-  return index === -1 ? undefined : { number: index + 1, total: pages.length };
+  const page = pages[index];
+  return page === undefined ? undefined : { page, number: index + 1, total: pages.length };
 };

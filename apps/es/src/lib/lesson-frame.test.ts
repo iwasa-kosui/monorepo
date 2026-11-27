@@ -48,14 +48,18 @@ describe('overallPosition', () => {
   ];
 
   it('章をまたいだ通し番号と総数を返す', () => {
-    expect(overallPosition(numbered, 'chapter-1', 2)).toEqual({ number: 4, total: 5 });
+    expect(overallPosition(numbered, 'chapter-1', 2)).toEqual({ page: numbered[3], number: 4, total: 5 });
+  });
+
+  it('該当するページの要素をそのまま返す', () => {
+    expect(overallPosition(numbered, 'chapter-1', 2)?.page).toBe(numbered[3]);
   });
 
   it('ページを1つ足すと、後ろのページの通し番号と総数が1ずつ増える', () => {
     const extended = [...numbered.slice(0, 2), { chapter: 'intro', number: 3 }, ...numbered.slice(2)];
     const before = overallPosition(numbered, 'summary', 1);
     const after = overallPosition(extended, 'summary', 1);
-    expect(after).toEqual({ number: before!.number + 1, total: before!.total + 1 });
+    expect(after).toMatchObject({ number: before!.number + 1, total: before!.total + 1 });
   });
 
   it('該当するページが無いと undefined を返す', () => {

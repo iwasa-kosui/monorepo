@@ -25,7 +25,6 @@ interface Group {
 interface Props {
   title: string;
   segments: readonly Segment[];
-  progressLabel: string;
   estimate: string;
   limit: string;
   overallNumber: number;
@@ -38,7 +37,6 @@ interface Props {
 const {
   title,
   segments,
-  progressLabel,
   estimate,
   limit,
   overallNumber,
@@ -51,7 +49,7 @@ const {
 
 <header class="lesson-bar">
   <h1 class="lesson-bar__title">{title}</h1>
-  <div class="lesson-bar__progress" role="img" aria-label={progressLabel}>
+  <div class="lesson-bar__progress" aria-hidden="true">
     {
       segments.map((segment) => (
         <span

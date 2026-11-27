@@ -38,10 +38,7 @@ if (overall === undefined) {
   throw new Error(`ページが見つかりません: ${chapter} ${number}`);
 }
 const index = overall.number - 1;
-const page = pages[index];
-if (page === undefined) {
-  throw new Error(`ページが見つかりません: ${chapter} ${number}`);
-}
+const page = overall.page;
 const rows = withTimeRanges(schedule);
 const rowOf = (id: string) => {
   const row = rows.find((candidate) => candidate.id === id);
@@ -115,7 +112,6 @@ const nextHref = hrefOf(pages[index + 1]);
     <LessonBar
       title={row.title}
       segments={segments}
-      progressLabel={`全体 ${overall.number}/${overall.total}`}
       estimate={elapsed}
       limit={limit}
       overallNumber={overall.number}

@@ -310,6 +310,25 @@
 }
 
 @media (max-width: 767px) {
+  .lesson-main {
+    --main-pad-top: var(--space-4);
+    --main-pad-x: var(--space-4);
+    padding: var(--space-4);
+  }
+  .lesson-frame--immersive .lesson-main {
+    --main-pad-top: var(--space-4);
+    --main-pad-x: var(--space-4);
+  }
+}
+
+@media (max-width: 479px) {
+  .lesson-bar {
+    column-gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
+}
+
+@media (max-width: 359px) {
   .lesson-bar__count {
     position: relative;
   }
@@ -323,15 +342,6 @@
     clip-path: inset(50%);
     border: 0;
     white-space: nowrap;
-  }
-  .lesson-main {
-    --main-pad-top: var(--space-4);
-    --main-pad-x: var(--space-4);
-    padding: var(--space-4);
-  }
-  .lesson-frame--immersive .lesson-main {
-    --main-pad-top: var(--space-4);
-    --main-pad-x: var(--space-4);
   }
 }
 
