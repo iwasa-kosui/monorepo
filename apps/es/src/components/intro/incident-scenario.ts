@@ -7,7 +7,7 @@ const cancelTamaSql = `UPDATE visits SET status = 'cancelled' WHERE id = 'visit-
 
 export const earlierLogs: readonly EarlierLog[] = [
   {
-    time: '2026-11-06T09:12:04.118Z',
+    time: '2026-11-03T09:12:04.118Z',
     level: 'INFO',
     method: 'POST',
     path: '/visits',
@@ -15,7 +15,7 @@ export const earlierLogs: readonly EarlierLog[] = [
     duration: 15,
   },
   {
-    time: '2026-11-06T09:12:04.170Z',
+    time: '2026-11-03T09:12:04.170Z',
     level: 'INFO',
     method: 'GET',
     path: '/visits/visit-pochi',

@@ -120,6 +120,7 @@ const railActors = railActorIds.flatMap((id) => {
             <time data-time></time>
           </p>
           <p class="post-text" data-text></p>
+          <ul class="post-list" data-list hidden></ul>
         </div>
       </li>
     </template>
@@ -468,6 +469,13 @@ const railActors = railActorIds.flatMap((id) => {
   line-height: var(--leading-normal);
   white-space: pre-line;
 }
+:global(.scene[data-scenario]) .post-list {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  list-style: disc;
+}
 
 :global(.scene[data-scenario]) .composer {
   flex: none;
@@ -491,10 +499,6 @@ const railActors = railActorIds.flatMap((id) => {
 :global(.scene[data-scenario]) .compose-slot {
   font-size: var(--text-note);
   line-height: var(--leading-normal);
-}
-:global(.scene[data-scenario]) .compose-slot :global(ul) {
-  margin: 0 0 var(--space-2);
-  padding-left: var(--space-5);
 }
 :global(.scene[data-scenario]) .compose-slot :global(label) {
   font-size: var(--text-note);

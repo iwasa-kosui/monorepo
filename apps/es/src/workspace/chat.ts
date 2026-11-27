@@ -147,6 +147,17 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     fillText(copy, '[data-name]', actor?.name ?? post.actor);
     fillText(copy, '[data-time]', post.time ?? minuteOf(scenario.startedAt + atMs));
     fillText(copy, '[data-text]', post.text);
+    const list = copy.querySelector<HTMLElement>('[data-list]');
+    if (list !== null && post.list !== undefined && post.list.length > 0) {
+      list.hidden = false;
+      list.replaceChildren(
+        ...post.list.map((item) => {
+          const row = document.createElement('li');
+          row.textContent = item;
+          return row;
+        }),
+      );
+    }
     entries.push({ post, element: copy });
     if (shown) {
       feed.append(copy);

@@ -44,6 +44,7 @@ export type Actor = {
 export type Post = {
   readonly actor: string;
   readonly text: string;
+  readonly list?: readonly string[];
   readonly time?: string;
   readonly channel?: string;
 };
