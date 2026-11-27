@@ -64,7 +64,6 @@
     "generate:og": "npx tsx scripts/generate-og-images.ts",
     "generate:og:talks": "node scripts/generate-og-images-talks.mjs",
     "generate:og:shore": "npx tsx scripts/capture-og-shore.ts",
-    "generate:og:shore:hatena": "npx tsx scripts/capture-og-shore.ts --time 28.4 --frame 965,215,240 --out scripts/og-assets/shore-hatena.png",
     "generate:talks": "npx tsx scripts/generate-talks.ts",
     "fetch:ogp": "node scripts/fetch-ogp.mjs",
     "prebuild": "pnpm generate:og && pnpm generate:og:talks && pnpm fetch:ogp && pnpm generate:talks",

@@ -34,9 +34,9 @@ const out = path.resolve(values.out ?? '');
 const readLightPalette = (): string => {
   const css = fs.readFileSync(globalCss, 'utf8');
   const background = css.match(/--color-bg:\s*([^;]+);/)?.[1];
-  const palette = css.match(/:root\s*\{([^}]*--shore-sand:[^}]*)\}/)?.[1];
-  if (!background || !palette) throw new Error(`${globalCss} から海辺の配色を読めません`);
-  return `:root { --color-bg: ${background}; ${palette} }`;
+  const palette = css.match(/\.shore-palette\s*\{([^}]*)\}/)?.[1];
+  if (!background || !palette) throw new Error(`${globalCss} から .shore-palette を読めません`);
+  return `:root { --color-bg: ${background}; } .shore-palette { ${palette} }`;
 };
 
 const bundle = async (): Promise<string> => {

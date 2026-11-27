@@ -1,5 +1,0 @@
-{
-  "version": 1,
-  "include": ["/og/*"],
-  "exclude": ["/og/talks/*", "/og/hatena/*"]
-}
