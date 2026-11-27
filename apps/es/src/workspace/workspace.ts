@@ -483,14 +483,16 @@ export const mountWorkspace = (root: HTMLElement): void => {
         const typingFrom = Math.max(previous, due - typingLeadMs);
         previous = due;
         const last = index === reply.followUps.length - 1;
-        const typing = (): void => chat.setTyping({ actor: item.actor });
+        const channel = item.channel === undefined ? {} : { channel: item.channel };
+        const typing = (): void => chat.setTyping({ actor: item.actor, ...channel });
         if (!reducedMotion() && typingFrom <= at) typing();
         return [
           ...(!reducedMotion() && typingFrom > at ? [{ at: typingFrom, run: typing }] : []),
           {
             at: due,
             run: () => {
-              chat.addPost({ actor: item.actor, text: item.text }, due);
+              chat.addPost({ actor: item.actor, text: item.text, ...channel }, due);
+              if (item.addTab !== undefined) applyTab(item.addTab, 'add');
               if (last) scheduler.finish(due);
             },
           },

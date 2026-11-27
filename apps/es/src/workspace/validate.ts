@@ -45,7 +45,12 @@ export const scenarioProblems = (scenario: WorkspaceScenario): string[] => {
     checkActor(post.actor, `history[${index}]`);
     checkChannel(post, `history[${index}]`);
   });
-  scenario.reply?.followUps.forEach((item, index) => checkActor(item.actor, `reply.followUps[${index}]`));
+  scenario.reply?.followUps.forEach((item, index) => {
+    const where = `reply.followUps[${index}]`;
+    checkActor(item.actor, where);
+    checkChannel(item, where);
+    if (item.addTab !== undefined) checkTab(item.addTab, where);
+  });
 
   scenario.timeline.forEach((event, index) => {
     const where = `timeline[${index}]`;

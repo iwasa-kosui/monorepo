@@ -41,6 +41,22 @@ describe('筋書きの検査', () => {
     expect(problems).toContain('timeline[0] のチャンネル # elsewhere');
   });
 
+  it('chat.channels に無いチャンネルを指す返信の後の発言を見つける', () => {
+    const broken: WorkspaceScenario = {
+      ...incidentScenario,
+      reply: { lines: [], followUps: [{ actor: 'support', delay: 1, text: 'x', channel: '# nowhere' }] },
+    };
+    expect(scenarioProblems(broken).join('\n')).toContain('reply.followUps[0] のチャンネル # nowhere');
+  });
+
+  it('存在しないタブを足す返信の後の発言を見つける', () => {
+    const broken: WorkspaceScenario = {
+      ...incidentScenario,
+      reply: { lines: [], followUps: [{ actor: 'support', delay: 1, text: 'x', addTab: 'missing' }] },
+    };
+    expect(scenarioProblems(broken).join('\n')).toContain('reply.followUps[0] のタブ missing がありません');
+  });
+
   it('at 指定の発言に付けた delay を見つける', () => {
     const broken: WorkspaceScenario = {
       ...incidentScenario,

@@ -84,7 +84,7 @@ const spokenOf = (scenario: WorkspaceScenario): Spoken[] => [
     where: `reply.followUps[${index}]`,
     actor: followUp.actor,
     text: followUp.text,
-    channel: scenario.chat.channel,
+    channel: followUp.channel ?? scenario.chat.channel,
   })),
 ];
 
@@ -146,6 +146,9 @@ const financeAsked = '集計だと3件なんですが、一覧で数えると2�
 const financeAnswer =
   '集計の3件が正しいと思います。ただ、業務イベントで内訳まで確かめられるのは2件で、残りの1件は業務イベントを入れる前のキャンセルなので確かめられません。業務イベントから正しい件数を出すには、集計に入るキャンセルがすべて業務イベントとして残っている必要があります';
 const financeThanks = 'なるほど、助かります！';
+const migrateOldData =
+  '古いデータについても、VisitMigrated のようなイベントを作って、イベントテーブルに取り込んでおいた方がいいですよ';
+const migrationRecord = 'ADR 3 にまとめました。ざっと読んでもらえると助かります';
 const siteGreeting = 'すみません、また1件お願いします🙏';
 const siteAsked =
   'コタロウの飼い主さんから、予約サイトではキャンセルになってるのに、こっちでは診察済みになってるって連絡があって…どっちが正しいですか？';
@@ -194,6 +197,8 @@ const chapter4Texts = [
   financeAsked,
   financeAnswer,
   financeThanks,
+  migrateOldData,
+  migrationRecord,
   siteGreeting,
   siteAsked,
   siteAnswer,
@@ -419,9 +424,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
     for (const id of ['chapter-3/01', 'chapter-3/04', 'chapter-4/03']) {
       expect(followUpDelays(id), id).toEqual([0.6]);
     }
-    for (const id of ['chapter-4/02', 'chapter-4/04']) {
-      expect(followUpDelays(id), id).toEqual([1.2]);
-    }
+    expect(followUpDelays('chapter-4/04')).toEqual([1.2]);
+    expect(followUpDelays('chapter-4/02')).toEqual([1.2, 4.5, 1.0]);
   });
 
   it('テストが通った後のカスタマーサポートの発言は 0.6 秒で届く', () => {
@@ -740,12 +744,14 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ]],
         opened: [['finance', financeGreeting], ['finance', financeAsked]],
         answer: financeAnswer,
-        follow: ['finance', financeThanks],
+        follows: [['finance', financeThanks], ['techlead', migrateOldData], ['techlead', migrationRecord]],
         tabs: [
           'memo:doc:相談1: 集計の件数が合わない',
           'editor:editor:visits.ts — clinic-api',
           'console:console:DB Console',
+          'adr:doc:ADR 3: 業務イベントを導入する前のデータを、移行用のイベントとして取り込む',
         ],
+        waiting: [],
         storageId: 'chapter-4-summary-table',
         exercise: 'chapter-4-summary-table-done',
         entry: 'why-this-count.ts',
@@ -761,7 +767,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ],
         opened: [['support', siteGreeting], ['support', siteAsked]],
         answer: siteAnswer,
-        follow: ['support', siteThanks],
+        follows: [['support', siteThanks]],
         tabs: [
           'memo:doc:相談2: 予約サイトのキャンセルが反映されたか分からない',
           'editor:editor:visits.ts — clinic-api',
@@ -771,6 +777,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         exercise: 'chapter-4-external-sync-done',
         entry: 'what-was-imported.ts',
         sqlHead: 'SELECT\n  received.target_id AS visit_id,',
+        waiting: [],
       },
       {
         id: 'chapter-4/04',
@@ -782,7 +789,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         ],
         opened: [['it', auditGreeting], ['it', auditAsked]],
         answer: auditAnswer,
-        follow: ['it', auditThanks],
+        follows: [['it', auditThanks]],
         tabs: [
           'memo:doc:相談3: 監査ログに理由がない',
           'editor:editor:visits.ts — clinic-api',
@@ -792,6 +799,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         exercise: 'chapter-4-audit-log-done',
         entry: 'why-changed.ts',
         sqlHead: 'SELECT\n  a.id AS audit_log_id,',
+        waiting: [],
       },
     ] as const;
 
@@ -806,8 +814,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
         expect(scenario.chat.buttons.map((button) => [button.name, button.label])).toEqual([['reply', '返信する']]);
         expect(scenario.gates?.reply.requires.map((requirement) => requirement.signal)).toEqual(['code:run']);
         expect(scenario.reply?.lines).toEqual([{ text: item.answer }]);
-        expect(scenario.reply?.followUps.map((followUp) => [followUp.actor, followUp.text])).toEqual([item.follow]);
-        expect(scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]))).toEqual([]);
+        expect(scenario.reply?.followUps.map((followUp) => [followUp.actor, followUp.text])).toEqual(item.follows);
+        expect(scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]))).toEqual(item.waiting);
       },
     );
 
@@ -827,6 +835,24 @@ describe('第1章から第4章とまとめの筋書き', () => {
         expect(projectFilesOf(editor.config.snapshot)).toEqual(['db.ts', 'visits.test.ts', 'visits.ts', item.entry]);
       },
     );
+
+    it('chapter-4/02 は、ADR 3 にまとめたことを知らせる発言と同時に、ADR 3 のタブを足す', () => {
+      const scenario = lessonScenarios['chapter-4/02'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      const added = (scenario.reply?.followUps ?? []).map((followUp) => [followUp.text, followUp.addTab]);
+      expect(added).toEqual([[financeThanks, undefined], [migrateOldData, undefined], [migrationRecord, 'adr']]);
+      expect(scenario.tabs.find((tab) => tab.key === 'adr')?.initial).toBe(false);
+    });
+
+    it('chapter-4/02 の返信の後のテックリードの発言は、「# dev」に届く', () => {
+      const scenario = lessonScenarios['chapter-4/02'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      const channels = (scenario.reply?.followUps ?? []).map((followUp) => [followUp.text, followUp.channel]);
+      expect(channels).toEqual([[financeThanks, undefined], [migrateOldData, devChannel], [
+        migrationRecord,
+        devChannel,
+      ]]);
+    });
 
     it('5 ページ目は、情シスとのやり取りを履歴に持ち、開いた時点でテックリードと kosui が 1 件ずつ投稿する', () => {
       const scenario = lessonScenarios['chapter-4/05'];

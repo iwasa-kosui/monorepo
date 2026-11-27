@@ -100,6 +100,8 @@ type Consultation = {
   readonly doc: { readonly title: string; readonly path: string };
   readonly pattern: Pattern;
   readonly thanksDelay?: number;
+  readonly laterPosts?: readonly { readonly post: Post; readonly delay: number; readonly addTab?: string }[];
+  readonly extraTabs?: readonly TabDefinition[];
 };
 
 const consultation = (options: Consultation): WorkspaceScenario =>
@@ -117,12 +119,22 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     },
     reply: {
       lines: [{ text: options.answer.text }],
-      followUps: [{ actor: options.thanks.actor, delay: options.thanksDelay ?? 1.2, text: options.thanks.text }],
+      followUps: [
+        { actor: options.thanks.actor, delay: options.thanksDelay ?? 1.2, text: options.thanks.text },
+        ...(options.laterPosts ?? []).map(({ post, delay, addTab }) => ({
+          actor: post.actor,
+          delay,
+          text: post.text,
+          ...(post.channel === undefined ? {} : { channel: post.channel }),
+          ...(addTab === undefined ? {} : { addTab }),
+        })),
+      ],
     },
     tabs: [
       docTab('memo', options.doc.title, options.doc.path),
       editorTab('editor', 'visits.ts', { snapshot: options.pattern.exercise }),
       consoleTab(options.pattern),
+      ...(options.extraTabs ?? []),
     ],
   });
 
@@ -221,6 +233,21 @@ export const chapter4SummaryTable: WorkspaceScenario = consultation({
   thanks: posts.financeThanks,
   doc: { title: '相談1: 集計の件数が合わない', path: 'consultations/summary-table' },
   pattern: summaryTable,
+  laterPosts: [
+    { post: posts.migrateOldData, delay: 4.5 },
+    { post: posts.migrationRecord, delay: 1.0, addTab: 'adr' },
+  ],
+  extraTabs: [
+    {
+      ...docTab(
+        'adr',
+        'ADR 3: 業務イベントを導入する前のデータを、移行用のイベントとして取り込む',
+        'adr/3-migrate-existing-data',
+        true,
+      ),
+      initial: false,
+    },
+  ],
 });
 
 export const chapter4ExternalSync: WorkspaceScenario = consultation({

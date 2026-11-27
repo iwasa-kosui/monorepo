@@ -277,7 +277,13 @@ export type ReplyLine = { readonly text: string; readonly after?: number };
 export type ReplyConfig = {
   readonly lines: readonly ReplyLine[];
   readonly from?: { readonly signal: SignalName; readonly formats?: Readonly<Record<string, FieldFormat>> };
-  readonly followUps: readonly { readonly actor: string; readonly delay: number; readonly text: string }[];
+  readonly followUps: readonly {
+    readonly actor: string;
+    readonly delay: number;
+    readonly text: string;
+    readonly channel?: string;
+    readonly addTab?: string;
+  }[];
 };
 
 export type AgentToolBody =
