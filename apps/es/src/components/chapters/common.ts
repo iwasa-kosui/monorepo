@@ -47,7 +47,7 @@ export const answeredThanks: Post = {
   text: 'はやっ！ありがとうございます、病院さんに伝えます🙏',
 };
 
-const lead = (text: string): Post => ({ actor: 'techlead', text });
+const lead = (text: string): Post => ({ actor: 'techlead', channel: devChannel, text });
 const presenter = (text: string): Post => ({ actor: 'kosui', channel: handsOnChannel, text });
 const support = (text: string): Post => ({ actor: 'support', text });
 const finance = (text: string): Post => ({ actor: 'finance', text });
