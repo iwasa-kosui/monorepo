@@ -94,6 +94,7 @@ type Consultation = {
   readonly thanks: Post;
   readonly doc: { readonly title: string; readonly path: string };
   readonly pattern: Pattern;
+  readonly thanksDelay?: number;
 };
 
 const consultation = (options: Consultation): WorkspaceScenario =>
@@ -111,7 +112,7 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     },
     reply: {
       lines: [{ text: options.answer.text }],
-      followUps: [{ actor: options.thanks.actor, delay: 1.2, text: options.thanks.text }],
+      followUps: [{ actor: options.thanks.actor, delay: options.thanksDelay ?? 1.2, text: options.thanks.text }],
     },
     tabs: [
       docTab('memo', options.doc.title, options.doc.path),
@@ -226,6 +227,7 @@ export const chapter4ExternalSync: WorkspaceScenario = consultation({
   thanks: posts.reminderThanks,
   doc: { title: '相談2: 外部への送信が届いたか分からない', path: 'consultations/external-sync' },
   pattern: externalSync,
+  thanksDelay: 0.6,
 });
 
 export const chapter4AuditLog: WorkspaceScenario = consultation({
