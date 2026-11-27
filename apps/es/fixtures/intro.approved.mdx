@@ -142,13 +142,9 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 ### DBバックアップの限界
 
-定期バックアップを復元すると、`visit-pochi` の `status` は `reserved` です。現在の DB では `cancelled` なので、`status` が `reserved` から `cancelled` に変わったことは分かります。
+定期バックアップを復元すると、`visit-pochi` の `status` は `reserved` です。現在の DB の `status` は `cancelled` なので、`status` が `reserved` から `cancelled` に変わったことは分かります。
 
-しかし、バックアップで戻るのは残っていた値だけです。`visits` テーブルには、キャンセルした人と理由を保存する列がありません。バックアップを復元しても、キャンセルした人と理由は分かりません。
-
-### 残していない内容
-
-誰がなぜ変えたのかは、残していなければどこにもありません。
+しかし、バックアップで戻るのは残っていた値だけです。`visits` テーブルには、キャンセルした人と理由を保存する列がありません。誰がなぜ変えたのかは、残していなければどこにもありません。
 
 </Fragment>
 </Workspace>

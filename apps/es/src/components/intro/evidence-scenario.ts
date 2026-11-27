@@ -29,7 +29,7 @@ export const accessLogLimit = lead(
 );
 
 export const backupLimit = lead(
-  'バックアップを復元すると、status が reserved だったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いんですよね',
+  'バックアップを復元すると、status が reserved だったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いです',
 );
 
 const tabs: readonly TabDefinition[] = [
@@ -83,6 +83,7 @@ const tabs: readonly TabDefinition[] = [
       updatedAt: '2026-11-06',
       updatedBy: 'テックリード',
     }),
+    initial: false,
     seen: explainSelected,
   },
 ];
@@ -95,7 +96,9 @@ export const evidenceScenario: WorkspaceScenario = {
     history: [inquiry, whyNotRecorded],
     timeline: [
       { when: 'log:target-opened', kind: 'post', post: accessLogLimit },
+      { when: 'log:target-opened', kind: 'tab', tab: 'explain', action: 'add' },
       { when: 'sql:executed', key: 'restored', kind: 'post', post: backupLimit },
+      { when: 'sql:executed', key: 'restored', kind: 'tab', tab: 'explain', action: 'add' },
     ],
     memo: {
       title: '調査メモ',
