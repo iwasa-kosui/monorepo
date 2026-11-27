@@ -203,3 +203,14 @@
   padding: 0;
   color: var(--ed-fg);
 }
+.panel[data-kind="editor"] .playground .playground-console-table {
+  background: transparent;
+  color: var(--ed-fg);
+}
+.panel[data-kind="editor"] .playground .playground-console-table th,
+.panel[data-kind="editor"] .playground .playground-console-table td {
+  border-color: var(--ed-rule);
+}
+.panel[data-kind="editor"] .playground .playground-console-table th {
+  background: var(--ed-side);
+}
