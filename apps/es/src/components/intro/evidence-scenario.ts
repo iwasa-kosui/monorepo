@@ -32,6 +32,10 @@ export const backupLimit = lead(
   'バックアップを復元すると、status が reserved だったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いです',
 );
 
+export const backupRestoreLimit = lead(
+  '状態が A → B → C のように変わっていく場合、C になった日時は分かります。B になった日時も、バックアップから復元すれば確かめられます。ただ、復元はとても時間がかかりますし、バックアップ間隔の間に起きたことは分からないです',
+);
+
 const tabs: readonly TabDefinition[] = [
   {
     key: 'logs',
@@ -98,6 +102,7 @@ export const evidenceScenario: WorkspaceScenario = {
       { when: 'log:target-opened', kind: 'post', post: accessLogLimit },
       { when: 'log:target-opened', kind: 'tab', tab: 'explain', action: 'add' },
       { when: 'sql:executed', key: 'restored', kind: 'post', post: backupLimit },
+      { when: 'sql:executed', key: 'restored', kind: 'post', post: backupRestoreLimit },
       { when: 'sql:executed', key: 'restored', kind: 'tab', tab: 'explain', action: 'add' },
     ],
     memo: {
