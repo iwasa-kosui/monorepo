@@ -3,83 +3,76 @@ wide: true
 immersive: true
 ---
 
+import CodeBlock from '../../../components/CodeBlock.astro';
 import CodePlayground from '../../../components/CodePlayground.astro';
-import { chapter4Takeaway } from '../../../components/chapters/chapter-4';
+import { chapter4AuditLog } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
+import { readFunctionsOf } from '../../../lib/snapshots';
 
 <div class="visually-hidden">
 
-## 持ち帰りの演習
+## 既存の監査ログ
 
 </div>
 
-<Workspace scenario={chapter4Takeaway}>
-<Fragment slot="summary-table">
+<Workspace scenario={chapter4AuditLog}>
+<Fragment slot="editor">
 <CodePlayground
-  exercise="chapter-4-summary-table-start"
-  editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'why-this-count.ts']}
-  testFile="visits.test.ts"
-  reveal="export const explainCancellationCount"
-  scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
-  complete={{ exercise: 'chapter-4-summary-table-done' }}
-/>
-</Fragment>
-<Fragment slot="external-sync">
-<CodePlayground
-  exercise="chapter-4-external-sync-start"
-  editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'what-was-imported.ts']}
-  testFile="visits.test.ts"
-  reveal="export const importExternalCancellation"
-  scripts={[{ file: 'what-was-imported.ts', label: 'what-was-imported.ts を実行する' }]}
-  complete={{ exercise: 'chapter-4-external-sync-done' }}
-/>
-</Fragment>
-<Fragment slot="audit-log">
-<CodePlayground
-  exercise="chapter-4-audit-log-start"
+  exercise="chapter-4-audit-log-done"
   editable={['visits.ts']}
   readonly={['db.ts', 'visits.test.ts', 'why-changed.ts']}
   testFile="visits.test.ts"
   reveal="export const cancelVisit"
   scripts={[{ file: 'why-changed.ts', label: 'why-changed.ts を実行する' }]}
-  complete={{ exercise: 'chapter-4-audit-log-done' }}
 />
 </Fragment>
-<Fragment slot="guide">
+<Fragment slot="memo">
 
-1. 選んだパターンのタブを押して、開始のコードを開きます。
-2. 「テストを実行する」を押します。
-3. 実行欄で `visits.ts` を編集して実装します。
-4. 「テストを実行する」を押します。`pass 16` と `fail 0` が出れば、実装は完了です。
-5. 確認用スクリプトのボタンを押して、問いに答えられることを確かめます。
+> この変更の業務上の理由は何か。
 
-開始の結果は、集計テーブルが `pass 11` と `fail 5`、外部システム同期と既存の監査ログが `pass 12` と `fail 4` です。
+`audit_logs` テーブルは、変更前後の値と操作者を持ちます。業務上の理由は持ちません。監査ログで足りる領域と、イベントで残す領域を分けます。
+
+`cancelVisit` は監査ログの ID を業務イベントの `payload` に入れます。`payload` は変更前後の値を持ちません。
+
+実行結果の表の1行目は、業務イベントを導入する前の変更です。2行目と3行目は、変更前後の値が同じです。担当者は `reason` で2つを見分けられます。4行目の診察の完了は業務イベントを記録しないので、`reason` が `null` です。
+
+監査ログそのものをイベントログから生成してしまう方法もあります。イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
 
 <div class="detail-row">
 
 <details>
-<summary>パターンごとの実装する内容</summary>
+<summary>読み取り関数を見る</summary>
 
-| 開始のコード | 実装する内容 | 確認用スクリプト |
-|---|---|---|
-| `chapter-4-summary-table-start` | `explainCancellationCount` と `verifyCancellationCount` | `why-this-count.ts` |
-| `chapter-4-external-sync-start` | `importExternalCancellation` の届いた内容と取り込んだ結果の記録、`findImportRecords`、`findUnappliedImports` | `what-was-imported.ts` |
-| `chapter-4-audit-log-start` | `cancelVisit` の `payload` への `auditLogId` の追加、`explainChange`、`findChangesWithoutReason` | `why-changed.ts` |
+<CodeBlock code={readFunctionsOf('chapter-4-audit-log-done', 'explainChange')} />
+
+</details>
+
+<details>
+<summary>出力例を見る</summary>
+
+```text
+┌─────────┬────────────┬────────────┬─────────────┬────────────────┬────────────────────────────┬──────────────────┬────────────────────────┐
+│ (index) │ auditLogId │ oldValue   │ newValue    │ operatedBy     │ operatedAt                 │ eventName        │ reason                 │
+├─────────┼────────────┼────────────┼─────────────┼────────────────┼────────────────────────────┼──────────────────┼────────────────────────┤
+│ 0       │ 1          │ 'reserved' │ 'cancelled' │ '受付スタッフ' │ '2026-10-15T01:20:00.000Z' │ null             │ null                   │
+│ 1       │ 2          │ 'reserved' │ 'cancelled' │ '受付スタッフ' │ '2026-11-27T17:16:45.456Z' │ 'VisitCancelled' │ '飼い主の都合'         │
+│ 2       │ 3          │ 'reserved' │ 'cancelled' │ '受付スタッフ' │ '2026-11-27T17:16:45.457Z' │ 'VisitCancelled' │ '来院前に回復したため' │
+│ 3       │ 4          │ 'reserved' │ 'completed' │ '獣医師'       │ '2026-11-27T17:16:45.457Z' │ null             │ null                   │
+└─────────┴────────────┴────────────┴─────────────┴────────────────┴────────────────────────────┴──────────────────┴────────────────────────┘
+┌─────────┬────────────┬───────────┬────────────┬─────────────┬────────────────┬────────────────────────────┐
+│ (index) │ auditLogId │ rowId     │ oldValue   │ newValue    │ operatedBy     │ operatedAt                 │
+├─────────┼────────────┼───────────┼────────────┼─────────────┼────────────────┼────────────────────────────┤
+│ 0       │ 1          │ 'visit-4' │ 'reserved' │ 'cancelled' │ '受付スタッフ' │ '2026-10-15T01:20:00.000Z' │
+│ 1       │ 4          │ 'visit-3' │ 'reserved' │ 'completed' │ '獣医師'       │ '2026-11-27T17:16:45.457Z' │
+└─────────┴────────────┴───────────┴────────────┴─────────────┴────────────────┴────────────────────────────┘
+```
 
 </details>
 
 <details>
 <summary>手元の Node で動かすとき</summary>
 
-1. 事前準備で展開したディレクトリの中にある、選んだパターンの開始のコードへ移動します。
-2. `node --test visits.test.ts` を実行します。
-3. `visits.ts` を編集して実装します。
-4. `node --test visits.test.ts` を実行します。`pass 16` と `fail 0` が出れば、実装は完了です。
-5. 確認用スクリプトを実行して、問いに答えられることを確かめます。
-
-解答は、名前の末尾が `-done` のディレクトリにあります。
+`chapter-4-audit-log-done` で `node why-changed.ts` を実行します。
 
 </details>
 

@@ -3,30 +3,70 @@ wide: true
 immersive: true
 ---
 
-import DecisionTable from '../../../components/DecisionTable.astro';
-import OwnQuestion from '../../../components/OwnQuestion.astro';
-import OwnQuestionView from '../../../components/OwnQuestionView.astro';
-import { chapter4Compare } from '../../../components/chapters/chapter-4';
+import { chapter4ExternalSyncAdr } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
 
-## 3つのパターンを表で比べて、普段の業務で運用しているシステムに近いものを1つ選ぶ
+## ADR 4 を読む
 
 </div>
 
-<Workspace scenario={chapter4Compare}>
+<Workspace scenario={chapter4ExternalSyncAdr}>
 <Fragment slot="memo">
+- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
+- 日付: 2026-11-09
+- 作成者: テックリード
 
-普段の業務で運用しているシステムに近いパターンを1つ選びます。選んだパターンの「活用するもの」と「記録しないもの」を読みます。選んだパターンは、判断表の下の入力欄に書きます。まとめの章で、この入力欄の内容を表示します。
+### 状況
 
-更新処理の行数は、`cancelVisit` と、`cancelVisit` から呼ぶ補助関数の差分です。外部システム同期では、`importExternalCancellation` と、`importExternalCancellation` から呼ぶ補助関数の差分です。読み取り関数の行数は、未実装の関数を完成させた差分です。この行数は、業務イベントの導入全体の変更量を示しません。
+飼い主は、予約サイトで来院をキャンセルできます。予約サイトは、キャンセルを予約システムへ送ります。
 
-<DecisionTable heading="比較" byAxis>
-  <OwnQuestionView />
-</DecisionTable>
+予約サイトから届いたキャンセルを、予約システムが反映できないことがあります。診察が終わった来院に、予約サイトからキャンセルが届いた場合です。予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。
 
-<OwnQuestion id="chapter-4" label="選んだパターン" showLabel rows={1} />
+この ADR は、予約サイトから届いたキャンセルの記録の方法を決定します。記録の方法は、次の3つの基準で比較しました。
+
+- 反映できなかったキャンセルも、届いたことを追えること
+- 業務のルールを変えた後に、届いた内容から取り込み結果を計算し直せること
+- 予約システムが扱うエンティティを増やさないこと
+
+### 決定
+
+予約サイトから届いたキャンセルを、`ExternalCancellationReceived` として `business_events` テーブルに追記します。`payload` は、予約サイトが送ってきた内容だけを持ちます。予約システムがどう反映したかは持ちません。
+
+続けて、取り込み結果を記録します。キャンセルできた場合は、`VisitCancelled` を記録します。キャンセルできなかった場合は、`ExternalCancellationRejected` を理由と一緒に記録します。届いた内容と取り込み結果は、同じトランザクションで記録します。
+
+事実は取り込み、状態は変化させません。
+
+業務イベントを導入する前に届いたキャンセルは、ADR 3 のとおり `VisitMigrated` として取り込みます。
+
+### 結果
+
+外部データの不備で処理が失敗しても、予約サイトからキャンセルが届いたことを追えます。業務のルールを変えた後に、`ExternalCancellationReceived` から取り込み結果を計算し直せます。
+
+一方で、届いたキャンセル1件につき、`business_events` テーブルの行が2行増えます。また、業務イベントを導入する前に届いたキャンセルは、`VisitMigrated` からは、予約サイトから来たことも、届いた日時も分かりません。
+
+### 検討した案
+
+予約サイトから届いたキャンセルの記録の方法は、採用した案と、採用しなかった2つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
+
+<div data-alternatives-table>
+
+| 案 | 反映できなかったキャンセルを追える | 取り込み結果を計算し直せる | エンティティを増やさない |
+|---|---|---|---|
+| 届いた事実と取り込み結果を分けて記録する（採用） | ○ | ○ | ○ |
+| 取り込み結果だけを記録する | × | × | ○ |
+| 「取り込み依頼作成」イベントとして記録する | ○ | ○ | × |
+
+</div>
+
+#### 取り込み結果だけを記録する
+
+記録が1行で済み、`business_events` テーブルの行が増えません。しかし、反映できなかったキャンセルは、どこにも残りません。業務のルールを変えた後に、当時届いた内容から取り込み結果を計算し直すこともできません。
+
+#### 「取り込み依頼作成」イベントとして記録する
+
+「取り込み依頼」というエンティティがあるとみなして、予約サイトから届いた内容を「取り込み依頼作成」イベントとして永続化します。予約サイトが送ってきた内容を、予約システムのスキーマに合わせてパースできなかった場合も、届いたことを残せます。しかし、予約システムが扱うエンティティに、取り込み依頼が増えます。今回の基準は、届いた事実と取り込み結果を分けて記録することで満たせます。パースに失敗した場合の扱いは、別の ADR で決定します。
 
 </Fragment>
 </Workspace>

@@ -3,75 +3,74 @@ wide: true
 immersive: true
 ---
 
-import CodeBlock from '../../../components/CodeBlock.astro';
-import CodePlayground from '../../../components/CodePlayground.astro';
-import { chapter4ExternalSync } from '../../../components/chapters/chapter-4';
+import { chapter4MigrationAdr } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
-import { readFunctionsOf } from '../../../lib/snapshots';
 
 <div class="visually-hidden">
 
-## 外部システム同期
+## ADR 3 を読む
 
 </div>
 
-<Workspace scenario={chapter4ExternalSync}>
-<Fragment slot="editor">
-<CodePlayground
-  exercise="chapter-4-external-sync-done"
-  editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'what-was-imported.ts']}
-  testFile="visits.test.ts"
-  reveal="export const importExternalCancellation"
-  scripts={[{ file: 'what-was-imported.ts', label: 'what-was-imported.ts を実行する' }]}
-/>
-</Fragment>
+<Workspace scenario={chapter4MigrationAdr}>
 <Fragment slot="memo">
 
-> 予約サイトから、いつ何が届き、どう取り込んだのか。
+- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
+- 日付: 2026-11-09
+- 作成者: テックリード
 
-飼い主は、予約サイトで来院をキャンセルできます。予約サイトは、キャンセルを予約システムへ送ります。`importExternalCancellation` は、届いたキャンセルを `ExternalCancellationReceived` として記録します。この記録は、予約サイトが送ってきた内容で、予約システムがどう反映したかを含みません。続けて、`importExternalCancellation` は来院をキャンセルし、取り込んだ結果を記録します。キャンセルできた場合は、第2章と同じ `VisitCancelled` を記録します。キャンセルできなかった場合は、`ExternalCancellationRejected` を理由と一緒に記録します。届いた内容と取り込んだ結果は、同じトランザクションで記録します。
+### 状況
 
-届いた事実と取り込み結果は、分けて記録します。そうしないと、次の2つで困ります。
+予約システムは、ADR 1 と ADR 2 のとおり、来院のキャンセルを業務イベント `VisitCancelled` として `business_events` テーブルに追記しています。業務イベントを導入する前のキャンセルは、`business_events` テーブルに行がありません。
 
-- バリデーションエラー時の記録喪失: 外部データの不備で処理が失敗した際、イベントが保存されないと「そもそも外部からデータが来たこと」自体が追えなくなります。
-- ビジネスルールの変更に弱い: 「外部のこのデータ（事実）を、当時はこういう解釈（取り込み結果）で処理したが、仕様変更後に再計算（リプレイ）したい」というイベントソーシング最大のメリットが活かせなくなります。
+`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。キャンセル数には、業務イベントを導入する前のキャンセルも含まれます。4月1日のキャンセル数は3ですが、業務イベントから数え直すと2です。差の1は、業務イベントを導入する前のキャンセルです。
 
-実行結果の表の1行目は、届いたキャンセルを取り込み、来院をキャンセルした例です。2行目は、診察が終わった来院に、予約サイトからキャンセルが届いた例です。予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。事実は取り込み、状態は変化させません。`result` の `rejected` は、届いたキャンセルで来院の状態を変えなかったことを表します。`rejectedReason` は、状態を変えなかった理由です。
+この ADR は、業務イベントを導入する前のデータの扱いを決定します。扱いは、次の3つの基準で比較しました。
 
-そもそも自プロダクトのスキーマに合わせたパースに失敗した場合などを考えると、「取り込み依頼」というエンティティがあるとみなして「取り込み依頼作成」イベントとして永続化しておく方法もあります。
+- キャンセル数が正しいまま、業務イベントから数え直した値と一致すること
+- 記録に残っていない理由と操作者を作らないこと
+- 業務イベントを導入した後の出来事と、導入する前のデータを区別できること
 
-<div class="detail-row">
+### 決定
 
-<details>
-<summary>読み取り関数を見る</summary>
+業務イベントを導入する前からある来院を、移行用のイベント `VisitMigrated` として `business_events` テーブルに取り込みます。
 
-<CodeBlock code={readFunctionsOf('chapter-4-external-sync-done', 'findImportRecords')} />
+`VisitMigrated` は、来院ごとに1行です。`target_state` には、移行した時点の来院の行を保存します。`payload` は空のオブジェクト `{}` にします。業務イベントを導入する前のキャンセルの理由と操作者は、どこにも残っていないためです。`event_at` は、移行を実行した日時です。
 
-</details>
+キャンセル数を業務イベントから数え直すときは、`VisitCancelled` に加えて、`target_state` の `status` が `cancelled` の `VisitMigrated` を数えます。
 
-<details>
-<summary>出力例を見る</summary>
+### 結果
 
-```text
-┌─────────┬───────────┬────────────┬────────────────────────────┬────────────────────────────┬────────────────────────┬────────────┬────────────────────────────────────────────┐
-│ (index) │ visitId   │ petName    │ operatedAt                 │ receivedAt                 │ cancelReason           │ result     │ rejectedReason                             │
-├─────────┼───────────┼────────────┼────────────────────────────┼────────────────────────────┼────────────────────────┼────────────┼────────────────────────────────────────────┤
-│ 0       │ 'visit-1' │ 'ポチ'     │ '2026-11-20T09:00:00.000Z' │ '2026-11-27T14:36:07.121Z' │ '飼い主の都合'         │ 'applied'  │ null                                       │
-│ 1       │ 'visit-2' │ 'コタロウ' │ '2026-11-20T09:30:00.000Z' │ '2026-11-27T14:36:07.122Z' │ '来院前に回復したため' │ 'rejected' │ '診察が終わった来院はキャンセルできません' │
-└─────────┴───────────┴────────────┴────────────────────────────┴────────────────────────────┴────────────────────────┴────────────┴────────────────────────────────────────────┘
-```
+業務イベントから数え直した値は、キャンセル数と一致します。
 
-</details>
+一方で、`VisitMigrated` から分かるのは、移行した時点の来院の状態だけです。業務イベントを導入する前のキャンセルについて、理由、操作者、キャンセルした日時は分かりません。また、`business_events` テーブルの行は、業務イベントを導入する前からある来院の数だけ増えます。
 
-<details>
-<summary>手元の Node で動かすとき</summary>
+### 検討した案
 
-`chapter-4-external-sync-done` で `node what-was-imported.ts` を実行します。
+業務イベントを導入する前のデータの扱いは、採用した案と、採用しなかった3つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
 
-</details>
+<div data-alternatives-table>
+
+| 案 | キャンセル数が正しいまま一致する | 理由と操作者を作らない | 導入の前後を区別できる |
+|---|---|---|---|
+| `VisitMigrated` として取り込む（採用） | ○ | ○ | ○ |
+| 取り込まない | × | ○ | ○ |
+| キャンセル数を業務イベントから作り直す | × | ○ | ○ |
+| `VisitCancelled` として取り込む | ○ | × | × |
 
 </div>
+
+#### 取り込まない
+
+移行の作業が要らず、`business_events` テーブルには業務イベントを導入した後の出来事だけが残ります。しかし、業務イベントから数え直した値は、キャンセル数より少ないままです。差が出たときに、差が業務イベントを導入する前のキャンセルなのか、業務イベントを通らないキャンセル数の書き換えなのかを、区別できません。
+
+#### キャンセル数を業務イベントから作り直す
+
+キャンセル数が業務イベントだけから決まるので、業務イベントから数え直した値と常に一致します。しかし、業務イベントを導入する前のキャンセルが、キャンセル数から消えます。4月1日のキャンセル数は2になりますが、正しい件数は3です。
+
+#### `VisitCancelled` として取り込む
+
+キャンセル数を数え直す SQL を変えずに済みます。しかし、`VisitCancelled` の `payload` は、キャンセルの理由と操作者を持ちます。業務イベントを導入する前のキャンセルには、理由と操作者が残っていないので、空にするか、作るかになります。業務イベントを導入した後のキャンセルと区別することもできません。
 
 </Fragment>
 </Workspace>

@@ -138,6 +138,33 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     ],
   });
 
+const postsOfConsultation = (options: Consultation): readonly Post[] => [
+  ...options.history,
+  ...options.opened,
+  options.answer,
+  options.thanks,
+  ...(options.laterPosts ?? []).map(({ post }) => post),
+];
+
+type AdrPage = {
+  readonly id: string;
+  readonly label: string;
+  readonly history: readonly Post[];
+  readonly opened: Post;
+  readonly doc: { readonly title: string; readonly path: string };
+};
+
+const postsOfAdr = (options: AdrPage): readonly Post[] => [...options.history, options.opened];
+
+const adrPage = (options: AdrPage): WorkspaceScenario =>
+  lessonScenario({
+    id: options.id,
+    label: options.label,
+    history: options.history,
+    timeline: opening(options.opened),
+    tabs: [docTab('memo', options.doc.title, options.doc.path, true)],
+  });
+
 const summaryTable: Pattern = {
   exercise: 'chapter-4-summary-table-done',
   script: 'why-this-count.ts',
@@ -196,24 +223,6 @@ const auditLog: Pattern = {
   ],
 };
 
-const financeExchange: readonly Post[] = [
-  posts.financeGreeting,
-  posts.financeAsked,
-  posts.financeAnswer,
-  posts.financeThanks,
-];
-const siteExchange: readonly Post[] = [
-  posts.siteGreeting,
-  posts.siteAsked,
-  posts.siteAnswer,
-  posts.siteThanks,
-];
-const auditExchange: readonly Post[] = [
-  posts.auditGreeting,
-  posts.auditAsked,
-  posts.auditAnswer,
-  posts.auditThanks,
-];
 const comparisonPosts: readonly Post[] = [posts.comparisonMade, posts.chooseOne];
 
 export const chapter4Overview: WorkspaceScenario = lessonScenario({
@@ -224,7 +233,7 @@ export const chapter4Overview: WorkspaceScenario = lessonScenario({
   tabs: [docTab('memo', '相談の一覧', 'consultations/list')],
 });
 
-export const chapter4SummaryTable: WorkspaceScenario = consultation({
+const summaryTableConsultation: Consultation = {
   id: 'chapter-4-summary-table',
   label: '集計の件数と、記録から数えた件数が合わない',
   history: overviewPosts,
@@ -233,27 +242,28 @@ export const chapter4SummaryTable: WorkspaceScenario = consultation({
   thanks: posts.financeThanks,
   doc: { title: '相談1: 集計の件数が合わない', path: 'consultations/summary-table' },
   pattern: summaryTable,
-  laterPosts: [
-    { post: posts.migrateOldData, delay: 4.5 },
-    { post: posts.migrationRecord, delay: 1.0, addTab: 'adr' },
-  ],
-  extraTabs: [
-    {
-      ...docTab(
-        'adr',
-        'ADR 3: 業務イベントを導入する前のデータを、移行用のイベントとして取り込む',
-        'adr/3-migrate-existing-data',
-        true,
-      ),
-      initial: false,
-    },
-  ],
-});
+  laterPosts: [{ post: posts.migrateOldData, delay: 4.5 }],
+};
 
-export const chapter4ExternalSync: WorkspaceScenario = consultation({
+export const chapter4SummaryTable: WorkspaceScenario = consultation(summaryTableConsultation);
+
+const migrationAdr: AdrPage = {
+  id: 'chapter-4-migration-adr',
+  label: '業務イベントを導入する前のデータの扱い',
+  history: postsOfConsultation(summaryTableConsultation),
+  opened: posts.migrationRecord,
+  doc: {
+    title: 'ADR 3: 業務イベントを導入する前のデータを、移行用のイベントとして取り込む',
+    path: 'adr/3-migrate-existing-data',
+  },
+};
+
+export const chapter4MigrationAdr: WorkspaceScenario = adrPage(migrationAdr);
+
+const externalSyncConsultation: Consultation = {
   id: 'chapter-4-external-sync',
   label: '予約サイトのキャンセルが反映されたか分からない',
-  history: financeExchange,
+  history: postsOfAdr(migrationAdr),
   opened: [posts.siteGreeting, posts.siteAsked],
   answer: posts.siteAnswer,
   thanks: posts.siteThanks,
@@ -261,24 +271,54 @@ export const chapter4ExternalSync: WorkspaceScenario = consultation({
   pattern: externalSync,
   thanksDelay: 0.6,
   laterPosts: [{ post: posts.externalSyncMigration, delay: 4.5 }],
-});
+};
 
-export const chapter4AuditLog: WorkspaceScenario = consultation({
+export const chapter4ExternalSync: WorkspaceScenario = consultation(externalSyncConsultation);
+
+const externalSyncAdr: AdrPage = {
+  id: 'chapter-4-external-sync-adr',
+  label: '予約サイトから届いたキャンセルの記録の方法',
+  history: postsOfConsultation(externalSyncConsultation),
+  opened: posts.externalSyncRecord,
+  doc: {
+    title: 'ADR 4: 予約サイトから届いた事実と、取り込み結果を分けて記録する',
+    path: 'adr/4-separate-received-and-imported',
+  },
+};
+
+export const chapter4ExternalSyncAdr: WorkspaceScenario = adrPage(externalSyncAdr);
+
+const auditLogConsultation: Consultation = {
   id: 'chapter-4-audit-log',
   label: '監査ログに変更の理由がない',
-  history: siteExchange,
+  history: postsOfAdr(externalSyncAdr),
   opened: [posts.auditGreeting, posts.auditAsked],
   answer: posts.auditAnswer,
   thanks: posts.auditThanks,
   doc: { title: '相談3: 監査ログに理由がない', path: 'consultations/audit-log' },
   pattern: auditLog,
   laterPosts: [{ post: posts.auditLogMigration, delay: 4.5 }],
-});
+};
+
+export const chapter4AuditLog: WorkspaceScenario = consultation(auditLogConsultation);
+
+const auditLogAdr: AdrPage = {
+  id: 'chapter-4-audit-log-adr',
+  label: '監査ログと業務イベントの役割の分け方',
+  history: postsOfConsultation(auditLogConsultation),
+  opened: posts.auditLogRecord,
+  doc: {
+    title: 'ADR 5: 監査ログで足りる領域と、業務イベントで残す領域を分ける',
+    path: 'adr/5-split-audit-log-and-events',
+  },
+};
+
+export const chapter4AuditLogAdr: WorkspaceScenario = adrPage(auditLogAdr);
 
 export const chapter4Compare: WorkspaceScenario = lessonScenario({
   id: 'chapter-4-compare',
   label: '3つのパターンを表で比べて、普段の業務で運用しているシステムに近いものを1つ選ぶ',
-  history: auditExchange,
+  history: postsOfAdr(auditLogAdr),
   timeline: opening(...comparisonPosts),
   tabs: [docTab('memo', '3つのパターンの比較', 'consultations/comparison')],
 });
