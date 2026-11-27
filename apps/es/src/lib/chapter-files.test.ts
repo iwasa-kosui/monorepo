@@ -38,13 +38,12 @@ describe('immersive のページ', () => {
 
   const expected = [
     'intro/02.mdx',
-    'intro/07.mdx',
     ...chapterNames().filter((chapter) => chapter !== 'intro').flatMap((chapter) =>
       chapterPageFiles(chapter).map((file) => `${chapter}/${file}`)
     ),
   ].sort();
 
-  it('immersive は導入の 2 ページ目と 7 ページ目と、第1章から第4章とまとめの全ページに付き、wide も残っている', () => {
+  it('immersive は導入の 2 ページ目と、第1章から第4章とまとめの全ページに付き、wide も残っている', () => {
     expect(immersiveFiles().sort()).toEqual(expected);
     for (const file of expected) {
       expect(read(`src/content/chapters/${file}`), file).toMatch(/^wide: true$/m);
@@ -56,13 +55,13 @@ describe('immersive のページ', () => {
     expect(source).toMatch(/<div class="visually-hidden">\n\n## .+\n\n.+\n\n<\/div>\n\n<InvestigationScene \/>/);
   });
 
-  it('導入の 7 ページ目も、見た目から隠す本文の見出しを、作業環境の前に置く', () => {
-    const source = read('src/content/chapters/intro/07.mdx');
+  it('第1章の 1 ページ目も、見た目から隠す本文の見出しを、作業環境の前に置く', () => {
+    const source = read('src/content/chapters/chapter-1/01.mdx');
     expect(source).toMatch(/<div class="visually-hidden">\n\n## .+\n\n.+\n\n<\/div>\n\n<Workspace /);
   });
 
   it('第1章から第4章とまとめのページは、最初の見出しが h2 なら、隠した見出しとして作業環境の前に置く', () => {
-    for (const file of expected.filter((name) => !name.startsWith('intro/'))) {
+    for (const file of expected.filter((name) => !name.startsWith('intro/') && name !== 'chapter-1/01.mdx')) {
       const source = read(`src/content/chapters/${file}`);
       const first = /^(#{2,3}) .+$/m.exec(source);
       if (first?.[1] !== '##') continue;
@@ -79,11 +78,17 @@ describe('immersive のページ', () => {
 });
 
 describe('導入の文面', () => {
-  it('導入は 8 ページに分かれている', () => {
-    expect(chapterPageFiles('intro')).toHaveLength(8);
+  it('導入は 7 ページに分かれている', () => {
+    expect(chapterPageFiles('intro')).toHaveLength(7);
   });
 
   it('分けたページをつないだ本文が、承認済みの導入と 1 文字も違わない', () => {
     expect(readChapterText('intro')).toBe(read('fixtures/intro.approved.mdx'));
+  });
+});
+
+describe('第1章の文面', () => {
+  it('1 ページ目の本文が、承認済みの文面と 1 文字も違わない', () => {
+    expect(read('src/content/chapters/chapter-1/01.mdx')).toBe(read('fixtures/chapter-1-01.approved.mdx'));
   });
 });

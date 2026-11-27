@@ -50,21 +50,21 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     role: '段階的な適用とこのハンズオンの目的',
   },
   'intro/07': {
-    flow: 'try',
-    mode: 'do',
-    role: 'アクセスログとDBバックアップで、ポチのキャンセルを調べる',
-  },
-  'intro/08': {
     flow: 'problem',
     mode: 'listen',
     role: 'コードを見ない開発と品質の保証',
   },
   'chapter-1/01': {
+    flow: 'try',
+    mode: 'do',
+    role: 'アクセスログとDBバックアップで、ポチのキャンセルを調べる',
+  },
+  'chapter-1/02': {
     flow: 'problem',
     mode: 'do',
     role: '普段の業務で運用しているシステムについて聞かれて、DB を見ても分からなかった質問を1つ書く',
   },
-  'chapter-1/02': {
+  'chapter-1/03': {
     flow: 'try',
     mode: 'do',
     role: 'エディタでテストを実行し、第2章で書くコードがまだ無いために4件が失敗することを確かめる',
