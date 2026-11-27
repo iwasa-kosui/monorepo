@@ -148,7 +148,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
 export const opening = (...group: readonly Post[]): TimelineEvent[] =>
   openingSchedule(group, inquiryChannel).map(({ post, at }) => ({ at, kind: 'post', post }));
 
-const documentTab = (key: string, title: string, path: string, config: DocConfig): TabDefinition => ({
+export const documentTab = (key: string, title: string, path: string, config: DocConfig): TabDefinition => ({
   key,
   kind: 'doc',
   title,
