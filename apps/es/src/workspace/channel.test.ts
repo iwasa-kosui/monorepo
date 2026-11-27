@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { channelOfPost, openingSchedule, placeholderOf, postsInChannel, typingLeadMs, typingStartMs } from './channel';
-import type { Post } from './scenario';
+import {
+  channelOfPost,
+  openingChannel,
+  openingSchedule,
+  placeholderOf,
+  postsInChannel,
+  typingLeadMs,
+  typingStartMs,
+} from './channel';
+import type { Post, TimelineEvent } from './scenario';
 
 const inquiryChannel = '# 問い合わせ対応';
 const handsOn = '# ハンズオン';
@@ -55,6 +63,30 @@ describe('チャンネルで表示する発言', () => {
   });
 });
 
+describe('ページを開いた時点のチャンネル', () => {
+  const arriving = (post: Post, at = 0): TimelineEvent => ({ at, kind: 'post', post });
+  const lead: Post = { actor: 'techlead', channel: '# dev', text: 'lead' };
+
+  it('開いた時点で届く発言が無ければ、既定のチャンネルで開く', () => {
+    expect(openingChannel([], inquiryChannel)).toBe(inquiryChannel);
+  });
+
+  it('開いた時点で届く最初の発言が別のチャンネルなら、そのチャンネルで開く', () => {
+    expect(openingChannel([arriving(lead), arriving(support('a'), 2)], inquiryChannel)).toBe('# dev');
+  });
+
+  it('開いた時点で届く最初の発言がチャンネルを指定していなければ、既定のチャンネルで開く', () => {
+    expect(openingChannel([arriving(support('a')), arriving(lead, 2)], inquiryChannel)).toBe(inquiryChannel);
+  });
+
+  it('合図を待つ発言と、発言以外の出来事は、開いた時点のチャンネルを決めない', () => {
+    const waiting: TimelineEvent = { when: 'tests:ran', kind: 'post', post: lead };
+    const affected: TimelineEvent = { at: 0, kind: 'affected', count: 1 };
+    expect(openingChannel([waiting], inquiryChannel)).toBe(inquiryChannel);
+    expect(openingChannel([waiting, affected, arriving(presenter('a'), 3)], inquiryChannel)).toBe(handsOn);
+  });
+});
+
 describe('入力欄のプレースホルダ', () => {
   const placeholder = `${inquiryChannel} へのメッセージ`;
 
@@ -78,8 +110,12 @@ describe('開いた時点の発言の届く時刻', () => {
     expect(timesOf([support('a'), presenter('b'), presenter('c'), support('d')])).toEqual([0, 4.5, 6.5, 11]);
   });
 
-  it('最初の発言が既定と別のチャンネルなら、履歴を読む時間を空けて届く', () => {
-    expect(timesOf([presenter('a'), presenter('b')])).toEqual([4.5, 6.5]);
+  it('最初の発言は、既定と別のチャンネルでも、待たずに届く', () => {
+    expect(timesOf([presenter('a'), presenter('b')])).toEqual([0, 2]);
+  });
+
+  it('最初の発言の次からは、最初の発言のチャンネルを基準に間隔を空ける', () => {
+    expect(timesOf([presenter('a'), support('b')])).toEqual([0, 4.5]);
   });
 
   it('切り替わる発言の入力中表示は、直前の発言の 3 秒後に始まり、1.5 秒続く', () => {

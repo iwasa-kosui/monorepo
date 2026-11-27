@@ -1,4 +1,5 @@
 ---
+import { openingChannel, placeholderOf } from '../../workspace/channel';
 import { chatPanelIdOf } from '../../workspace/panel-props';
 import type { WorkspaceScenario } from '../../workspace/scenario';
 
@@ -9,6 +10,12 @@ interface Props {
 
 const { scenario, composer = false } = Astro.props;
 const { chat, memo, gates } = scenario;
+const initialChannel = openingChannel(scenario.timeline, chat.channel);
+const placeholder = placeholderOf(
+  initialChannel,
+  chat.channel,
+  chat.placeholder,
+);
 const timed = scenario.mode === 'timed';
 const memoId = `${scenario.id}-memo`;
 const reasonId = `${scenario.id}-reason`;
@@ -71,7 +78,7 @@ const railActors = railActorIds.flatMap((id) => {
       {
         chat.channels.map((channel) => (
           <li
-            class={channel.current ? 'on' : undefined}
+            class={channel.name === initialChannel ? 'on' : undefined}
             data-channel={channel.name}
           >
             {channel.name}
@@ -83,7 +90,7 @@ const railActors = railActorIds.flatMap((id) => {
 
   <div class="chat-main" id={mainId}>
     <div class="chat-head">
-      <p class="channel" data-channel-title>{chat.channel}</p>
+      <p class="channel" data-channel-title>{initialChannel}</p>
       {
         !timed && (
           <button
@@ -135,7 +142,7 @@ const railActors = railActorIds.flatMap((id) => {
           )
             : (
             <p class="ph" aria-hidden="true" data-placeholder>
-              {chat.placeholder}
+              {placeholder}
             </p>
           )
         }

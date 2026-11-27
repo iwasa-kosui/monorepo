@@ -1,4 +1,4 @@
-import { channelOfPost, placeholderOf, postsInChannel } from './channel';
+import { channelOfPost, openingChannel, placeholderOf, postsInChannel } from './channel';
 import { minuteOf } from './clock';
 import { cloneFirst, fillText, must } from './dom';
 import type { MemoView } from './rules';
@@ -49,8 +49,9 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const placeholder = root.querySelector<HTMLElement>('[data-placeholder]');
   const questionInput = root.querySelector<HTMLTextAreaElement>('[data-own-question] textarea');
   const defaultChannel = scenario.chat.channel;
+  const initialChannel = openingChannel(scenario.timeline, defaultChannel);
   const entries: { readonly post: Post; readonly element: HTMLElement }[] = [];
-  let channel = defaultChannel;
+  let channel = initialChannel;
   let typingActor: string | null = null;
   let unread = 0;
   let open = false;
@@ -210,7 +211,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     showHistory,
     clear: () => {
       entries.splice(0);
-      showChannel(defaultChannel);
+      showChannel(initialChannel);
       feed.replaceChildren();
       clearTyping();
       unread = 0;
