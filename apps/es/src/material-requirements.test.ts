@@ -70,9 +70,10 @@ describe('PRD の受入条件', () => {
     }
   });
 
-  it('イベントソーシングが出るファイルは決まった5つだけ', () => {
+  it('イベントソーシングが出るファイルは決まった6つだけ', () => {
     expect(filesContaining('イベントソーシング')).toEqual([
       'src/components/figures/EventSourcingFigure.astro',
+      'src/content/chapters/chapter-4.mdx',
       'src/content/chapters/intro.mdx',
       'src/content/chapters/summary.mdx',
       'src/pages/setup.astro',
