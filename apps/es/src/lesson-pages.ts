@@ -62,7 +62,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-1/01': {
     flow: 'problem',
     mode: 'do',
-    role: '自分のシステムで、DB を見ても分からなかったことを1つ書く',
+    role: '普段の業務で運用しているシステムについて聞かれて、DB を見ても分からなかった質問を1つ書く',
   },
   'chapter-1/02': {
     flow: 'try',
