@@ -113,6 +113,7 @@ export const posts = {
   externalSyncMigration: lead(
     '導入前に予約サイトから届いたキャンセルは、取り込みの記録に出てきません。ADR 3 のとおり VisitMigrated で取り込んでも、予約サイトから来たのか、いつ届いたのかは分からないままです',
   ),
+  externalSyncRecord: lead('ADR 4 にまとめました。ざっと読んでもらえると助かります'),
   auditGreeting: infoSys('お疲れ様です、監査対応で確認させてください'),
   auditAsked: infoSys('監査ログに reserved → cancelled の変更は残ってるんですが、理由が載ってなくて。分かりますか？'),
   auditAnswer: you('監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました'),
@@ -120,6 +121,7 @@ export const posts = {
   auditLogMigration: lead(
     '導入前の監査ログの変更は、業務イベントが無いので理由が分かりません。ADR 3 のとおり VisitMigrated で取り込んでも、監査ログに無い理由は埋まりません',
   ),
+  auditLogRecord: lead('ADR 5 にまとめました。ざっと読んでもらえると助かります'),
   comparisonMade: lead('3つを同じ軸で並べた表を作りました'),
   chooseOne: presenter('あなたが普段の業務で運用しているシステムに近いパターンを、1つ選んでみてください'),
   takeHome: lead('時間の関係で、実装は持ち帰りにします'),
