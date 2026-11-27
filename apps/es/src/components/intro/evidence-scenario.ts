@@ -36,11 +36,11 @@ export const accessLogLimit = lead(
 );
 
 export const backupLimit = lead(
-  'バックアップを復元すると、status が reserved から checked_in、cancelled の順に変わったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いです',
+  'バックアップを復元すると、status が予約済みから受付済み、キャンセル済みの順に変わったことは分かります。ただ、戻るのは残っていた値だけです。誰がなぜ変えたのかは、残してなければどこにも無いです',
 );
 
 export const backupRestoreLimit = lead(
-  'cancelled になった日時は分かります。checked_in になった日時も、バックアップから復元すれば確かめられます。8月1日のバックアップは reserved で、9月1日は checked_in なので、その間です。ただ、復元はとても時間がかかりますし、バックアップ間隔の間に起きたことは分からないです',
+  'キャンセル済みになった日時は分かります。受付済みになった日時も、バックアップから復元すれば確かめられます。8月1日のバックアップは予約済みで、9月1日は受付済みなので、その間です。ただ、復元はとても時間がかかりますし、バックアップ間隔の間に起きたことは分からないです',
 );
 
 export const accessLogArchive = lead(
@@ -128,7 +128,7 @@ export const evidenceScenario: WorkspaceScenario = {
         {
           key: 'what',
           label: '何を',
-          text: 'reserved、checked_in、cancelled の順',
+          text: '予約済み、受付済み、キャンセル済みの順',
           result: 'found',
           fill: restoredQueried,
         },
