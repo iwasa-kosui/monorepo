@@ -280,6 +280,18 @@ describe('第1章から第4章とまとめの筋書き', () => {
     }
   });
 
+  it('導入の 2 つの筋書きの発言者は、表示名で固定する', () => {
+    expect(Object.values(incidentScenario.actors).map((actor) => actor.name)).toEqual(['カスタマーサポート', 'あなた']);
+    expect(Object.values(evidenceScenario.actors).map((actor) => actor.name)).toEqual([
+      'カスタマーサポート',
+      'あなた',
+      'テックリード',
+      '経理',
+      '情シス',
+      'kosui',
+    ]);
+  });
+
   it('導入の発言者の名前と頭文字を引き継ぐ', () => {
     const [, first] = entries[0] ?? [];
     expect(first?.actors['support']).toEqual(incidentScenario.actors['support']);
@@ -342,7 +354,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
 
   it('開いた時点で届く発言があるページは、開いた時点のチャンネルがその最初の発言のチャンネルである', () => {
     for (const [id, scenario] of allScenarios) {
-      const first = timedPostsOf(scenario)[0];
+      const first = timedPostsOf(scenario).find((post) => post.at === 0);
       expect(openingChannel(scenario.timeline, scenario.chat.channel), id).toBe(
         first === undefined ? scenario.chat.channel : first.channel,
       );
