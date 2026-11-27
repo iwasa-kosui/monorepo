@@ -362,4 +362,21 @@ const approvable = config.approvable === true;
 :global(.scene[data-scenario]) .doc-paper :global(.cfig) {
   margin-block: var(--space-3);
 }
+:global(.scene[data-scenario])
+  .doc-paper
+  :global([data-adr-status="approved"]) {
+  display: none;
+}
+:global(.scene[data-scenario])
+  .doc:has([data-approve][aria-pressed="true"])
+  .doc-paper
+  :global([data-adr-status="approved"]) {
+  display: inline;
+}
+:global(.scene[data-scenario])
+  .doc:has([data-approve][aria-pressed="true"])
+  .doc-paper
+  :global([data-adr-status="proposed"]) {
+  display: none;
+}
 </style>
