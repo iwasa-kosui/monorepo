@@ -379,4 +379,64 @@ const approvable = config.approvable === true;
   :global([data-adr-status="proposed"]) {
   display: none;
 }
+@media (max-width: 767px) {
+  :global(.content)
+    :global(.scene[data-scenario])
+    .doc-paper
+    :global([data-alternatives-table] table) {
+    overflow-x: visible;
+  }
+  :global(.content)
+    :global(.scene[data-scenario])
+    .doc-paper
+    :global([data-alternatives-table] thead) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  :global(.content)
+    :global(.scene[data-scenario])
+    .doc-paper
+    :global([data-alternatives-table] tbody),
+  :global(.content)
+    :global(.scene[data-scenario])
+    .doc-paper
+    :global([data-alternatives-table] tr) {
+    display: block;
+  }
+  :global(.content)
+    :global(.scene[data-scenario])
+    .doc-paper
+    :global([data-alternatives-table] tr + tr) {
+    margin-top: var(--space-4);
+  }
+  :global(.content)
+    :global(.scene[data-scenario])
+    .doc-paper
+    :global([data-alternatives-table] td) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-3);
+    padding-inline: 0;
+  }
+  :global(.content)
+    :global(.scene[data-scenario])
+    .doc-paper
+    :global([data-alternatives-table] td:first-child) {
+    display: block;
+    font-weight: var(--weight-bold);
+  }
+  :global(.content)
+    :global(.scene[data-scenario])
+    .doc-paper
+    :global([data-alternatives-table] td:not(:first-child))::before {
+    content: attr(data-label);
+    content: attr(data-label) / "";
+    color: var(--role-muted);
+    text-wrap: balance;
+  }
+}
 </style>
