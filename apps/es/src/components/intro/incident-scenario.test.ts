@@ -23,6 +23,11 @@ const initialVisits = consoleTab.config.setup.rows;
 
 const timedEvents = timeline.flatMap((event) => (event.at === undefined ? [] : [{ ...event, at: event.at }]));
 
+const unlessRepliedAt = (at: number): boolean | undefined => {
+  const event = timedEvents.find((item) => item.kind === 'post' && item.at === at);
+  return event?.kind === 'post' ? event.unlessReplied === true : undefined;
+};
+
 const texts = [
   ...timeline.flatMap((event) => (event.kind === 'post' ? [event.post.text] : [])),
   ...reply.lines.map((line) => line.text),
@@ -61,9 +66,15 @@ describe('障害対応の筋書き', () => {
     ]);
   });
 
-  it('56 秒の投稿は、最終の返信をしていない場合だけ届く', () => {
-    const late = timedEvents.find((event) => event.kind === 'post' && event.at === 56);
-    expect(late?.kind === 'post' && late.unlessReplied).toBe(true);
+  it('34 秒と 56 秒の投稿は、最終の返信をしていない場合だけ届く', () => {
+    expect(unlessRepliedAt(34)).toBe(true);
+    expect(unlessRepliedAt(56)).toBe(true);
+  });
+
+  it('23 秒までの投稿は、最終の返信をした後も届く', () => {
+    for (const event of timedEvents.filter((item) => item.kind === 'post' && item.at <= 23)) {
+      expect(event.kind === 'post' && event.unlessReplied, `${event.at} 秒`).not.toBe(true);
+    }
   });
 
   it('エージェントのタブは、「答えを見る」の合図で足して開く', () => {

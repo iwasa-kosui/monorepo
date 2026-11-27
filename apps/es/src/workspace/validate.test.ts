@@ -41,6 +41,22 @@ describe('筋書きの検査', () => {
     expect(problems).toContain('timeline[0] のチャンネル # elsewhere');
   });
 
+  it('at 指定の発言に付けた delay を見つける', () => {
+    const broken: WorkspaceScenario = {
+      ...incidentScenario,
+      timeline: [{ at: 1, kind: 'post', post: { actor: 'support', text: 'y' }, delay: 0.6 }],
+    };
+    expect(scenarioProblems(broken).join('\n')).toContain('timeline[0] は at 指定なので、delay は使われません');
+  });
+
+  it('負の delay を見つける', () => {
+    const broken: WorkspaceScenario = {
+      ...incidentScenario,
+      timeline: [{ when: 'agent:requested', kind: 'post', post: { actor: 'support', text: 'y' }, delay: -1 }],
+    };
+    expect(scenarioProblems(broken).join('\n')).toContain('timeline[0] の delay は 0 以上の有限の数にします');
+  });
+
   it('chat.channels にあるチャンネルを指す発言は、問題にしない', () => {
     const channel = incidentScenario.chat.channels[0]?.name ?? '';
     const scenario: WorkspaceScenario = {

@@ -222,6 +222,7 @@ export const incidentScenario: WorkspaceScenario = {
         actor: 'support',
         text: '病院さんに折り返さないとなので、わかってるところまででいいので教えてください！',
       },
+      unlessReplied: true,
     },
     {
       at: 56,
