@@ -140,7 +140,7 @@ const otherTeams = '記録の話、ほかのチームからも相談が来てま
 const threeConsultations = '3つあるので順番に見ていきましょう';
 const pastExperience =
   '医療SaaSの共通基盤で、既存の顧客基盤に最新状態しか残っておらず、過去のユーザー、店舗、端末、ライセンスの変化を追うことが難しかった経験があります';
-const closestQuestion = '自分が挙げた質問に近いのはどれか、考えながら見てもらえると';
+const closestQuestion = '普段の業務で運用しているシステムに近いのはどれか、考えながら見てもらえると';
 const financeGreeting = 'お疲れ様です。昨日のキャンセル件数の件で質問です';
 const financeAsked = '集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？';
 const financeAnswer = '記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです';

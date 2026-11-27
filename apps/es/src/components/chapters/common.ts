@@ -91,7 +91,7 @@ export const posts = {
   pastExperience: presenter(
     '医療SaaSの共通基盤で、既存の顧客基盤に最新状態しか残っておらず、過去のユーザー、店舗、端末、ライセンスの変化を追うことが難しかった経験があります',
   ),
-  closestQuestion: presenter('自分が挙げた質問に近いのはどれか、考えながら見てもらえると'),
+  closestQuestion: presenter('普段の業務で運用しているシステムに近いのはどれか、考えながら見てもらえると'),
   financeGreeting: finance('お疲れ様です。昨日のキャンセル件数の件で質問です'),
   financeAsked: finance('集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？'),
   financeAnswer: you('記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです'),
