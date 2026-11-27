@@ -365,15 +365,50 @@ const rows: readonly Row[] = [
   .merge-arrow::before {
     content: "↓";
   }
+  .map {
+    gap: var(--space-2);
+  }
   .row {
-    grid-template-columns: 7rem minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .from {
-    gap: var(--space-1);
+    grid-row: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    padding-bottom: 0;
+  }
+  .head .from {
+    align-items: flex-start;
+  }
+  .sources {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .to,
+  .why {
+    grid-column: 1;
   }
   .arrow {
-    min-width: 0.5rem;
-    margin-right: 0.3125rem;
+    flex: none;
+    width: 2px;
+    min-width: 0;
+    height: 0.75rem;
+    margin: 0 0 0.3125rem 1rem;
+  }
+  .arrow::after {
+    top: auto;
+    right: auto;
+    bottom: -0.3125rem;
+    left: 50%;
+    border: 0.3125rem solid transparent;
+    border-bottom: 0;
+    border-top-color: var(--role-accent-strong);
+    transform: translateX(-50%);
+  }
+  .sources:has(.none) + .arrow::after {
+    border-left-color: transparent;
+    border-top-color: var(--role-border);
   }
 }
 </style>
