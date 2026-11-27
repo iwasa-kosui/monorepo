@@ -1,9 +1,24 @@
-import { channelOfPost, openingChannel, placeholderOf, postsInChannel } from './channel';
+import {
+  channelOfPost,
+  type ChannelState,
+  hasOpeningPost,
+  openingChannel,
+  openingChannelState,
+  placeholderOf,
+  postsInChannel,
+  receivePost,
+  receiveTyping,
+  revealChannel,
+  selectChannel,
+  totalUnread,
+  typingVisible,
+  unreadOf,
+} from './channel';
 import { minuteOf } from './clock';
 import { cloneFirst, fillText, must } from './dom';
 import type { MemoView } from './rules';
 import type { ButtonName, Post, WorkspaceScenario } from './scenario';
-import { firstUnreadOf, scrollTopToReveal } from './unread';
+import { firstUnreadsAfter, scrollTopToReveal } from './unread';
 
 export type ChatView = {
   readonly started: boolean;
@@ -46,24 +61,31 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const typing = root.querySelector<HTMLElement>('[data-typing]');
   const typingText = root.querySelector<HTMLElement>('[data-typing-text]');
   const channelTitle = root.querySelector<HTMLElement>('[data-channel-title]');
-  const channelItems = [...root.querySelectorAll<HTMLElement>('[data-channel]')];
+  const channelItems = [...root.querySelectorAll<HTMLButtonElement>('button[data-channel]')];
   const placeholder = root.querySelector<HTMLElement>('[data-placeholder]');
   const questionInput = root.querySelector<HTMLTextAreaElement>('[data-own-question] textarea');
   const defaultChannel = scenario.chat.channel;
   const initialChannel = openingChannel(scenario.timeline, defaultChannel);
   const entries: { readonly post: Post; readonly element: HTMLElement }[] = [];
-  let channel = initialChannel;
+  const awaitsOpeningPost = hasOpeningPost(scenario.timeline);
+  let awaiting = awaitsOpeningPost;
+  let state = openingChannelState(initialChannel);
+  let renderedChannel = initialChannel;
   let typingActor: string | null = null;
-  let unread = 0;
-  let firstUnread: HTMLElement | null = null;
+  let typingChannel = initialChannel;
+  let firsts: ReadonlyMap<string, HTMLElement> = new Map();
   let open = false;
   let tabbed = false;
   let front = false;
 
   const visible = (): boolean => (tabbed ? front : rail === null || open);
 
+  const renderEmpty = (): void => {
+    feed.toggleAttribute('data-empty', feed.childElementCount === 0 && !awaiting);
+  };
+
   const layoutFeed = (): void => {
-    const shown = new Set(postsInChannel(entries.map((entry) => entry.post), channel, defaultChannel));
+    const shown = new Set(postsInChannel(entries.map((entry) => entry.post), state.channel, defaultChannel));
     let previous: string | null = null;
     const elements: HTMLElement[] = [];
     for (const entry of entries) {
@@ -73,37 +95,40 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
       elements.push(entry.element);
     }
     feed.replaceChildren(...elements);
+    renderEmpty();
     feed.scrollTop = feed.scrollHeight;
   };
 
   const renderPlaceholder = (): void => {
-    const text = placeholderOf(channel, defaultChannel, scenario.chat.placeholder);
+    const text = placeholderOf(state.channel, defaultChannel, scenario.chat.placeholder);
     if (placeholder !== null) placeholder.textContent = text;
     if (questionInput !== null) questionInput.placeholder = text;
   };
 
-  const showChannel = (next: string): void => {
-    if (next === channel) return;
-    channel = next;
-    if (channelTitle !== null) channelTitle.textContent = channel;
-    for (const item of channelItems) item.classList.toggle('on', item.dataset.channel === channel);
-    renderPlaceholder();
-    layoutFeed();
+  const renderChannels = (): void => {
+    for (const item of channelItems) {
+      const name = item.dataset.channel ?? '';
+      const count = unreadOf(state, name);
+      if (name === state.channel) item.setAttribute('aria-current', 'true');
+      else item.removeAttribute('aria-current');
+      if (count > 0) item.dataset.channelUnread = String(count);
+      else delete item.dataset.channelUnread;
+      const countCell = item.querySelector<HTMLElement>('[data-channel-count]');
+      if (countCell !== null) {
+        countCell.hidden = count === 0;
+        countCell.textContent = String(count);
+      }
+      const label = item.querySelector<HTMLElement>('[data-channel-label]');
+      if (label !== null) label.textContent = count > 0 ? `（未読 ${count} 件）` : '';
+    }
   };
 
-  const setTyping = (post: Pick<Post, 'actor' | 'channel'>): void => {
-    showChannel(channelOfPost(post, defaultChannel));
-    typingActor = post.actor;
-    if (typingText !== null) typingText.textContent = `${scenario.actors[post.actor]?.name ?? post.actor} が入力中…`;
-    typing?.setAttribute('data-active', '');
-  };
-
-  const clearTyping = (): void => {
-    typingActor = null;
-    typing?.removeAttribute('data-active');
+  const renderTyping = (): void => {
+    typing?.toggleAttribute('data-active', typingActor !== null && typingVisible(state, typingChannel));
   };
 
   const renderRail = (): void => {
+    const unread = totalUnread(state);
     if (tabBadge !== null) {
       tabBadge.hidden = unread === 0;
       tabBadge.textContent = String(unread);
@@ -119,10 +144,39 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     }
   };
 
-  const revealUnread = (toEnd: boolean): void => {
-    const target = firstUnread;
-    firstUnread = null;
-    unread = 0;
+  const syncChannel = (): void => {
+    if (state.channel !== renderedChannel) {
+      renderedChannel = state.channel;
+      if (channelTitle !== null) channelTitle.textContent = state.channel;
+      renderPlaceholder();
+      layoutFeed();
+    }
+    renderChannels();
+    renderTyping();
+    renderRail();
+  };
+
+  const apply = (next: ChannelState): void => {
+    state = next;
+    firsts = firstUnreadsAfter(firsts, state.unread, null);
+    syncChannel();
+  };
+
+  const setTyping = (post: Pick<Post, 'actor' | 'channel'>): void => {
+    typingChannel = channelOfPost(post, defaultChannel);
+    typingActor = post.actor;
+    if (typingText !== null) typingText.textContent = `${scenario.actors[post.actor]?.name ?? post.actor} が入力中…`;
+    apply(receiveTyping(state, typingChannel, visible()));
+  };
+
+  const clearTyping = (): void => {
+    typingActor = null;
+    renderTyping();
+  };
+
+  const reveal = (next: ChannelState, toEnd: boolean): void => {
+    const target = firsts.get(next.channel);
+    apply(next);
     feed.scrollTop = scrollTopToReveal({
       scrollTop: feed.scrollTop,
       feedTop: feed.getBoundingClientRect().top,
@@ -137,8 +191,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     open = next;
     renderRail();
     if (open) {
-      revealUnread(false);
-      renderRail();
+      reveal(revealChannel(state), false);
       feed.focus({ preventScroll: true });
     }
   };
@@ -150,15 +203,21 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     return true;
   };
 
+  for (const item of channelItems) {
+    item.addEventListener('click', () => {
+      reveal(selectChannel(state, item.dataset.channel ?? ''), false);
+    });
+  }
+
   rail?.addEventListener('click', () => {
     if (open) closeRail();
     else setOpen(true);
   });
 
-  const append = (post: Post, atMs: number, counted: boolean): void => {
+  const append = (post: Post, atMs: number): HTMLElement => {
     const copy = cloneFirst(postTemplate, 'li');
     const actor = scenario.actors[post.actor];
-    const shown = channelOfPost(post, defaultChannel) === channel;
+    const shown = channelOfPost(post, defaultChannel) === state.channel;
     copy.classList.toggle('is-continued', (feed.lastElementChild as HTMLElement | null)?.dataset.actor === post.actor);
     copy.dataset.actor = post.actor;
     copy.classList.toggle('is-you', actor?.self === true);
@@ -181,23 +240,23 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     entries.push({ post, element: copy });
     if (shown) {
       feed.append(copy);
+      renderEmpty();
       feed.scrollTop = feed.scrollHeight;
     }
     if (typingActor === post.actor) clearTyping();
-    if (counted && shown && !visible() && actor?.self !== true) {
-      unread += 1;
-      firstUnread = firstUnreadOf(firstUnread, firstUnread?.isConnected === true, copy);
-      renderRail();
-    }
+    return copy;
   };
 
   const addPost = (post: Post, atMs: number): void => {
-    showChannel(channelOfPost(post, defaultChannel));
-    append(post, atMs, true);
+    awaiting = false;
+    const channel = channelOfPost(post, defaultChannel);
+    apply(receivePost(state, { channel, self: scenario.actors[post.actor]?.self === true }, visible()));
+    const element = append(post, atMs);
+    firsts = firstUnreadsAfter(firsts, state.unread, { channel, post: element });
   };
 
   const showHistory = (): void => {
-    for (const post of scenario.history) append(post, 0, false);
+    for (const post of scenario.history) append(post, 0);
   };
 
   const render = (view: ChatView): void => {
@@ -205,7 +264,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
       tabbed = view.tabbed;
       front = view.front;
       if (tabbed) open = false;
-      if (visible()) revealUnread(true);
+      if (visible()) reveal(revealChannel(state), true);
       renderRail();
     }
     const disabled = (name: ButtonName, base: boolean): boolean =>
@@ -233,18 +292,18 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
 
   renderPlaceholder();
   showHistory();
+  renderEmpty();
 
   return {
     addPost,
     showHistory,
     clear: () => {
       entries.splice(0);
-      showChannel(initialChannel);
+      awaiting = awaitsOpeningPost;
+      apply(openingChannelState(initialChannel));
       feed.replaceChildren();
+      renderEmpty();
       clearTyping();
-      unread = 0;
-      firstUnread = null;
-      renderRail();
     },
     setTyping,
     clearTyping,

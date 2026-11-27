@@ -2,12 +2,22 @@ import { describe, expect, it } from 'vitest';
 
 import {
   channelOfPost,
+  type ChannelState,
+  hasOpeningPost,
   openingChannel,
+  openingChannelState,
   openingSchedule,
   placeholderOf,
   postsInChannel,
+  receivePost,
+  receiveTyping,
+  revealChannel,
+  selectChannel,
+  totalUnread,
   typingLeadMs,
   typingStartMs,
+  typingVisible,
+  unreadOf,
 } from './channel';
 import type { Post, TimelineEvent } from './scenario';
 
@@ -83,7 +93,19 @@ describe('ページを開いた時点のチャンネル', () => {
     const waiting: TimelineEvent = { when: 'tests:ran', kind: 'post', post: lead };
     const affected: TimelineEvent = { at: 0, kind: 'affected', count: 1 };
     expect(openingChannel([waiting], inquiryChannel)).toBe(inquiryChannel);
-    expect(openingChannel([waiting, affected, arriving(presenter('a'), 3)], inquiryChannel)).toBe(handsOn);
+    expect(openingChannel([waiting, affected, arriving(presenter('a'))], inquiryChannel)).toBe(handsOn);
+  });
+
+  it('開いてから時間が経って届く発言は、開いた時点のチャンネルを決めない', () => {
+    expect(openingChannel([arriving(lead, 3)], inquiryChannel)).toBe(inquiryChannel);
+    expect(openingChannel([arriving(lead, 3), arriving(presenter('a'))], inquiryChannel)).toBe(handsOn);
+  });
+
+  it('開いた時点で届く発言があるかを答える', () => {
+    const waiting: TimelineEvent = { when: 'tests:ran', kind: 'post', post: lead };
+    expect(hasOpeningPost([arriving(support('a'))])).toBe(true);
+    expect(hasOpeningPost([arriving(lead, 3), waiting])).toBe(false);
+    expect(hasOpeningPost([])).toBe(false);
   });
 });
 
@@ -129,5 +151,202 @@ describe('開いた時点の発言の届く時刻', () => {
     const [, second] = openingSchedule([support('a'), support('b')], inquiryChannel);
     if (second === undefined) throw new Error('発言がありません');
     expect(second.at * 1000 - typingStartMs(second.at)).toBe(typingLeadMs);
+  });
+});
+
+describe('参加者が選んだチャンネルの状態', () => {
+  const dev = '# dev';
+  const general = '# general';
+  const reading = (channel: string, unread: Record<string, number> = {}): ChannelState => ({
+    channel,
+    pinned: true,
+    unread,
+  });
+  const arrive = (channel: string, self = false): { readonly channel: string; readonly self: boolean } => ({
+    channel,
+    self,
+  });
+
+  describe('チャンネルを選ぶ', () => {
+    it('開いた時点では、開いた時点のチャンネルを表示し、固定せず、未読が無い', () => {
+      expect(openingChannelState(dev)).toEqual({ channel: dev, pinned: false, unread: {} });
+    });
+
+    it('選んだチャンネルを表示し、固定する', () => {
+      expect(selectChannel(openingChannelState(dev), inquiryChannel)).toMatchObject({
+        channel: inquiryChannel,
+        pinned: true,
+      });
+    });
+
+    it('選んだチャンネルの未読を 0 にし、他のチャンネルの未読は残す', () => {
+      const next = selectChannel(reading(inquiryChannel, { [dev]: 2, [handsOn]: 1 }), dev);
+      expect(unreadOf(next, dev)).toBe(0);
+      expect(unreadOf(next, handsOn)).toBe(1);
+    });
+
+    it('すでに表示しているチャンネルを選んでも、固定する', () => {
+      expect(selectChannel(openingChannelState(dev), dev)).toMatchObject({ channel: dev, pinned: true });
+    });
+  });
+
+  describe('発言が届く', () => {
+    it('固定していないときは、発言のチャンネルに切り替える', () => {
+      const next = receivePost(openingChannelState(dev), arrive(inquiryChannel), true);
+      expect(next).toMatchObject({ channel: inquiryChannel, pinned: false });
+    });
+
+    it('固定していないときに切り替えた先の、残っていた未読は 0 になる', () => {
+      const state: ChannelState = { channel: dev, pinned: false, unread: { [inquiryChannel]: 3 } };
+      expect(unreadOf(receivePost(state, arrive(inquiryChannel), true), inquiryChannel)).toBe(0);
+    });
+
+    it('固定していて、別のチャンネルの発言が届いたときは、切り替えずに、そのチャンネルの未読を 1 増やす', () => {
+      const next = receivePost(reading(inquiryChannel), arrive(dev), true);
+      expect(next).toMatchObject({ channel: inquiryChannel, pinned: true });
+      expect(unreadOf(next, dev)).toBe(1);
+      expect(unreadOf(receivePost(next, arrive(dev), true), dev)).toBe(2);
+    });
+
+    it('固定していて、別のチャンネルの発言が届いたときは、表示中のチャンネルと他のチャンネルの未読を変えない', () => {
+      const next = receivePost(reading(inquiryChannel, { [handsOn]: 4 }), arrive(dev), true);
+      expect(unreadOf(next, inquiryChannel)).toBe(0);
+      expect(unreadOf(next, handsOn)).toBe(4);
+    });
+
+    it('固定していて、表示中のチャンネルの発言が届いたときは、状態を変えない', () => {
+      const state = reading(inquiryChannel, { [dev]: 1 });
+      expect(receivePost(state, arrive(inquiryChannel), true)).toEqual(state);
+    });
+
+    it('参加者自身の発言が届いたときは、固定していても発言のチャンネルに切り替え、固定を解除する', () => {
+      const next = receivePost(reading(dev), arrive(inquiryChannel, true), true);
+      expect(next).toMatchObject({ channel: inquiryChannel, pinned: false });
+    });
+
+    it('固定していないときの参加者自身の発言は、発言のチャンネルに切り替え、固定しないままにする', () => {
+      const next = receivePost(openingChannelState(dev), arrive(inquiryChannel, true), true);
+      expect(next).toMatchObject({ channel: inquiryChannel, pinned: false });
+    });
+
+    it('参加者自身の発言のあとに届く発言は、固定が解除されているので、発言のチャンネルに切り替わる', () => {
+      const replied = receivePost(reading(dev), arrive(inquiryChannel, true), true);
+      expect(receivePost(replied, arrive(handsOn), true)).toMatchObject({ channel: handsOn, pinned: false });
+    });
+
+    it('参加者自身の発言のチャンネルの未読は、0 になる', () => {
+      const next = receivePost(reading(dev, { [inquiryChannel]: 2 }), arrive(inquiryChannel, true), true);
+      expect(unreadOf(next, inquiryChannel)).toBe(0);
+    });
+  });
+
+  describe('チャットが見えていない間に発言が届く', () => {
+    it('固定していなくても、離れたチャンネルの発言の未読が残り、表示中のチャンネルは最後の発言のチャンネルになる', () => {
+      const posts = [arrive(dev), arrive(handsOn), arrive(handsOn)];
+      const hidden = posts.reduce((state, post) => receivePost(state, post, false), openingChannelState(handsOn));
+      expect(hidden.channel).toBe(handsOn);
+      expect(unreadOf(hidden, dev)).toBe(1);
+      expect(unreadOf(hidden, handsOn)).toBe(2);
+    });
+
+    it('見えるようになると、表示中のチャンネルの未読だけが 0 になり、離れたチャンネルの未読は残る', () => {
+      const posts = [arrive(dev), arrive(handsOn), arrive(handsOn)];
+      const hidden = posts.reduce((state, post) => receivePost(state, post, false), openingChannelState(handsOn));
+      const shown = revealChannel(hidden);
+      expect(shown.channel).toBe(handsOn);
+      expect(unreadOf(shown, handsOn)).toBe(0);
+      expect(unreadOf(shown, dev)).toBe(1);
+    });
+
+    it('固定していても、別のチャンネルの発言の未読が増え、表示中のチャンネルは変わらない', () => {
+      const next = receivePost(reading(inquiryChannel), arrive(dev), false);
+      expect(next).toMatchObject({ channel: inquiryChannel, pinned: true });
+      expect(unreadOf(next, dev)).toBe(1);
+    });
+
+    it('参加者自身の発言は、未読を増やさず、宛先のチャンネルを表示して固定を解除する', () => {
+      const next = receivePost(reading(dev), arrive(inquiryChannel, true), false);
+      expect(next).toMatchObject({ channel: inquiryChannel, pinned: false });
+      expect(unreadOf(next, inquiryChannel)).toBe(0);
+    });
+
+    it('固定していないときに切り替えた先の、残っていた未読は 0 にならず、1 増える', () => {
+      const state: ChannelState = { channel: dev, pinned: false, unread: { [inquiryChannel]: 3 } };
+      expect(unreadOf(receivePost(state, arrive(inquiryChannel), false), inquiryChannel)).toBe(4);
+    });
+  });
+
+  describe('チャットが見えるようになる', () => {
+    it('固定したチャンネルの未読を 0 にし、固定は変えない', () => {
+      const next = revealChannel(reading(inquiryChannel, { [inquiryChannel]: 2, [dev]: 1 }));
+      expect(next).toMatchObject({ channel: inquiryChannel, pinned: true });
+      expect(unreadOf(next, inquiryChannel)).toBe(0);
+      expect(unreadOf(next, dev)).toBe(1);
+    });
+  });
+
+  describe('入力中の表示', () => {
+    it('固定していないときは、発言のチャンネルに切り替えて、入力中を出す', () => {
+      const next = receiveTyping(openingChannelState(dev), inquiryChannel, true);
+      expect(next.channel).toBe(inquiryChannel);
+      expect(typingVisible(next, inquiryChannel)).toBe(true);
+    });
+
+    it('固定していないときに切り替えた先の、残っていた未読は 0 になる', () => {
+      const state: ChannelState = { channel: dev, pinned: false, unread: { [inquiryChannel]: 3 } };
+      expect(unreadOf(receiveTyping(state, inquiryChannel, true), inquiryChannel)).toBe(0);
+    });
+
+    it('チャットが見えていない間は、切り替えても、切り替えた先の未読を 0 にしない', () => {
+      const state: ChannelState = { channel: dev, pinned: false, unread: { [inquiryChannel]: 3 } };
+      const next = receiveTyping(state, inquiryChannel, false);
+      expect(next.channel).toBe(inquiryChannel);
+      expect(unreadOf(next, inquiryChannel)).toBe(3);
+    });
+
+    it('固定していて、発言のチャンネルが表示中のチャンネルと同じときは、入力中を出す', () => {
+      const state = reading(dev);
+      expect(receiveTyping(state, dev, true)).toEqual(state);
+      expect(typingVisible(state, dev)).toBe(true);
+    });
+
+    it('固定していて、発言のチャンネルが表示中のチャンネルと違うときは、切り替えず、入力中を出さない', () => {
+      const state = reading(inquiryChannel);
+      expect(receiveTyping(state, dev, true)).toEqual(state);
+      expect(typingVisible(state, dev)).toBe(false);
+    });
+
+    it('固定していないときは、表示中のチャンネルと違っても、入力中を出す', () => {
+      expect(typingVisible(openingChannelState(dev), inquiryChannel)).toBe(true);
+    });
+  });
+
+  describe('未読の件数', () => {
+    it('届いていないチャンネルの未読は 0 である', () => {
+      expect(unreadOf(openingChannelState(dev), general)).toBe(0);
+    });
+
+    it('チャット全体の未読は、チャンネルごとの未読の合計である', () => {
+      expect(totalUnread(reading(dev, { [dev]: 2, [handsOn]: 1, [general]: 4 }))).toBe(7);
+    });
+
+    it('どのチャンネルにも未読が無いときの、チャット全体の未読は 0 である', () => {
+      expect(totalUnread(openingChannelState(dev))).toBe(0);
+    });
+
+    it('チャットが見えるようになると、表示中のチャンネルの分だけ合計から減る', () => {
+      const next = revealChannel(reading(dev, { [dev]: 1, [handsOn]: 3 }));
+      expect(totalUnread(next)).toBe(3);
+    });
+
+    it('チャットが見えていて別のチャンネルに届いた発言も、合計に入る', () => {
+      const next = receivePost(reading(dev), arrive(handsOn), true);
+      expect(totalUnread(next)).toBe(1);
+    });
+
+    it('チャンネルを選ぶと、選んだチャンネルの分だけ合計から減る', () => {
+      const next = selectChannel(reading(dev, { [dev]: 1, [handsOn]: 3 }), handsOn);
+      expect(totalUnread(next)).toBe(1);
+    });
   });
 });
