@@ -425,7 +425,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       expect(followUpDelays(id), id).toEqual([0.6]);
     }
     expect(followUpDelays('chapter-4/04')).toEqual([1.2]);
-    expect(followUpDelays('chapter-4/02')).toEqual([1.2, 1.2, 1.0]);
+    expect(followUpDelays('chapter-4/02')).toEqual([1.2, 4.5, 1.0]);
   });
 
   it('テストが通った後のカスタマーサポートの発言は 0.6 秒で届く', () => {
@@ -751,7 +751,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
           'console:console:DB Console',
           'adr:doc:ADR 3: 業務イベントを導入する前のデータを、移行用のイベントとして取り込む',
         ],
-        waiting: [{ when: 'chat:replied', kind: 'tab', tab: 'adr', action: 'add' }],
+        waiting: [],
         storageId: 'chapter-4-summary-table',
         exercise: 'chapter-4-summary-table-done',
         entry: 'why-this-count.ts',
@@ -835,6 +835,14 @@ describe('第1章から第4章とまとめの筋書き', () => {
         expect(projectFilesOf(editor.config.snapshot)).toEqual(['db.ts', 'visits.test.ts', 'visits.ts', item.entry]);
       },
     );
+
+    it('chapter-4/02 は、ADR 3 にまとめたことを知らせる発言と同時に、ADR 3 のタブを足す', () => {
+      const scenario = lessonScenarios['chapter-4/02'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      const added = (scenario.reply?.followUps ?? []).map((followUp) => [followUp.text, followUp.addTab]);
+      expect(added).toEqual([[financeThanks, undefined], [migrateOldData, undefined], [migrationRecord, 'adr']]);
+      expect(scenario.tabs.find((tab) => tab.key === 'adr')?.initial).toBe(false);
+    });
 
     it('chapter-4/02 の返信の後のテックリードの発言は、「# dev」に届く', () => {
       const scenario = lessonScenarios['chapter-4/02'];

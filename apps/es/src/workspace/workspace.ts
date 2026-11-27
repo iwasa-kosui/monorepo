@@ -492,6 +492,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
             at: due,
             run: () => {
               chat.addPost({ actor: item.actor, text: item.text, ...channel }, due);
+              if (item.addTab !== undefined) applyTab(item.addTab, 'add');
               if (last) scheduler.finish(due);
             },
           },

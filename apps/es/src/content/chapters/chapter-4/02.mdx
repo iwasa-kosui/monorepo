@@ -94,7 +94,7 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 
 業務イベントを導入する前からある来院を、移行用のイベント `VisitMigrated` として `business_events` テーブルに取り込みます。
 
-`VisitMigrated` は、来院ごとに1行です。`target_state` には、移行した時点の来院の行を保存します。`payload` は空にします。業務イベントを導入する前のキャンセルの理由と操作者は、どこにも残っていないためです。`event_at` は、移行を実行した日時です。
+`VisitMigrated` は、来院ごとに1行です。`target_state` には、移行した時点の来院の行を保存します。`payload` は空のオブジェクト `{}` にします。業務イベントを導入する前のキャンセルの理由と操作者は、どこにも残っていないためです。`event_at` は、移行を実行した日時です。
 
 キャンセル数を業務イベントから数え直すときは、`VisitCancelled` に加えて、`target_state` の `status` が `cancelled` の `VisitMigrated` を数えます。
 

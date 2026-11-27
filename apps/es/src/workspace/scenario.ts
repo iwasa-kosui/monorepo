@@ -282,6 +282,7 @@ export type ReplyConfig = {
     readonly delay: number;
     readonly text: string;
     readonly channel?: string;
+    readonly addTab?: string;
   }[];
 };
 

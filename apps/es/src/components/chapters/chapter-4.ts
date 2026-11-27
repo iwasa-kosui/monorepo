@@ -1,4 +1,4 @@
-import type { Post, TabDefinition, TableInfo, TimelineEvent, WorkspaceScenario } from '../../workspace/scenario';
+import type { Post, TabDefinition, TableInfo, WorkspaceScenario } from '../../workspace/scenario';
 import { docTab, editorTab, lessonScenario, opening, posts, replyButton } from './common';
 
 const overviewPosts: readonly Post[] = [
@@ -100,8 +100,7 @@ type Consultation = {
   readonly doc: { readonly title: string; readonly path: string };
   readonly pattern: Pattern;
   readonly thanksDelay?: number;
-  readonly laterPosts?: readonly { readonly post: Post; readonly delay: number }[];
-  readonly afterReply?: readonly TimelineEvent[];
+  readonly laterPosts?: readonly { readonly post: Post; readonly delay: number; readonly addTab?: string }[];
   readonly extraTabs?: readonly TabDefinition[];
 };
 
@@ -110,7 +109,7 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     id: options.id,
     label: options.label,
     history: options.history,
-    timeline: [...opening(...options.opened), ...(options.afterReply ?? [])],
+    timeline: opening(...options.opened),
     buttons: replyButton('返信する'),
     gates: {
       reply: {
@@ -122,11 +121,12 @@ const consultation = (options: Consultation): WorkspaceScenario =>
       lines: [{ text: options.answer.text }],
       followUps: [
         { actor: options.thanks.actor, delay: options.thanksDelay ?? 1.2, text: options.thanks.text },
-        ...(options.laterPosts ?? []).map(({ post, delay }) => ({
+        ...(options.laterPosts ?? []).map(({ post, delay, addTab }) => ({
           actor: post.actor,
           delay,
           text: post.text,
           ...(post.channel === undefined ? {} : { channel: post.channel }),
+          ...(addTab === undefined ? {} : { addTab }),
         })),
       ],
     },
@@ -234,10 +234,9 @@ export const chapter4SummaryTable: WorkspaceScenario = consultation({
   doc: { title: '相談1: 集計の件数が合わない', path: 'consultations/summary-table' },
   pattern: summaryTable,
   laterPosts: [
-    { post: posts.migrateOldData, delay: 1.2 },
-    { post: posts.migrationRecord, delay: 1.0 },
+    { post: posts.migrateOldData, delay: 4.5 },
+    { post: posts.migrationRecord, delay: 1.0, addTab: 'adr' },
   ],
-  afterReply: [{ when: 'chat:replied', kind: 'tab', tab: 'adr', action: 'add' }],
   extraTabs: [
     {
       ...docTab(
