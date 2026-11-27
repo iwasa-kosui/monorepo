@@ -193,7 +193,8 @@ const focus = (n: number): Record<string, string> =>
     {
       view === 'mechanism' && (
         <p class="stage-label">
-          イベントを追記する（イベントソーシング）
+          イベントを追記する<span style="white-space: nowrap"
+          >（イベントソーシング）</span>
         </p>
       )
     }
@@ -294,7 +295,7 @@ const focus = (n: number): Record<string, string> =>
       </div>
 
       <div class="zone zone-read">
-        <span class="tag">読み取る処理</span>
+        <span class="tag">読み取る処理（CQRS）</span>
         <div class="tbl">
           <table class="cfig-table">
             <caption>読み取り用のデータ</caption>
