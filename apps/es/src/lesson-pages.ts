@@ -137,7 +137,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     flow: 'demo',
     mode: 'do',
     role:
-      '情シスからの質問について、監査ログと業務イベントの役割を分ける方法を、エディタの完成コードと DB コンソールの SQL で確かめて返信する',
+      '情シスからの質問について、監査ログで足りる領域と、イベントで残す領域を分ける方法を、エディタの完成コードと DB コンソールの SQL で確かめて返信する',
   },
   'chapter-4/05': {
     flow: 'try',
