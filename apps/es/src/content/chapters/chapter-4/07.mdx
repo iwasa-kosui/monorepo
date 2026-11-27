@@ -14,6 +14,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 <Workspace scenario={chapter4AuditLogAdr}>
 <Fragment slot="memo">
+
 - ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
 - 日付: 2026-11-09
 - 作成者: テックリード
@@ -40,7 +41,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 すべての変更が業務イベントを記録した後は、監査ログを業務イベントから生成します。イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
 
-業務イベントを導入する前の監査ログの変更は、ADR 3 のとおり `VisitMigrated` として取り込みます。
+業務イベントを導入する前からある来院は、ADR 3 のとおり `VisitMigrated` として取り込みます。導入前の監査ログは、監査ログを業務イベントから生成した後も残します。
 
 ### 結果
 
@@ -48,7 +49,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 業務イベントを導入する前の変更は、`VisitMigrated` として取り込んでも、理由は分かりません。
 
-すべての変更が業務イベントを記録した後は、記録は業務イベントだけになります。
+すべての変更が業務イベントを記録した後は、業務イベントを導入した後の変更の記録は、業務イベントだけになります。
 
 ### 検討した案
 
