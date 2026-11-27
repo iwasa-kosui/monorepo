@@ -228,8 +228,8 @@ const timedPostsOf = (scenario: WorkspaceScenario): { readonly at: number; reado
 describe('第1章から第4章とまとめの筋書き', () => {
   it('19 ページ分あり、章のページと同じ ID を持つ', () => {
     expect(Object.keys(lessonScenarios)).toEqual([
-      'chapter-1/01',
       'chapter-1/02',
+      'chapter-1/03',
       'chapter-2/01',
       'chapter-2/02',
       'chapter-2/03',
@@ -361,8 +361,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
     }
   });
 
-  it('第1章 2 ページ目は、テックリードの発言で始まるので、開いた時点のチャンネルが「# dev」である', () => {
-    const scenario = lessonScenarios['chapter-1/02'];
+  it('第1章 3 ページ目は、テックリードの発言で始まるので、開いた時点のチャンネルが「# dev」である', () => {
+    const scenario = lessonScenarios['chapter-1/03'];
     if (scenario === undefined) throw new Error('筋書きがありません');
     expect(openingChannel(scenario.timeline, scenario.chat.channel)).toBe(devChannel);
   });
@@ -384,7 +384,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       .filter(([, scenario]) => scenario.tabs.every((tab) => tab.kind === 'doc'))
       .map(([id]) => id);
     expect(docsOnly).toEqual([
-      'chapter-1/01',
+      'chapter-1/02',
       'chapter-2/01',
       'chapter-2/03',
       'chapter-3/02',
@@ -481,8 +481,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
   });
 
   describe('第1章', () => {
-    it('1 ページ目は、導入のやり取りを履歴に持ち、開いた時点でテックリードが 1 件、kosui が 2 件投稿する', () => {
-      const scenario = lessonScenarios['chapter-1/01'];
+    it('2 ページ目は、導入のやり取りを履歴に持ち、開いた時点でテックリードが 1 件、kosui が 2 件投稿する', () => {
+      const scenario = lessonScenarios['chapter-1/02'];
       expect(scenario).toBeDefined();
       if (scenario === undefined) return;
       expect(scenario.history.map((post) => [post.actor, post.text])).toEqual([
@@ -504,8 +504,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
       ]);
     });
 
-    it('2 ページ目は、1 ページ目の投稿を履歴に持ち、テスト実行の合図で投稿する', () => {
-      const scenario = lessonScenarios['chapter-1/02'];
+    it('3 ページ目は、2 ページ目の投稿を履歴に持ち、テスト実行の合図で投稿する', () => {
+      const scenario = lessonScenarios['chapter-1/03'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       expect(scenario.history.map((post) => [post.actor, post.text])).toEqual([
         ['support', inquiry],

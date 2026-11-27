@@ -13,8 +13,8 @@ import {
 import { summaryDecide, summaryToday } from './summary';
 
 export const lessonScenarios: Readonly<Record<string, WorkspaceScenario>> = {
-  'chapter-1/01': chapter1Question,
-  'chapter-1/02': chapter1RunTests,
+  'chapter-1/02': chapter1Question,
+  'chapter-1/03': chapter1RunTests,
   'chapter-2/01': chapter2Explain,
   'chapter-2/02': chapter2Step1,
   'chapter-2/03': chapter2Table,
