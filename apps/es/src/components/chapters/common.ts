@@ -118,7 +118,7 @@ export const posts = {
   auditAnswer: you('監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました'),
   auditThanks: infoSys('ありがとうございます。理由が無い分は別途確認します'),
   auditLogMigration: lead(
-    '導入前の監査ログの変更は、業務イベントが無いので理由が分かりません。ADR 3 のとおり VisitMigrated で取り込んでも、理由は埋まりません',
+    '導入前の監査ログの変更は、業務イベントが無いので理由が分かりません。ADR 3 のとおり VisitMigrated で取り込んでも、監査ログに無い理由は埋まりません',
   ),
   comparisonMade: lead('3つを同じ軸で並べた表を作りました'),
   chooseOne: presenter('あなたが普段の業務で運用しているシステムに近いパターンを、1つ選んでみてください'),
