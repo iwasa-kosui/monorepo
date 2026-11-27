@@ -37,7 +37,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/04': {
     flow: 'explain',
     mode: 'listen',
-    role: 'イベントソーシングとCQRS',
+    role: 'イベントソーシング',
   },
   'intro/05': {
     flow: 'problem',
