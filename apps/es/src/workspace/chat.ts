@@ -3,6 +3,7 @@ import { minuteOf } from './clock';
 import { cloneFirst, fillText, must } from './dom';
 import type { MemoView } from './rules';
 import type { ButtonName, Post, WorkspaceScenario } from './scenario';
+import { firstUnreadOf, scrollTopToReveal } from './unread';
 
 export type ChatView = {
   readonly started: boolean;
@@ -54,6 +55,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   let channel = initialChannel;
   let typingActor: string | null = null;
   let unread = 0;
+  let firstUnread: HTMLElement | null = null;
   let open = false;
   let tabbed = false;
   let front = false;
@@ -117,11 +119,28 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     }
   };
 
+  const revealUnread = (toEnd: boolean): void => {
+    const target = firstUnread;
+    firstUnread = null;
+    unread = 0;
+    feed.scrollTop = scrollTopToReveal({
+      scrollTop: feed.scrollTop,
+      feedTop: feed.getBoundingClientRect().top,
+      paddingTop: parseFloat(getComputedStyle(feed).paddingTop),
+      targetTop: target?.isConnected === true ? target.getBoundingClientRect().top : null,
+      scrollHeight: feed.scrollHeight,
+      toEnd,
+    });
+  };
+
   const setOpen = (next: boolean): void => {
     open = next;
-    if (open) unread = 0;
     renderRail();
-    if (open) feed.focus({ preventScroll: true });
+    if (open) {
+      revealUnread(false);
+      renderRail();
+      feed.focus({ preventScroll: true });
+    }
   };
 
   const closeRail = (): boolean => {
@@ -167,6 +186,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     if (typingActor === post.actor) clearTyping();
     if (counted && shown && !visible() && actor?.self !== true) {
       unread += 1;
+      firstUnread = firstUnreadOf(firstUnread, firstUnread?.isConnected === true, copy);
       renderRail();
     }
   };
@@ -185,10 +205,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
       tabbed = view.tabbed;
       front = view.front;
       if (tabbed) open = false;
-      if (visible()) {
-        unread = 0;
-        feed.scrollTop = feed.scrollHeight;
-      }
+      if (visible()) revealUnread(true);
       renderRail();
     }
     const disabled = (name: ButtonName, base: boolean): boolean =>
@@ -226,6 +243,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
       feed.replaceChildren();
       clearTyping();
       unread = 0;
+      firstUnread = null;
       renderRail();
     },
     setTyping,
