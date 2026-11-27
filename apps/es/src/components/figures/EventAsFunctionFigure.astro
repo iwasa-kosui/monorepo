@@ -16,7 +16,7 @@ const targetState = [
 ];
 
 const down = (length: number): string =>
-  `<svg class="v" viewBox="0 0 24 ${length}" aria-hidden="true" focusable="false"><path class="shaft" d="M12 4V${
+  `<svg viewBox="0 0 24 ${length}" aria-hidden="true" focusable="false"><path class="shaft" d="M12 4V${
     length - 6
   }"/><path class="head" d="M5 ${length - 16}L12 ${length - 4}L19 ${
     length - 16
@@ -58,7 +58,7 @@ const arrow = down(48);
     </div>
 
     <div class="link" data-link="emit">
-      <span class="label">出力される</span>
+      <span>出力される</span>
       <span class="arrow"><Fragment set:html={arrow} /></span>
     </div>
 
