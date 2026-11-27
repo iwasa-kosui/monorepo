@@ -88,6 +88,9 @@ export const posts = {
   staffReply: { actor: 'you', text: '受付スタッフが、飼い主の都合でキャンセルしてます' },
   otherTeams: lead('記録の話、ほかのチームからも相談が来てます'),
   threeConsultations: lead('3つあるので順番に見ていきましょう'),
+  pastExperience: presenter(
+    '医療SaaSの共通基盤で、既存の顧客基盤に最新状態しか残っておらず、過去のユーザー、店舗、端末、ライセンスの変化を追うことが難しかった経験があります',
+  ),
   closestQuestion: presenter('自分が挙げた質問に近いのはどれか、考えながら見てもらえると'),
   financeGreeting: finance('お疲れ様です。昨日のキャンセル件数の件で質問です'),
   financeAsked: finance('集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？'),

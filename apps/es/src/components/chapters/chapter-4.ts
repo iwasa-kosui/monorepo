@@ -1,7 +1,12 @@
 import type { Post, TabDefinition, TableInfo, WorkspaceScenario } from '../../workspace/scenario';
 import { docTab, editorTab, lessonScenario, opening, posts, replyButton } from './common';
 
-const overviewPosts: readonly Post[] = [posts.otherTeams, posts.threeConsultations, posts.closestQuestion];
+const overviewPosts: readonly Post[] = [
+  posts.otherTeams,
+  posts.threeConsultations,
+  posts.pastExperience,
+  posts.closestQuestion,
+];
 
 const businessEvents: TableInfo = {
   name: 'business_events',
