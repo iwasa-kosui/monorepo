@@ -46,7 +46,7 @@ export const chapter2Table: WorkspaceScenario = lessonScenario({
   history: [...earlier, posts.decisionRecord],
   timeline: opening(posts.tableRecord),
   tabs: [
-    docTab('memo', 'ADR 2: 記録を1つのテーブルにまとめる', 'adr/2-record-table', true),
+    docTab('memo', 'ADR 2: 出来事ごとの記録を、1つのテーブルにまとめる', 'adr/2-record-table', true),
     docTab('explain', '3つの列を関数にたとえる', 'notes/columns-as-function'),
   ],
 });
