@@ -3,6 +3,7 @@ wide: true
 immersive: true
 ---
 
+import EventAsFunctionFigure from '../../../components/figures/EventAsFunctionFigure.astro';
 import RecordMappingFigure from '../../../components/figures/RecordMappingFigure.astro';
 import Quote from '../../../components/Quote.astro';
 import { chapter2Table } from '../../../components/chapters/chapter-2';
@@ -47,6 +48,10 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - 来院以外の対象の記録も同じテーブルに保存するので、対象は `target_type` と `target_id` の組で表します。
 - 来院の行からは、キャンセルした人と理由は分かりません。`operated_by` や `reason` のように出来事ごとに異なる列は、JSON にして `payload` の1列に保存します。
 - `target_state` には、変更後の来院の行をそのまま保存します。`visits` の行はその後も変わりますが、「いつ何が起きたか」と「その時点の状態」の両方を確認できます。
+
+`event_name`、`payload`、`target_state` の3つの列は、関数にたとえることもできます。`event_name` という関数に `payload` という引数を与えると、結果として `target_state` の状態が出力されます。あくまで例ですが、このように捉えると分かりやすいかもしれません。
+
+<EventAsFunctionFigure />
 
 一方で、`payload` と `target_state` の内容は、DB が検査しません。キーの名前を誤っても `INSERT` は成功し、読み取り時に値を取得できません。また、来院の状態を `visits` と `business_events` の両方に保持するので、1行のサイズが大きくなります。
 

@@ -1,0 +1,329 @@
+---
+import './figure.css';
+
+const payload = [
+  '{',
+  '  "reason": "飼い主の都合",',
+  '  "operatedBy": "受付スタッフ"',
+  '}',
+];
+const targetState = [
+  '{',
+  '  "id": "visit-pochi",',
+  '  "pet_name": "ポチ",',
+  '  "status": "cancelled"',
+  '}',
+];
+
+const right = (length: number): string =>
+  `<svg class="h" viewBox="0 0 ${length} 24" aria-hidden="true" focusable="false"><path class="shaft" d="M4 12H${
+    length - 6
+  }"/><path class="head" d="M${length - 16} 5L${length - 4} 12L${
+    length - 16
+  } 19"/><circle class="dot" cx="9" cy="12" r="5" style="--dx:${
+    length - 24
+  }px;--dy:0px"/></svg>`;
+const down = (length: number): string =>
+  `<svg class="v" viewBox="0 0 24 ${length}" aria-hidden="true" focusable="false"><path class="shaft" d="M12 4V${
+    length - 6
+  }"/><path class="head" d="M5 ${length - 16}L12 ${length - 4}L19 ${
+    length - 16
+  }"/><circle class="dot" cx="12" cy="9" r="5" style="--dx:0px;--dy:${
+    length - 24
+  }px"/></svg>`;
+
+const arrow = right(96) + down(48);
+---
+
+<section
+  class="cfig fn"
+  data-event-as-function-figure
+  aria-label="event_name を関数、payload を引数、target_state を出力にたとえた図"
+>
+  <p class="fn-head">3つの列を関数にたとえた例</p>
+
+  <div class="flow">
+    <div class="face face-fn">
+      <div class="face-top">
+        <span class="face-label">関数</span>
+        <span class="mono">event_name</span>
+      </div>
+      <div class="call">
+        <span class="mono name" data-lit="fn">VisitCancelled</span>
+        <span
+          class="mono paren"
+          aria-hidden="true"
+        >(</span>
+      </div>
+      <div class="arg" data-lit="arg">
+        <div class="face-top">
+          <span class="face-label">引数</span>
+          <span class="mono">payload</span>
+        </div>
+        <pre class="mono value">{payload.map((line) => <span class="line">{line}</span>)}</pre>
+      </div>
+      <div class="mono paren" aria-hidden="true">)</div>
+    </div>
+
+    <div class="link" data-link="emit">
+      <span class="label">出力される</span>
+      <span class="arrow"><Fragment set:html={arrow} /></span>
+    </div>
+
+    <div class="face face-out" data-lit="out">
+      <div class="face-top">
+        <span class="face-label">出力</span>
+        <span class="mono">target_state</span>
+      </div>
+      <pre class="mono value">{targetState.map((line) => <span class="line">{line}</span>)}</pre>
+    </div>
+  </div>
+</section>
+
+<style>
+.cfig.fn {
+  container-type: inline-size;
+  gap: var(--space-3);
+}
+.cfig.fn .mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+}
+.cfig.fn .fn-head {
+  margin: 0;
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.face {
+  --base: var(--role-ground);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--base);
+  padding: var(--space-3) var(--space-4);
+}
+.face-fn {
+  --base: var(--role-accent-strong);
+  color: var(--role-on-strong);
+}
+.face-out {
+  --base: var(--role-accent-soft);
+}
+.face-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+}
+.face-label {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+
+.cfig.fn .call {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.cfig.fn .name {
+  --base: transparent;
+  margin-left: calc(-1 * var(--space-2));
+  border-radius: var(--radius-sm);
+  background-color: var(--base);
+  padding: 0 var(--space-2);
+  font-size: var(--fig-text);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+.cfig.fn .paren {
+  font-size: var(--fig-text);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.cfig.fn .arg {
+  --base: var(--role-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-inline: var(--space-4);
+  border-radius: var(--radius-md);
+  background-color: var(--base);
+  padding: var(--space-3) var(--space-4);
+  color: var(--role-ink);
+}
+.cfig.fn .value {
+  margin: 0;
+  border-radius: 0;
+  background: transparent !important;
+  padding: 0;
+  color: inherit;
+  line-height: var(--leading-normal);
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.cfig.fn .line {
+  display: block;
+  padding-inline-start: 4ch;
+  text-indent: -4ch;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+.arrow {
+  display: block;
+  flex: none;
+  order: -1;
+  width: 1.5rem;
+  color: var(--role-muted);
+  line-height: 0;
+}
+.arrow :global(svg) {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.arrow :global(svg.h) {
+  display: none;
+}
+.arrow :global(.shaft),
+.arrow :global(.head) {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.arrow :global(.dot) {
+  fill: var(--role-accent);
+  opacity: 0;
+}
+
+@container (min-width: 68rem) {
+  .flow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 6rem minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .link {
+    flex-direction: column;
+    gap: var(--space-1);
+    text-align: center;
+  }
+  .arrow {
+    order: 0;
+    width: 100%;
+  }
+  .arrow :global(svg.h) {
+    display: block;
+  }
+  .arrow :global(svg.v) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cfig.fn {
+    --cycle: 8s;
+    --lit: var(--role-marker);
+  }
+
+  [data-lit="arg"] {
+    animation: lit-arg var(--cycle) linear infinite;
+  }
+  [data-lit="fn"] {
+    animation: lit-fn var(--cycle) linear infinite;
+  }
+  [data-link="emit"] .arrow :global(.dot) {
+    animation: travel var(--cycle) linear infinite;
+  }
+  [data-lit="out"] {
+    animation: lit-out var(--cycle) linear infinite;
+  }
+
+  @keyframes lit-arg {
+    0%,
+    22%,
+    100% {
+      background-color: var(--base);
+    }
+    4%,
+    18% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes lit-fn {
+    0%,
+    22%,
+    44%,
+    100% {
+      background-color: var(--base);
+      color: var(--role-on-strong);
+    }
+    26%,
+    40% {
+      background-color: var(--lit);
+      color: var(--role-ink);
+    }
+  }
+  @keyframes travel {
+    0%,
+    44% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    46% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    64% {
+      opacity: 1;
+      transform: translate(var(--dx), var(--dy));
+    }
+    66%,
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy));
+    }
+  }
+  @keyframes lit-out {
+    0%,
+    66%,
+    94%,
+    100% {
+      background-color: var(--base);
+    }
+    70%,
+    90% {
+      background-color: var(--lit);
+    }
+  }
+}
+</style>
