@@ -1,0 +1,390 @@
+<style>
+.fig-rpt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  border-radius: 12px;
+  background: var(--fig-soft);
+  padding: 1rem;
+  overflow-x: auto;
+  color: var(--fig-ink);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.fig-rpt .fig-rpt-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.fig-rpt .fig-rpt-head {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-rpt-face-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-rpt-caller {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  border-radius: 10px;
+  background-color: var(--fig-agent);
+  padding: 0.75rem 1rem;
+  color: var(--fig-on-agent);
+}
+.fig-rpt-caller-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.fig-rpt-tx {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-inline-start: 1rem;
+  border-radius: 10px;
+  background-color: var(--fig-surface);
+  padding: 0.75rem 1rem;
+}
+.fig-rpt-tx-label {
+  --base: transparent;
+  align-self: flex-start;
+  margin-inline-start: -0.5rem;
+  border-radius: 4px;
+  background-color: var(--base);
+  padding: 0 0.5rem;
+  color: var(--fig-muted);
+}
+.fig-rpt-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4rem minmax(0, 1.25fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+.fig-rpt-stmt {
+  --base: var(--fig-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  border-radius: 8px;
+  background-color: var(--base);
+  padding: 0.5rem 0.75rem;
+}
+.fig-rpt-stmt-note {
+  color: var(--fig-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.fig-rpt-arrow {
+  display: block;
+  color: var(--fig-muted);
+  line-height: 0;
+}
+.fig-rpt-arrow svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.fig-rpt-shaft,
+.fig-rpt-head-mark {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fig-rpt-dot {
+  fill: var(--fig-agent);
+  opacity: 0;
+}
+.fig-rpt-store {
+  --base: var(--fig-agent-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  border-radius: 8px;
+  background-color: var(--base);
+  padding: 0.5rem 0.75rem;
+}
+.fig-rpt-store-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-rpt-row {
+  --base: var(--fig-surface);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  border-radius: 4px;
+  background-color: var(--base);
+  padding: 0.25rem 0.5rem;
+}
+.fig-rpt-cell {
+  min-width: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.fig-rpt-status {
+  display: inline-grid;
+}
+.fig-rpt-status-before,
+.fig-rpt-status-after {
+  grid-area: 1 / 1;
+}
+.fig-rpt-status-before {
+  opacity: 0;
+}
+
+@media (max-width: 40rem) {
+  .fig-rpt-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fig-rpt-arrow {
+    display: grid;
+    place-items: center;
+    justify-self: center;
+    width: 4rem;
+    height: 4rem;
+  }
+  .fig-rpt-arrow svg {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fig-rpt {
+    --cycle: 10s;
+    --lit: color-mix(in srgb, var(--fig-agent) 30%, var(--fig-surface));
+  }
+
+  .fig-rpt-update {
+    animation: fig-rpt-lit-update var(--cycle) linear infinite;
+  }
+  .fig-rpt-arrow-update .fig-rpt-dot {
+    animation: fig-rpt-travel-update var(--cycle) linear infinite;
+  }
+  .fig-rpt-status-before {
+    animation: fig-rpt-status-before var(--cycle) linear infinite;
+  }
+  .fig-rpt-status-after {
+    animation: fig-rpt-status-after var(--cycle) linear infinite;
+  }
+  .fig-rpt-visits .fig-rpt-row {
+    animation: fig-rpt-lit-visits var(--cycle) linear infinite;
+  }
+  .fig-rpt-insert {
+    animation: fig-rpt-lit-insert var(--cycle) linear infinite;
+  }
+  .fig-rpt-arrow-insert .fig-rpt-dot {
+    animation: fig-rpt-travel-insert var(--cycle) linear infinite;
+  }
+  .fig-rpt-row-new {
+    animation: fig-rpt-row-new var(--cycle) linear infinite;
+  }
+  .fig-rpt-tx-label {
+    animation: fig-rpt-lit-tx var(--cycle) linear infinite;
+  }
+
+  @keyframes fig-rpt-lit-update {
+    0%,
+    6%,
+    24%,
+    100% {
+      background-color: var(--base);
+    }
+    9%,
+    21% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes fig-rpt-travel-update {
+    0%,
+    11% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    12% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    21% {
+      opacity: 1;
+      transform: translate(42px, 0);
+    }
+    22%,
+    100% {
+      opacity: 0;
+      transform: translate(42px, 0);
+    }
+  }
+  @keyframes fig-rpt-status-before {
+    0%,
+    22% {
+      opacity: 1;
+    }
+    24%,
+    96% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes fig-rpt-status-after {
+    0%,
+    22% {
+      opacity: 0;
+    }
+    24%,
+    96% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes fig-rpt-lit-visits {
+    0%,
+    22%,
+    36%,
+    100% {
+      background-color: var(--base);
+    }
+    25%,
+    33% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes fig-rpt-lit-insert {
+    0%,
+    36%,
+    54%,
+    100% {
+      background-color: var(--base);
+    }
+    39%,
+    51% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes fig-rpt-travel-insert {
+    0%,
+    41% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    42% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    51% {
+      opacity: 1;
+      transform: translate(42px, 0);
+    }
+    52%,
+    100% {
+      opacity: 0;
+      transform: translate(42px, 0);
+    }
+  }
+  @keyframes fig-rpt-row-new {
+    0%,
+    52% {
+      opacity: 0;
+      background-color: var(--base);
+    }
+    55%,
+    63% {
+      opacity: 1;
+      background-color: var(--lit);
+    }
+    66%,
+    96% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+    100% {
+      opacity: 0;
+      background-color: var(--base);
+    }
+  }
+  @keyframes fig-rpt-lit-tx {
+    0%,
+    66%,
+    92%,
+    100% {
+      background-color: var(--base);
+      color: var(--fig-muted);
+    }
+    70%,
+    88% {
+      background-color: var(--lit);
+      color: var(--fig-ink);
+    }
+  }
+}
+</style>
+<figure class="fig fig-rpt" aria-label="cancelVisit が1つのトランザクションの中で visits を書き換え、business_events へ1行を追記する図">
+<p class="fig-rpt-head">1つのトランザクションの中で、状態の書き換えと記録の追記を行う</p>
+<div class="fig-rpt-caller">
+<span class="fig-rpt-face-label">更新処理</span>
+<span class="fig-rpt-mono fig-rpt-caller-name">cancelVisit</span>
+</div>
+<div class="fig-rpt-tx">
+<span class="fig-rpt-face-label fig-rpt-tx-label">1つのトランザクション</span>
+<div class="fig-rpt-step">
+<div class="fig-rpt-stmt fig-rpt-update">
+<span class="fig-rpt-mono">UPDATE visits</span>
+<span class="fig-rpt-stmt-note">状態を書き換える</span>
+</div>
+<span class="fig-rpt-arrow fig-rpt-arrow-update">
+<svg viewBox="0 0 64 24" aria-hidden="true" focusable="false">
+<path class="fig-rpt-shaft" d="M4 12H56"></path>
+<path class="fig-rpt-head-mark" d="M46 5L60 12L46 19"></path>
+<circle class="fig-rpt-dot" cx="9" cy="12" r="5"></circle>
+</svg>
+</span>
+<div class="fig-rpt-store fig-rpt-visits">
+<span class="fig-rpt-store-name"><span class="fig-rpt-mono">visits</span>（現在の状態）</span>
+<span class="fig-rpt-row">
+<span class="fig-rpt-mono fig-rpt-cell">visit-pochi</span>
+<span class="fig-rpt-mono fig-rpt-cell fig-rpt-status">
+<span class="fig-rpt-status-before" aria-hidden="true">reserved</span>
+<span class="fig-rpt-status-after">cancelled</span>
+</span>
+</span>
+</div>
+</div>
+<div class="fig-rpt-step">
+<div class="fig-rpt-stmt fig-rpt-insert">
+<span class="fig-rpt-mono">INSERT INTO business_events</span>
+<span class="fig-rpt-stmt-note">記録を1行追記する</span>
+</div>
+<span class="fig-rpt-arrow fig-rpt-arrow-insert">
+<svg viewBox="0 0 64 24" aria-hidden="true" focusable="false">
+<path class="fig-rpt-shaft" d="M4 12H56"></path>
+<path class="fig-rpt-head-mark" d="M46 5L60 12L46 19"></path>
+<circle class="fig-rpt-dot" cx="9" cy="12" r="5"></circle>
+</svg>
+</span>
+<div class="fig-rpt-store">
+<span class="fig-rpt-store-name"><span class="fig-rpt-mono">business_events</span>（記録）</span>
+<span class="fig-rpt-row fig-rpt-row-new">
+<span class="fig-rpt-mono fig-rpt-cell">VisitCancelled</span>
+<span class="fig-rpt-cell">飼い主の都合、受付スタッフ</span>
+</span>
+</div>
+</div>
+</div>
+</figure>

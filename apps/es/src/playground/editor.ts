@@ -23,6 +23,7 @@ export type EditorOptions = {
   wrap?: boolean;
   foldExportsExcept?: string;
   typecheck?: Extension;
+  extensions?: readonly Extension[];
   onChange?: (doc: string) => void;
   onCursor?: (line: number, column: number) => void;
   onRun?: () => void;
@@ -113,6 +114,9 @@ export const createEditorState = (doc: string, options: EditorOptions): EditorSt
   }
   if (options.typecheck !== undefined) {
     extensions.push(options.typecheck);
+  }
+  if (options.extensions !== undefined) {
+    extensions.push(...options.extensions);
   }
   if (options.onCursor !== undefined) {
     const onCursor = options.onCursor;

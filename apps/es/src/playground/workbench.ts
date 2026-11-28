@@ -1,9 +1,11 @@
 import { Compartment, type EditorState, type Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 
+import { baseName } from '../lib/file-tree.ts';
 import { type FileSelectedDetail, fileSelectedEvent } from '../workspace/ide-events.ts';
 import { element, query } from './dom.ts';
 import { createEditorState, createEditorView, cursorOf } from './editor.ts';
+import { createTourExtension, revealTourStep, type Tour, type TourControls, tourStepEffect } from './tour.ts';
 
 export type WorkbenchOptions = {
   readonly root: HTMLElement;
@@ -11,12 +13,15 @@ export type WorkbenchOptions = {
   readonly baseline: Readonly<Record<string, string>>;
   readonly editable: readonly string[];
   readonly opened: readonly string[];
+  readonly deferShowAll?: boolean;
   readonly active: string;
   readonly wrap?: boolean;
   readonly typecheck?: boolean;
   readonly foldExcept?: { readonly file: string; readonly name: string };
   readonly onChange?: (file: string) => void;
   readonly onSelect?: (file: string) => void;
+  readonly tour?: Tour;
+  readonly onTourStep?: (index: number | null) => void;
 };
 
 export type Workbench = {
@@ -29,6 +34,9 @@ export type Workbench = {
   readonly docs: () => Record<string, string>;
   readonly setDoc: (file: string, doc: string) => void;
   readonly replaceDoc: (file: string, doc: string) => void;
+  readonly showTourStep: (index: number) => void;
+  readonly closeTour: () => void;
+  readonly tourStep: () => number | null;
 };
 
 const readOnlyNote = '（読み取りだけ）';
@@ -58,6 +66,17 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
   const typecheckSlot = new Compartment();
   let typecheckExtensions: ReadonlyMap<string, Extension> = new Map();
 
+  let tourStep: number | null = null;
+  const tourControls: TourControls = {
+    previous: () => navigateTour(Math.max((tourStep ?? 0) - 1, 0), 'previous'),
+    next: () => navigateTour(Math.min((tourStep ?? 0) + 1, (options.tour?.steps.length ?? 1) - 1), 'next'),
+    restart: () => navigateTour(0, 'restart'),
+    close: () => {
+      closeTour();
+      view.focus();
+    },
+  };
+
   const stateFor = (file: string, doc: string): EditorState =>
     createEditorState(doc, {
       language: 'typescript',
@@ -68,6 +87,7 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
       ...(options.typecheck === true && isEditable(file)
         ? { typecheck: typecheckSlot.of(typecheckExtensions.get(file) ?? []) }
         : {}),
+      ...(options.tour !== undefined ? { extensions: [createTourExtension(options.tour, file, tourControls)] } : {}),
       onChange: (next) => {
         markModified(file, next);
         options.onChange?.(file);
@@ -80,6 +100,15 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
 
   const keep = (): void => {
     states.set(active, view.state);
+  };
+
+  const applyTour = (): void => {
+    if (options.tour !== undefined) view.dispatch({ effects: tourStepEffect.of(tourStep) });
+  };
+
+  const revealActiveTourStep = (): void => {
+    const step = tourStep === null ? undefined : options.tour?.steps[tourStep];
+    if (step !== undefined && step.file === active) revealTourStep(view, step);
   };
 
   if (options.typecheck === true) {
@@ -101,9 +130,17 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
   const tabOf = (file: string): HTMLButtonElement | undefined => tabsOf().find((tab) => tab.dataset.file === file);
 
   const buildTab = (file: string): HTMLElement => {
-    const tab = element('button', { attributes: { type: 'button', role: 'tab', 'data-file': file } }, [
+    const nested = baseName(file) !== file;
+    const tab = element('button', {
+      attributes: {
+        type: 'button',
+        role: 'tab',
+        'data-file': file,
+        ...(nested ? { 'aria-label': `${file}${isEditable(file) ? '' : readOnlyNote}` } : {}),
+      },
+    }, [
       element('span', { className: 'wb-icon', text: 'TS', attributes: { 'aria-hidden': 'true' } }),
-      element('span', { className: 'wb-name', text: file }),
+      element('span', { className: 'wb-name', text: baseName(file) }),
       ...(isEditable(file) ? [] : [element('span', { className: 'wb-lock', text: readOnlyNote })]),
     ]);
     const close = element('button', {
@@ -127,12 +164,38 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
     tabList.toggleAttribute('data-single', tabs.length <= 1);
   };
 
+  const expandParents = (item: HTMLElement): void => {
+    const folders: HTMLElement[] = [];
+    for (
+      let list = item.closest('.ide-files');
+      list !== null;
+      list = list.parentElement?.closest('.ide-files') ?? null
+    ) {
+      const folder = list.previousElementSibling;
+      if (folder instanceof HTMLElement) folders.push(folder);
+    }
+    if (!folders.some((folder) => folder.hasAttribute('data-ide-dir'))) return;
+    for (const folder of folders) folder.setAttribute('aria-expanded', 'true');
+  };
+
+  const keepInView = (item: HTMLElement): void => {
+    const list = item.closest<HTMLElement>('.ide-side > .ide-files');
+    if (list === null || list.clientHeight === 0 || list.scrollHeight <= list.clientHeight) return;
+    const box = item.getBoundingClientRect();
+    const frame = list.getBoundingClientRect();
+    if (box.top < frame.top) list.scrollTop -= frame.top - box.top;
+    else if (box.bottom > frame.bottom) list.scrollTop += box.bottom - frame.bottom;
+  };
+
   const syncTabs = (): void => {
     markTabs();
     if (shell === null) return;
     for (const item of shell.querySelectorAll<HTMLElement>('[data-ide-file]')) {
-      if (item.dataset.ideFile === active) item.setAttribute('aria-current', 'true');
-      else item.removeAttribute('aria-current');
+      if (item.dataset.ideFile === active) {
+        item.setAttribute('aria-current', 'true');
+        expandParents(item);
+        keepInView(item);
+      } else item.removeAttribute('aria-current');
     }
     if (statusFile !== null) statusFile.textContent = active;
     const { line, column } = cursorOf(view.state);
@@ -153,6 +216,7 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
       keep();
       active = file;
       view.setState(state);
+      applyTour();
       const top = scrolls.get(file) ?? 0;
       view.requestMeasure({
         read: () => null,
@@ -207,13 +271,50 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
   if (shell !== null) {
     const showAllTabs = (): void => {
       if (shell.dataset.sidebar !== 'closed') return;
+      if (options.deferShowAll === true && shell.dataset.sidebarDecided === undefined) return;
       for (const file of names) {
         if (tabOf(file) === undefined) tabList.append(buildTab(file));
       }
       markTabs();
     };
-    new MutationObserver(showAllTabs).observe(shell, { attributes: true, attributeFilter: ['data-sidebar'] });
+    new MutationObserver(showAllTabs).observe(shell, {
+      attributes: true,
+      attributeFilter: ['data-sidebar', 'data-sidebar-decided'],
+    });
     showAllTabs();
+  }
+
+  const focusTourCard = (preferred: string, attempts = 8): void => {
+    requestAnimationFrame(() => {
+      const card = view.dom.querySelector('.cm-tour-card');
+      const buttons = [preferred, 'next', 'restart', 'previous'].flatMap((action) =>
+        card?.querySelector<HTMLButtonElement>(`[data-tour-action="${action}"]`) ?? []
+      );
+      const button = buttons.find((candidate) => !candidate.disabled);
+      if (button !== undefined) button.focus({ preventScroll: true });
+      else if (attempts > 0) focusTourCard(preferred, attempts - 1);
+    });
+  };
+
+  function navigateTour(index: number, action: string): void {
+    showTourStep(index);
+    focusTourCard(action);
+  }
+
+  function showTourStep(index: number): void {
+    const step = options.tour?.steps[index];
+    if (step === undefined || !states.has(step.file)) return;
+    tourStep = index;
+    open(step.file);
+    applyTour();
+    revealTourStep(view, step);
+    options.onTourStep?.(index);
+  }
+
+  function closeTour(): void {
+    tourStep = null;
+    applyTour();
+    options.onTourStep?.(null);
   }
 
   tabList.addEventListener('click', (event) => {
@@ -269,7 +370,11 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
       if (!states.has(file)) return;
       keep();
       states.set(file, stateFor(file, doc));
-      if (file === active) view.setState(states.get(file) ?? stateFor(file, doc));
+      if (file === active) {
+        view.setState(states.get(file) ?? stateFor(file, doc));
+        applyTour();
+        revealActiveTourStep();
+      }
       markModified(file, doc);
     },
     replaceDoc: (file, doc) => {
@@ -284,5 +389,8 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
       markModified(file, doc);
       options.onChange?.(file);
     },
+    showTourStep,
+    closeTour,
+    tourStep: () => tourStep,
   };
 };

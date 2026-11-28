@@ -1,0 +1,141 @@
+---
+layout: ../layouts/BaseLayout.astro
+title: ハンズオンの後に受けた質問
+topBar: true
+---
+
+import CodeBlock from '../components/CodeBlock.astro';
+import CodePlayground from '../components/CodePlayground.astro';
+import ArchiveFigure from '../components/figures/ArchiveFigure.astro';
+import AreaChoiceFigure from '../components/figures/AreaChoiceFigure.astro';
+import EventCenteredFigure from '../components/figures/EventCenteredFigure.astro';
+import RecordPathFigure from '../components/figures/RecordPathFigure.astro';
+import { smallStartWithdrawn, storeRecording, storeWithdrawn } from '../components/questions/code';
+import CodeDiff from '../components/questions/CodeDiff.astro';
+import CssTabs from '../components/questions/CssTabs.astro';
+import { embeds } from '../components/questions/embeds';
+import IdeWindow from '../components/questions/IdeWindow.astro';
+import Quote from '../components/Quote.astro';
+import { cancelVisitOf } from '../lib/snapshots';
+
+# ハンズオンの後に受けた質問
+
+ハンズオンの後に、参加者から次の懸念を受けました。
+
+業務イベントの記録をビジネスロジックに入れると、システムの規模が大きくなるにつれてレコードが増え続け、記録をやめることも難しくなるのではないか。ログのように特定の仕組みに依存しない形で残すとしても、費用と古い記録の保管が気になる。
+
+このページは、この懸念を5つの問いに分けて答えます。コードを含む詳しい説明は、[フォローアップの記事](https://kosui.me/posts/2026/11/28/event-record-patterns-and-retreat)にあります。
+
+## Q. ハンズオンのコードは、ビジネスロジックにイベントストアを入れていますか
+
+A. 入れていません。`visits` テーブルが現在の状態を持ち、`cancelVisit` が同じトランザクションで `business_events` へ1行を追記するだけです。
+
+<RecordPathFigure variant="through" />
+
+`cancelVisit` は、キャンセルできるかを判定するときに `visits` だけを読み、`business_events` を読みません。
+
+<CodeBlock code={cancelVisitOf('chapter-2-step-2')} />
+
+## Q. 記録と状態が食い違うことはありますか
+
+A. あります。`visits` を書き換える `UPDATE` 文と、`business_events` へ追記する `INSERT` 文は、別の文です。この2つの文が同じ出来事を表すことは、開発者がテストで確認します。
+
+<RecordPathFigure variant="bypass" />
+
+- `cancelVisit` を通らずに `visits` を書き換える変更は、記録に残りません。
+- `payload` のキーの名前を間違えても、`INSERT` は成功します。
+
+ビジネスロジックがイベントを中心にして書かれていないかぎり、この食い違いは避けられません。
+
+## Q. 業務イベントの記録を始める形には、何がありますか
+
+A. 3つあります。3つの形は、1つのシステムで併用できます。
+
+<CssTabs
+  name="start"
+  label="業務イベントの記録を始める3つの形"
+  labels={['ハンズオンの形で小さく始める', 'ビジネスロジックをイベント中心に書く', '特定の領域だけイベント中心に書く']}
+>
+<Fragment slot="tab-1">
+
+既存の更新処理に `INSERT` 文を1つ足します。ビジネスロジックは変えません。記録と状態の食い違いは残ります。
+
+<CodeDiff
+  label="記録を足す前の cancelVisit と、記録を足した後の cancelVisit の差分"
+  before={cancelVisitOf('chapter-1-start')}
+  after={cancelVisitOf('chapter-2-step-2')}
+/>
+
+</Fragment>
+<Fragment slot="tab-2">
+
+更新処理の関数は、DB に書き込まず、業務イベントを返します。保存する処理は、業務イベントが持つ変更後の状態を `visits` に書き、同じトランザクションで同じ業務イベントを `business_events` に書きます。`visits` に書く値と `target_state` に書く値は同じ業務イベントから取るので、一致します。
+
+<EventCenteredFigure />
+
+この形でも、現在の状態は `visits` から読みます。記録から現在の状態を組み立て直すことはしません。代わりに、既存の更新処理を書き直す作業が必要です。
+
+次のエディタは、来院のキャンセルをこの形で書き直したコードです。ディレクトリの分け方は、実際のアプリと同じです。ツアーの「次へ」を押すと、来院のキャンセルが処理される順に、コードをたどれます。
+
+<IdeWindow scenario={embeds['event-centered'].scenario}>
+<Fragment slot="editor">
+<CodePlayground {...embeds['event-centered'].playground} />
+</Fragment>
+</IdeWindow>
+
+</Fragment>
+<Fragment slot="tab-3">
+
+「誰が、いつ、何を、なぜ」を後から問われる領域だけを、業務イベントを返す形に書き直します。ほかの領域は、ハンズオンの形のままにするか、記録を足さないままにします。
+
+<AreaChoiceFigure />
+
+</Fragment>
+</CssTabs>
+
+## Q. レコードが増え続けることには、どう対処しますか
+
+A. 古い業務イベントを DB の外へ書き出してから、DB から削除します。3つの形はどれも `visits` が現在の状態を持ち、状態を変える処理は古い業務イベントを読まないので、古い業務イベントは DB の外へ移せます。
+
+<ArchiveFigure />
+
+<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2026/11/28/event-record-patterns-and-retreat">
+
+実務では、DynamoDB の CDC を使ってイベントを受け取り、それを S3 上に Parquet ファイルで書き込むことで、料金・参照しやすさ・完全性のトレードオフを乗り切ったことがあります。DynamoDB 以外では、Aurora PostgreSQL の Outbox テーブルに届いたイベントを、Iceberg/Delta Lake 形式で S3 へ書き出す ECS のワーカーを立てたこともあります。
+
+</Quote>
+
+画面やほかの処理が業務イベントを読む場合は、その業務イベントを DB に残します。
+
+## Q. 記録をやめるときは、どうしますか
+
+A. `business_events` へ書く処理を削除します。`visits` への書き込みは残るので、現在の状態は失われません。
+
+<CssTabs name="withdraw" label="記録をやめるときに削除するコード" labels={['ハンズオンの形', 'イベント中心に書いた形']}>
+<Fragment slot="tab-1">
+
+`cancelVisit` から `INSERT` 文を削除します。記録は止まり、`visits` の更新は変わりません。
+
+<CodeDiff
+  label="記録をやめるときに cancelVisit から削除する行"
+  before={cancelVisitOf('chapter-2-step-2')}
+  after={smallStartWithdrawn}
+/>
+
+</Fragment>
+<Fragment slot="tab-2">
+
+保存する処理から `business_events` への `INSERT` 文を削除します。更新処理の関数が業務イベントを返す形は、そのまま残せます。
+
+<CodeDiff
+  label="記録をやめるときに保存する処理から削除する行"
+  before={storeRecording}
+  after={storeWithdrawn}
+/>
+
+</Fragment>
+</CssTabs>
+
+どちらの形でも、残った `business_events` の行は、DB の外へ書き出してから削除します。
+
+画面やほかの処理が業務イベントを読んでいる場合は、記録をやめる前に、その画面や処理の代わりを用意します。業務イベントを読む箇所が増えるほど、記録をやめる作業は増えます。

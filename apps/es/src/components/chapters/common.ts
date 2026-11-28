@@ -1,3 +1,4 @@
+import { baseName } from '../../lib/file-tree';
 import { openingSchedule } from '../../workspace/channel';
 import type {
   Actor,
@@ -148,6 +149,7 @@ type LessonOptions = Pick<WorkspaceScenario, 'id' | 'label' | 'tabs'> & {
   readonly timeline?: readonly TimelineEvent[];
   readonly buttons?: readonly ChatButton[];
   readonly collapsed?: true;
+  readonly live?: false;
   readonly memo?: WorkspaceScenario['memo'];
   readonly gates?: WorkspaceScenario['gates'];
   readonly reply?: WorkspaceScenario['reply'];
@@ -177,7 +179,9 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
     placeholder: `${inquiryChannel} へのメッセージ`,
     buttons: options.buttons ?? [],
     ...(options.collapsed === true || docsOnly(options.tabs) ? { collapsed: true as const } : {}),
-    live: { channel: handsOnChannel, ...(options.ask ?? { label: `${handsOnChannel} へのメッセージ` }) },
+    ...(options.live === false
+      ? {}
+      : { live: { channel: handsOnChannel, ...(options.ask ?? { label: `${handsOnChannel} へのメッセージ` }) } }),
   },
   actors,
   history: options.history ?? [],
@@ -221,7 +225,7 @@ export const editorTab = (
 ): TabDefinition => ({
   key,
   kind: 'editor',
-  title: name?.title ?? `${active} — clinic-api`,
+  title: name?.title ?? `${baseName(active)} — clinic-api`,
   label: 'エディタ',
   url: `https://ide.internal.example/${name?.directory ?? 'clinic-api'}/${active}`,
   favicon: { tone: 'azure', shape: 'rounded' },

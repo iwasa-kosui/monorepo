@@ -1,3 +1,4 @@
+import { baseName } from '../../lib/file-tree';
 import { type FileSelectedDetail, fileSelectedEvent } from '../ide-events';
 import type { PanelMount } from '../panel';
 import { watchSlotSignals } from './watch';
@@ -11,14 +12,16 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
   const ide = panel.querySelector<HTMLElement>('[data-ide]');
   if (ide === null) return {};
   const toggle = ide.querySelector<HTMLButtonElement>('[data-ide-toggle]');
-  const folder = ide.querySelector<HTMLButtonElement>('[data-ide-folder]');
   const scrim = ide.querySelector<HTMLButtonElement>('[data-ide-scrim]');
   const browserTab = root.querySelector<HTMLElement>(`[role="tab"][data-tool="${tab.key}"]`);
   const address = root.querySelector<HTMLElement>('[data-address]');
   const project = tab.config.project;
-  const baseUrl = tab.url.slice(0, tab.url.lastIndexOf('/') + 1);
+  const { active } = tab.config;
+  const baseUrl = tab.url.endsWith(active)
+    ? tab.url.slice(0, tab.url.length - active.length)
+    : tab.url.slice(0, tab.url.lastIndexOf('/') + 1);
   // タブの名前がファイル名でないとき（開始コードを並べるタブ）は、ファイルを選んでも名前を変えない
-  const namedByFile = tab.title === `${tab.config.active} — ${project}`;
+  const namedByFile = tab.title === `${baseName(active)} — ${project}`;
 
   const remPx = (): number => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
@@ -33,6 +36,7 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
     const { width } = ide.getBoundingClientRect();
     if (width === 0) return;
     decided = true;
+    ide.dataset.sidebarDecided = '';
     if (
       ide.querySelector('[data-play="add-record"]') === null
       && width >= sidebarOpenMinRem * remPx() * sidebarOpenRemScale()
@@ -64,18 +68,20 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
     setDrawer(false);
     toggle?.focus();
   });
-  folder?.addEventListener('click', () => {
-    folder.setAttribute('aria-expanded', String(folder.getAttribute('aria-expanded') !== 'true'));
-  });
   ide.addEventListener('click', (event) => {
-    const picked = event.target instanceof Element && event.target.closest('[data-ide-file]') !== null;
+    const folder = event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>('[data-ide-folder], [data-ide-dir]')
+      : null;
+    folder?.setAttribute('aria-expanded', String(folder.getAttribute('aria-expanded') !== 'true'));
+    const picked = event.target instanceof Element
+      && event.target.closest('[data-ide-file], [data-ide-tour-step]') !== null;
     if (picked && ide.dataset.drawer === 'open') setDrawer(false);
   });
   ide.addEventListener(fileSelectedEvent, (event) => {
     const { file } = (event as CustomEvent<FileSelectedDetail>).detail;
     if (browserTab === null) return;
     const title = browserTab.querySelector<HTMLElement>('.tab-title');
-    if (title !== null && namedByFile) title.textContent = `${file} — ${project}`;
+    if (title !== null && namedByFile) title.textContent = `${baseName(file)} — ${project}`;
     browserTab.dataset.url = `${baseUrl}${file}`;
     if (address !== null && browserTab.getAttribute('aria-selected') === 'true') {
       address.textContent = browserTab.dataset.url;

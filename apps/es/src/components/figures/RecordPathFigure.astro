@@ -1,0 +1,473 @@
+---
+import './figure.css';
+
+interface Props {
+  variant: 'through' | 'bypass';
+}
+
+const { variant } = Astro.props;
+const through = variant === 'through';
+const label = through
+  ? 'cancelVisit が1つのトランザクションの中で visits を書き換え、business_events へ1行を追記する図'
+  : 'cancelVisit を通らない更新処理が visits だけを書き換え、business_events に行が増えない図';
+const head = through
+  ? '1つのトランザクションの中で、状態の書き換えと記録の追記を行う'
+  : 'cancelVisit を通らない更新処理は、状態だけを書き換える';
+---
+
+<section
+  class="cfig path"
+  data-record-path-figure
+  data-variant={variant}
+  aria-label={label}
+>
+  <p class="path-head">{head}</p>
+
+  <div class="caller">
+    {
+      through ? (
+        <>
+          <span class="face-label">更新処理</span>
+          <span class="mono caller-name">cancelVisit</span>
+        </>
+      ) : (
+        <span class="caller-name">
+          <span class="mono">cancelVisit</span> を通らない更新処理
+        </span>
+      )
+    }
+  </div>
+
+  <div class="tx">
+    <span class="face-label tx-label" data-lit="tx">{
+      through ? '1つのトランザクション' : 'トランザクション'
+    }</span>
+
+    <div class="step">
+      <div class="stmt" data-lit="update">
+        <span class="mono">UPDATE visits</span>
+        <span class="stmt-note">状態を書き換える</span>
+      </div>
+      <span class="arrow" data-arrow="update">
+        <svg viewBox="0 0 64 24" aria-hidden="true" focusable="false">
+          <path class="shaft" d="M4 12H56"></path>
+          <path class="head" d="M46 5L60 12L46 19"></path>
+          <circle class="dot" cx="9" cy="12" r="5"></circle>
+        </svg>
+      </span>
+      <div class="store" data-lit="visits">
+        <span class="store-name"><span class="mono"
+          >visits</span>（現在の状態）</span>
+        <span class="row">
+          <span class="mono cell">visit-pochi</span>
+          <span class="mono cell status">
+            <span class="status-before" aria-hidden="true">reserved</span>
+            <span class="status-after">cancelled</span>
+          </span>
+        </span>
+      </div>
+    </div>
+
+    <div class="step">
+      {
+        through ? (
+          <div class="stmt" data-lit="insert">
+            <span class="mono">INSERT INTO business_events</span>
+            <span class="stmt-note">記録を1行追記する</span>
+          </div>
+        ) : (
+          <div class="stmt stmt-missing" data-lit="missing">
+            <span class="stmt-note">INSERT 文がない</span>
+          </div>
+        )
+      }
+      <span class="arrow" data-arrow="insert">
+        <svg viewBox="0 0 64 24" aria-hidden="true" focusable="false">
+          <path class="shaft" d="M4 12H56"></path>
+          <path class="head" d="M46 5L60 12L46 19"></path>
+          <circle class="dot" cx="9" cy="12" r="5"></circle>
+        </svg>
+      </span>
+      <div class="store" data-lit="events">
+        <span class="store-name"><span class="mono"
+          >business_events</span>（記録）</span>
+        {
+          through ? (
+            <span class="row row-new">
+              <span class="mono cell">VisitCancelled</span>
+              <span class="cell">飼い主の都合、受付スタッフ</span>
+            </span>
+          ) : (
+            <span class="row row-none">
+              <span class="cell">行が増えない</span>
+            </span>
+          )
+        }
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.cfig.path {
+  gap: var(--space-3);
+}
+.cfig.path .mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+  overflow-wrap: anywhere;
+}
+.path-head {
+  margin: 0;
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.face-label {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+
+.caller {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  border-radius: var(--radius-lg);
+  background-color: var(--role-accent-strong);
+  padding: var(--space-3) var(--space-4);
+  color: var(--role-on-strong);
+}
+.caller-name {
+  font-size: var(--fig-code);
+  font-weight: var(--weight-bold);
+}
+
+.tx {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-inline-start: var(--space-4);
+  border-radius: var(--radius-lg);
+  background-color: var(--role-ground);
+  padding: var(--space-3) var(--space-4);
+}
+.tx-label {
+  --base: transparent;
+  align-self: flex-start;
+  margin-inline-start: calc(-1 * var(--space-2));
+  border-radius: var(--radius-sm);
+  background-color: var(--base);
+  padding: 0 var(--space-2);
+  color: var(--role-muted);
+}
+
+.step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4rem minmax(0, 1.25fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+.stmt {
+  --base: var(--role-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--base);
+  padding: var(--space-2) var(--space-3);
+}
+.stmt-note {
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-normal);
+}
+.stmt-missing {
+  --base: var(--role-danger-soft);
+}
+.stmt-missing .stmt-note {
+  color: var(--role-ink);
+  font-weight: var(--weight-bold);
+}
+
+.arrow {
+  display: block;
+  color: var(--role-muted);
+  line-height: 0;
+}
+.arrow svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.shaft,
+.head {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dot {
+  fill: var(--role-accent);
+  opacity: 0;
+}
+[data-variant="bypass"] [data-arrow="insert"] {
+  opacity: 0.25;
+}
+
+.store {
+  --base: var(--role-accent-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--base);
+  padding: var(--space-2) var(--space-3);
+}
+.store-name {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.row {
+  --base: var(--role-ground);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background-color: var(--base);
+  padding: var(--space-1) var(--space-2);
+}
+.row-none {
+  --base: var(--role-danger-soft);
+  font-weight: var(--weight-bold);
+}
+.cell {
+  min-width: 0;
+  font-size: var(--fig-label);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+.status {
+  display: inline-grid;
+}
+.status-before,
+.status-after {
+  grid-area: 1 / 1;
+}
+.status-before {
+  opacity: 0;
+}
+
+@media (max-width: 40rem) {
+  .step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .arrow {
+    display: grid;
+    place-items: center;
+    justify-self: center;
+    width: 4rem;
+    height: 4rem;
+  }
+  .arrow svg {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cfig.path {
+    --cycle: 10s;
+    --lit: var(--role-marker);
+  }
+
+  [data-lit="update"] {
+    animation: path-lit-update var(--cycle) linear infinite;
+  }
+  [data-arrow="update"] .dot {
+    animation: path-travel-update var(--cycle) linear infinite;
+  }
+  .status-before {
+    animation: path-status-before var(--cycle) linear infinite;
+  }
+  .status-after {
+    animation: path-status-after var(--cycle) linear infinite;
+  }
+  [data-lit="visits"] .row {
+    animation: path-lit-visits var(--cycle) linear infinite;
+  }
+  [data-variant="through"] [data-lit="insert"] {
+    animation: path-lit-insert var(--cycle) linear infinite;
+  }
+  [data-variant="through"] [data-arrow="insert"] .dot {
+    animation: path-travel-insert var(--cycle) linear infinite;
+  }
+  [data-variant="through"] .row-new {
+    animation: path-row-new var(--cycle) linear infinite;
+  }
+  [data-variant="through"] [data-lit="tx"] {
+    animation: path-lit-tx var(--cycle) linear infinite;
+  }
+  [data-variant="bypass"] [data-lit="missing"],
+  [data-variant="bypass"] .row-none {
+    animation: path-missing var(--cycle) linear infinite;
+  }
+
+  @keyframes path-lit-update {
+    0%,
+    6%,
+    24%,
+    100% {
+      background-color: var(--base);
+    }
+    9%,
+    21% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes path-travel-update {
+    0%,
+    11% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    12% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    21% {
+      opacity: 1;
+      transform: translate(42px, 0);
+    }
+    22%,
+    100% {
+      opacity: 0;
+      transform: translate(42px, 0);
+    }
+  }
+  @keyframes path-status-before {
+    0%,
+    22% {
+      opacity: 1;
+    }
+    24%,
+    96% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes path-status-after {
+    0%,
+    22% {
+      opacity: 0;
+    }
+    24%,
+    96% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes path-lit-visits {
+    0%,
+    22%,
+    36%,
+    100% {
+      background-color: var(--base);
+    }
+    25%,
+    33% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes path-lit-insert {
+    0%,
+    36%,
+    54%,
+    100% {
+      background-color: var(--base);
+    }
+    39%,
+    51% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes path-travel-insert {
+    0%,
+    41% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    42% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    51% {
+      opacity: 1;
+      transform: translate(42px, 0);
+    }
+    52%,
+    100% {
+      opacity: 0;
+      transform: translate(42px, 0);
+    }
+  }
+  @keyframes path-row-new {
+    0%,
+    52% {
+      opacity: 0;
+      background-color: var(--base);
+    }
+    55%,
+    63% {
+      opacity: 1;
+      background-color: var(--lit);
+    }
+    66%,
+    96% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+    100% {
+      opacity: 0;
+      background-color: var(--base);
+    }
+  }
+  @keyframes path-lit-tx {
+    0%,
+    66%,
+    92%,
+    100% {
+      background-color: var(--base);
+      color: var(--role-muted);
+    }
+    70%,
+    88% {
+      background-color: var(--lit);
+      color: var(--role-ink);
+    }
+  }
+  @keyframes path-missing {
+    0%,
+    36% {
+      background-color: var(--role-ground);
+    }
+    42%,
+    96% {
+      background-color: var(--role-danger-soft);
+    }
+    100% {
+      background-color: var(--role-ground);
+    }
+  }
+}
+</style>

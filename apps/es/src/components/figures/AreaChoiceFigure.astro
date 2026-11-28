@@ -1,0 +1,97 @@
+---
+import './figure.css';
+---
+
+<section
+  class="cfig area"
+  data-area-choice-figure
+  aria-label="更新処理ごとに、業務イベントの記録の形を選ぶ例の図"
+>
+  <p class="area-head">更新処理ごとに形を選ぶ例</p>
+
+  <div class="areas" role="list">
+    <div class="area-row" role="listitem">
+      <span class="area-fn">
+        <span class="mono">cancelVisit</span>
+        <span class="area-note"
+        >「誰が、いつ、何を、なぜ」を後から問われる</span>
+      </span>
+      <span class="form-chip form-chip-strong">イベント中心に書く</span>
+    </div>
+    <div class="area-row" role="listitem">
+      <span class="area-fn">
+        <span class="mono">completeVisit</span>
+      </span>
+      <span class="form-chip form-chip-soft"
+      >ハンズオンの形で INSERT 文を足す</span>
+    </div>
+    <div class="area-row" role="listitem">
+      <span class="area-fn">
+        <span class="mono">reserveVisit</span>
+      </span>
+      <span class="form-chip form-chip-none">記録を足さない</span>
+    </div>
+  </div>
+</section>
+
+<style>
+.cfig.area {
+  gap: var(--space-3);
+}
+.cfig.area .mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+  font-weight: var(--weight-bold);
+  overflow-wrap: anywhere;
+}
+.area-head {
+  margin: 0;
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.areas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.area-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  background-color: var(--role-ground);
+  padding: var(--space-3) var(--space-4);
+}
+.area-fn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.area-note {
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-normal);
+}
+.form-chip {
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.form-chip-strong {
+  background-color: var(--role-accent-strong);
+  color: var(--role-on-strong);
+}
+.form-chip-soft {
+  background-color: var(--role-accent-soft);
+}
+.form-chip-none {
+  background-color: var(--role-surface);
+  color: var(--role-muted);
+}
+</style>

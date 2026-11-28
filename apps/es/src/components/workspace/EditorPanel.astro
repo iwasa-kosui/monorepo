@@ -1,4 +1,5 @@
 ---
+import { baseName, buildFileTree, type FileTree } from '../../lib/file-tree';
 import { projectFilesOf } from '../../lib/snapshots';
 import {
   expectTab,
@@ -6,6 +7,7 @@ import {
   type PanelProps,
   tabIdOf,
 } from '../../workspace/panel-props';
+import EditorTree from './EditorTree.astro';
 
 type Props = PanelProps;
 
@@ -13,11 +15,29 @@ const { scenario, tab: definition, hidden } = Astro.props;
 const tab = expectTab(definition, 'editor');
 const config = tab.config;
 const files = projectFilesOf(config.snapshot);
+const tree = buildFileTree(files);
 if (!files.includes(config.active)) {
   throw new Error(
     `エディタのタブ ${tab.key} が最初に開く ${config.active} が、${config.snapshot} にありません`,
   );
 }
+const charRem = 0.62;
+const widestRowRem = (node: FileTree, depth: number): number =>
+  Math.max(
+    0,
+    ...node.dirs.map((dir) =>
+      Math.max(
+        0.25 + depth * 0.625 + 1.25 + dir.name.length * charRem + 0.5,
+        widestRowRem(dir, depth + 1),
+      )
+    ),
+    ...node.files.map((file) =>
+      1.5 + (depth - 1) * 0.625 + 3.61 + baseName(file).length * charRem
+    ),
+  );
+const sideFit = tree.dirs.length > 0
+  ? `--ide-side-fit: ${Math.ceil(widestRowRem(tree, 1) * 4) / 4}rem`
+  : undefined;
 const panelId = panelIdOf(scenario, tab.key);
 const sideId = `${panelId}-explorer`;
 const listId = `${panelId}-files`;
@@ -88,7 +108,13 @@ const icons = {
         ))
       }
     </div>
-    <nav class="ide-side" id={sideId} aria-label="エクスプローラー">
+    <nav
+      class="ide-side"
+      id={sideId}
+      aria-label="エクスプローラー"
+      data-nested={tree.dirs.length > 0 ? '' : undefined}
+      style={sideFit}
+    >
       <p class="ide-side-title">EXPLORER</p>
       <button
         type="button"
@@ -101,25 +127,7 @@ const icons = {
         <span class="ide-folder-name">{config.project}</span>
       </button>
       <ul class="ide-files" id={listId}>
-        {
-          files.map((file) => (
-            <li>
-              <button
-                type="button"
-                class="ide-file"
-                data-ide-file={file}
-                aria-current={file === config.active ? 'true' : undefined}
-              >
-                <span class="ide-icon" aria-hidden="true">TS</span>
-                <span class="ide-name">{file}</span>
-                <span class="ide-mark" data-ide-mark hidden>
-                  <span aria-hidden="true">M</span>
-                  <span class="cfig-sr">（編集済み）</span>
-                </span>
-              </button>
-            </li>
-          ))
-        }
+        <EditorTree tree={tree} active={config.active} idPrefix={listId} />
       </ul>
     </nav>
     <button
@@ -273,112 +281,6 @@ const icons = {
   font-size: var(--text-note);
   letter-spacing: 0.04em;
 }
-:global(.scene[data-scenario]) .ide-folder {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-1);
-  width: 100%;
-  min-height: var(--tap-min);
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0 var(--space-2) 0 var(--space-1);
-  color: var(--ed-fg);
-  font-size: var(--text-note);
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.02em;
-  line-height: var(--leading-normal);
-  text-align: left;
-  cursor: pointer;
-}
-:global(.scene[data-scenario]) .ide-folder-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-:global(.scene[data-scenario]) .ide-chevron {
-  flex: none;
-  width: 1rem;
-  height: 1rem;
-  background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-}
-:global(.scene[data-scenario]) .ide-folder[aria-expanded="false"] .ide-chevron {
-  transform: rotate(-90deg);
-}
-:global(.scene[data-scenario]) .ide-folder[aria-expanded="false"] + .ide-files {
-  display: none;
-}
-:global(.scene[data-scenario]) .ide-files {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-:global(.scene[data-scenario]) .ide-files li {
-  margin: 0;
-}
-:global(.scene[data-scenario]) .ide-file {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: var(--tap-min);
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0 var(--space-3) 0 var(--space-5);
-  color: var(--ed-fg);
-  font-size: var(--text-note);
-  line-height: var(--leading-normal);
-  text-align: left;
-  cursor: pointer;
-}
-:global(.scene[data-scenario]) .ide-file:hover {
-  background: var(--ed-hover);
-}
-:global(.scene[data-scenario]) .ide-file[aria-current="true"] {
-  background: var(--ed-soft);
-}
-:global(.scene[data-scenario]) .ide-file:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-:global(.scene[data-scenario]) .ide-icon,
-:global(.scene[data-scenario]) .panel[data-kind="editor"] :global(.wb-icon) {
-  flex: none;
-  color: var(--ed-ts);
-  font-family: var(--font-code);
-  font-size: var(--text-note);
-  font-weight: var(--weight-bold);
-  line-height: 1;
-  text-align: center;
-}
-:global(.scene[data-scenario]) .ide-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  font-family: var(--font-code);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-:global(.scene[data-scenario]) .ide-mark {
-  flex: none;
-  color: var(--ed-warning);
-  font-size: var(--text-note);
-  font-weight: var(--weight-bold);
-}
-:global(.scene[data-scenario])
-  .ide-file:has(.ide-mark:not([hidden]))
-  .ide-name {
-  color: var(--ed-warning);
-}
 :global(.scene[data-scenario]) .ide-scrim {
   display: none;
 }
@@ -487,5 +389,221 @@ const icons = {
   :global(.scene[data-scenario]) .ide-status-item[aria-hidden="true"] {
     display: none;
   }
+}
+</style>
+
+<style is:global>
+.scene[data-scenario] .ide-folder {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: var(--ide-row, var(--tap-min));
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 var(--space-2) 0 var(--space-1);
+  color: var(--ed-fg);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+  line-height: var(--leading-normal);
+  text-align: left;
+  cursor: pointer;
+}
+.scene[data-scenario] .ide-folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.scene[data-scenario] .ide-dir {
+  padding-left: calc(
+    var(--space-1) + var(--depth, 1) * var(--ide-indent, var(--space-3))
+  );
+  font-weight: var(--weight-regular);
+}
+.scene[data-scenario] .ide-dir .ide-folder-name {
+  text-transform: none;
+}
+.scene[data-scenario] .ide-chevron {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+.scene[data-scenario] .ide-folder[aria-expanded="false"] .ide-chevron {
+  transform: rotate(-90deg);
+}
+.scene[data-scenario] .ide-folder[aria-expanded="false"] + .ide-files {
+  display: none;
+}
+.scene[data-scenario] .ide-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.scene[data-scenario] .ide-files li {
+  margin: 0;
+}
+.scene[data-scenario] .ide-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--ide-row, var(--tap-min));
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 var(--space-3) 0
+    calc(
+      var(--space-5) + (var(--depth, 1) - 1) * var(--ide-indent, var(--space-3))
+    );
+  color: var(--ed-fg);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+  text-align: left;
+  cursor: pointer;
+}
+.scene[data-scenario] .ide-file:hover {
+  background: var(--ed-hover);
+}
+.scene[data-scenario] .ide-file[aria-current="true"] {
+  background: var(--ed-soft);
+}
+.scene[data-scenario] .ide-file:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.scene[data-scenario] .ide-icon,
+.scene[data-scenario] .panel[data-kind="editor"] .wb-icon {
+  flex: none;
+  color: var(--ed-ts);
+  font-family: var(--font-code);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  text-align: center;
+}
+.scene[data-scenario] .ide-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene[data-scenario] .ide-mark {
+  flex: none;
+  color: var(--ed-warning);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+}
+.scene[data-scenario] .ide-file:has(.ide-mark:not([hidden])) .ide-name {
+  color: var(--ed-warning);
+}
+
+.scene[data-scenario] .ide-side[data-nested] {
+  --ide-indent: 0.625rem;
+}
+@container ide (min-width: 40rem) {
+  .scene[data-scenario] .panel[data-kind="editor"] .ide-side[data-nested] {
+    --ide-row: 1.75rem;
+    width: min(max(16rem, var(--ide-side-fit, 16rem)), 40%);
+  }
+}
+@container ide (max-width: 39.99rem) {
+  .scene[data-scenario]
+    .panel[data-kind="editor"]
+    .ide[data-sidebar]
+    .ide-side[data-nested] {
+    width: min(max(16rem, var(--ide-side-fit, 16rem)), 82%);
+  }
+}
+.scene[data-scenario]
+  .panel[data-kind="editor"]
+  .ide:has(.ide-side[data-nested])
+  .ide-status-file {
+  flex: 1 1 0;
+}
+
+.scene[data-scenario] .ide-side[data-tour] {
+  overflow: hidden;
+}
+.scene[data-scenario] .ide-side[data-tour] > .ide-files {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
+}
+.scene[data-scenario] .ide-tour {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 45%;
+  border-top: 1px solid var(--ed-rule);
+}
+.scene[data-scenario] .ide-tour-steps {
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden auto;
+  list-style: none;
+}
+.scene[data-scenario] .ide-tour-steps li {
+  margin: 0;
+}
+.scene[data-scenario] .ide-tour-head[aria-expanded="false"] + .ide-tour-steps {
+  display: none;
+}
+.scene[data-scenario] .ide-tour-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: var(--ide-row, var(--tap-min));
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 var(--space-3) 0 var(--space-1);
+  color: var(--ed-fg);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+  text-align: left;
+  cursor: pointer;
+}
+.scene[data-scenario] .ide-tour-step:hover {
+  background: var(--ed-hover);
+}
+.scene[data-scenario] .ide-tour-step[aria-current="step"] {
+  background: var(--ed-soft);
+}
+.scene[data-scenario] .ide-tour-step:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.scene[data-scenario] .ide-tour-index {
+  flex: none;
+  width: 1rem;
+  color: var(--ed-muted);
+  font-family: var(--font-code);
+  text-align: center;
+}
+.scene[data-scenario] .ide-tour-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

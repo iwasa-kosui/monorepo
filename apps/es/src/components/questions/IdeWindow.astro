@@ -1,0 +1,65 @@
+---
+import type { WorkspaceScenario } from '../../workspace/scenario';
+import Workspace from '../workspace/Workspace.astro';
+
+interface Props {
+  scenario: WorkspaceScenario;
+  fill?: boolean;
+}
+
+const { scenario, fill = false } = Astro.props;
+---
+
+<div class:list={['q-ide', { 'q-ide--fill': fill }]}>
+  <Workspace scenario={scenario}>
+    <slot name="editor" slot="editor" />
+  </Workspace>
+</div>
+
+<style>
+.q-ide {
+  --q-ide-width: min(72rem, 100vw - 2rem);
+  width: var(--q-ide-width);
+  margin-block: var(--space-4);
+  margin-inline: calc((100% - var(--q-ide-width)) / 2);
+}
+.q-ide :global(.scene .workspace) {
+  flex: none;
+}
+.q-ide :global(.scene .pages) {
+  flex: none;
+  height: 40rem;
+}
+
+@media (max-width: 639px) {
+  .q-ide:not(.q-ide--fill) :global(.scene .pages) {
+    height: 55rem;
+  }
+}
+
+@media (min-width: 64rem) {
+  .q-ide :global(.scene .pages) {
+    height: 44rem;
+  }
+}
+
+.q-ide.q-ide--fill {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  margin: 0;
+}
+.q-ide.q-ide--fill :global(.scene) {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.q-ide.q-ide--fill :global(.scene .workspace) {
+  flex: 1 1 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+.q-ide.q-ide--fill :global(.scene .pages) {
+  flex: 1 1 0;
+  height: auto;
+}
+</style>

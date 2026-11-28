@@ -1,0 +1,64 @@
+---
+interface Props {
+  name: string;
+  title: string;
+}
+
+const { name, title } = Astro.props;
+
+const origin = import.meta.env.PUBLIC_ES_ORIGIN
+  ?? 'https://es.kosui.workers.dev';
+const src = `${origin}/embed/${name}/`;
+---
+
+<figure class="code-editor">
+  <iframe src={src} title={title} loading="lazy"></iframe>
+  <figcaption>
+    {title}
+    <a href={src} target="_blank" rel="noopener noreferrer">新しいタブで開く</a>
+  </figcaption>
+</figure>
+
+<style>
+.code-editor {
+  --code-editor-width: min(72rem, 100vw - 2rem);
+  width: var(--code-editor-width);
+  margin-block: 2rem;
+  margin-inline: calc((100% - var(--code-editor-width)) / 2);
+}
+
+.code-editor iframe {
+  display: block;
+  width: 100%;
+  height: 40rem;
+  border: 0;
+  border-radius: var(--radius-clay);
+  box-shadow: var(--shadow-clay);
+  color-scheme: light;
+}
+
+.code-editor figcaption {
+  margin-top: 0.75rem;
+  text-align: center;
+  text-wrap: pretty;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+
+.code-editor figcaption a {
+  margin-left: 0.5rem;
+}
+
+@media (min-width: 64rem) {
+  .code-editor iframe {
+    height: 46rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .code-editor iframe {
+    box-shadow: var(--shadow-clay-dark);
+  }
+}
+</style>

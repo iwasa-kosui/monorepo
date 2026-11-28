@@ -1,0 +1,301 @@
+---
+import './figure.css';
+
+const rows = [
+  { id: 1, old: true },
+  { id: 2, old: true },
+  { id: 3, old: true },
+  { id: 4, old: false },
+  { id: 5, old: false },
+];
+---
+
+<section
+  class="cfig arc"
+  data-archive-figure
+  aria-label="古い業務イベントを DB の外のストレージへ書き出してから、DB から削除する図"
+>
+  <p class="arc-head">
+    古い業務イベントを DB の外へ書き出してから、DB から削除する
+  </p>
+
+  <div class="lane">
+    <div class="face">
+      <span class="face-label">DB</span>
+      <div class="table">
+        <span class="table-name"><span class="mono"
+          >visits</span>（現在の状態）</span>
+        <span class="row row-state">
+          <span class="mono">visit-pochi</span>
+          <span class="mono">cancelled</span>
+        </span>
+        <span class="table-note">状態を変える処理は、この行だけを読む</span>
+      </div>
+      <div class="table">
+        <span class="table-name"><span class="mono"
+          >business_events</span>（記録）</span>
+        {
+          rows.map((row) => (
+            <span class:list={['row', row.old ? 'row-old' : 'row-kept']}>
+              <span class="mono">event_id {row.id}</span>
+              <span class="tag">{
+                row.old ? '書き出してから削除' : 'DB に残す'
+              }</span>
+            </span>
+          ))
+        }
+      </div>
+    </div>
+
+    <div class="link">
+      <span class="arrow" data-arrow="export">
+        <svg viewBox="0 0 80 24" aria-hidden="true" focusable="false">
+          <path class="shaft" d="M4 12H72"></path>
+          <path class="head" d="M62 5L76 12L62 19"></path>
+          <circle class="dot" cx="9" cy="12" r="5"></circle>
+        </svg>
+      </span>
+      <span>書き出す</span>
+    </div>
+
+    <div class="face face-out">
+      <span class="face-label">DB の外のストレージ</span>
+      <div class="file" data-lit="file">
+        <span class="file-name">Parquet ファイル</span>
+        <span class="mono">event_id 1〜3</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.cfig.arc {
+  gap: var(--space-3);
+}
+.cfig.arc .mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+  overflow-wrap: anywhere;
+}
+.arc-head {
+  margin: 0;
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+.face {
+  --base: var(--role-ground);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--base);
+  padding: var(--space-3) var(--space-4);
+}
+.face-out {
+  --base: var(--role-accent-soft);
+}
+.face-label {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.table-name {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.table-note {
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-normal);
+}
+.row {
+  --base: var(--role-surface);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background-color: var(--base);
+  padding: var(--space-1) var(--space-2);
+}
+.row-state {
+  --base: var(--role-accent-soft);
+}
+.row-old {
+  opacity: 0.4;
+}
+.tag {
+  font-size: var(--fig-label);
+  line-height: var(--leading-normal);
+}
+
+.link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+.arrow {
+  display: block;
+  width: 100%;
+  line-height: 0;
+}
+.arrow svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.shaft,
+.head {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dot {
+  fill: var(--role-accent);
+  opacity: 0;
+}
+
+.file {
+  --base: var(--role-ground);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--base);
+  padding: var(--space-2) var(--space-3);
+}
+.file-name {
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+
+@media (max-width: 40rem) {
+  .lane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .link {
+    flex-direction: row;
+    justify-content: center;
+  }
+  .arrow {
+    display: grid;
+    place-items: center;
+    width: 4rem;
+    height: 4rem;
+  }
+  .arrow svg {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cfig.arc {
+    --cycle: 12s;
+    --lit: var(--role-marker);
+  }
+
+  .row-old {
+    animation: arc-row-old var(--cycle) linear infinite;
+  }
+  [data-arrow="export"] .dot {
+    animation: arc-travel var(--cycle) linear infinite;
+  }
+  [data-lit="file"] {
+    animation: arc-file var(--cycle) linear infinite;
+  }
+
+  @keyframes arc-row-old {
+    0%,
+    4% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+    8%,
+    20% {
+      opacity: 1;
+      background-color: var(--lit);
+    }
+    24%,
+    50% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+    58%,
+    96% {
+      opacity: 0.4;
+      background-color: var(--base);
+    }
+    100% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+  }
+  @keyframes arc-travel {
+    0%,
+    21% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    22% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    33% {
+      opacity: 1;
+      transform: translate(58px, 0);
+    }
+    34%,
+    100% {
+      opacity: 0;
+      transform: translate(58px, 0);
+    }
+  }
+  @keyframes arc-file {
+    0%,
+    33% {
+      opacity: 0;
+      background-color: var(--base);
+    }
+    36%,
+    46% {
+      opacity: 1;
+      background-color: var(--lit);
+    }
+    50%,
+    96% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+    100% {
+      opacity: 0;
+      background-color: var(--base);
+    }
+  }
+}
+</style>

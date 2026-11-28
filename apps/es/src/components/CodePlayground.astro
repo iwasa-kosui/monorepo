@@ -2,26 +2,32 @@
 import '../playground/playground.css';
 import '../playground/workbench.css';
 
+import { baseName } from '../lib/file-tree';
 import { snapshotFiles } from '../lib/snapshots';
+import type { Tour } from '../playground/tour';
 
 interface Props {
   exercise: string;
   editable: string[];
   readonly?: string[];
+  opened?: string[];
   testFile?: string;
   reveal?: string;
   scripts?: { file: string; label: string }[];
   complete?: { exercise: string; label?: string };
+  tour?: Tour;
   hidden?: boolean;
 }
 
 const {
   exercise,
   editable,
+  opened,
   testFile,
   reveal,
   scripts = [],
   complete,
+  tour,
   hidden = false,
 } = Astro.props;
 const readonlyFiles = Astro.props.readonly ?? [];
@@ -31,11 +37,13 @@ const config = JSON.stringify({
   files: snapshotFiles(exercise),
   editable,
   readonly: readonlyFiles,
+  opened,
   testFile: testFile ?? null,
   reveal: reveal ?? null,
   complete: complete === undefined
     ? null
     : { files: snapshotFiles(complete.exercise) },
+  tour: tour ?? null,
 });
 ---
 
@@ -111,10 +119,16 @@ const config = JSON.stringify({
               type="button"
               role="tab"
               data-file={file}
+              aria-label={baseName(file) === file
+              ? undefined
+              : `${file}${
+                readonlyFiles.includes(file) ? '（読み取りだけ）' : ''
+              }`}
               aria-selected={index === 0 ? 'true' : 'false'}
               tabindex={index === 0 ? 0 : -1}
             >
-              {file} {readonlyFiles.includes(file) ? '（読み取りだけ）' : ''}
+              {baseName(file)}
+              {readonlyFiles.includes(file) ? '（読み取りだけ）' : ''}
             </button>
           ))
         }

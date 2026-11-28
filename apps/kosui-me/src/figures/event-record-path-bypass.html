@@ -1,0 +1,339 @@
+<style>
+.fig-rpb {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  border-radius: 12px;
+  background: var(--fig-soft);
+  padding: 1rem;
+  overflow-x: auto;
+  color: var(--fig-ink);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.fig-rpb .fig-rpb-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.fig-rpb .fig-rpb-head {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-rpb-face-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-rpb-caller {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  border-radius: 10px;
+  background-color: var(--fig-agent);
+  padding: 0.75rem 1rem;
+  color: var(--fig-on-agent);
+}
+.fig-rpb-caller-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.fig-rpb-tx {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-inline-start: 1rem;
+  border-radius: 10px;
+  background-color: var(--fig-surface);
+  padding: 0.75rem 1rem;
+}
+.fig-rpb-tx-label {
+  --base: transparent;
+  align-self: flex-start;
+  margin-inline-start: -0.5rem;
+  border-radius: 4px;
+  background-color: var(--base);
+  padding: 0 0.5rem;
+  color: var(--fig-muted);
+}
+.fig-rpb-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4rem minmax(0, 1.25fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+.fig-rpb-stmt {
+  --base: var(--fig-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  border-radius: 8px;
+  background-color: var(--base);
+  padding: 0.5rem 0.75rem;
+}
+.fig-rpb-stmt-note {
+  color: var(--fig-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.fig-rpb-stmt-missing {
+  --base: var(--fig-problem-soft);
+}
+.fig-rpb-stmt-missing .fig-rpb-stmt-note {
+  color: var(--fig-ink);
+  font-weight: 700;
+}
+.fig-rpb-arrow {
+  display: block;
+  color: var(--fig-muted);
+  line-height: 0;
+}
+.fig-rpb-arrow svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.fig-rpb-shaft,
+.fig-rpb-head-mark {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fig-rpb-dot {
+  fill: var(--fig-agent);
+  opacity: 0;
+}
+.fig-rpb-arrow-insert {
+  opacity: 0.25;
+}
+.fig-rpb-store {
+  --base: var(--fig-agent-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  border-radius: 8px;
+  background-color: var(--base);
+  padding: 0.5rem 0.75rem;
+}
+.fig-rpb-store-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-rpb-row {
+  --base: var(--fig-surface);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  border-radius: 4px;
+  background-color: var(--base);
+  padding: 0.25rem 0.5rem;
+}
+.fig-rpb-row-none {
+  --base: var(--fig-problem-soft);
+  font-weight: 700;
+}
+.fig-rpb-cell {
+  min-width: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.fig-rpb-status {
+  display: inline-grid;
+}
+.fig-rpb-status-before,
+.fig-rpb-status-after {
+  grid-area: 1 / 1;
+}
+.fig-rpb-status-before {
+  opacity: 0;
+}
+
+@media (max-width: 40rem) {
+  .fig-rpb-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fig-rpb-arrow {
+    display: grid;
+    place-items: center;
+    justify-self: center;
+    width: 4rem;
+    height: 4rem;
+  }
+  .fig-rpb-arrow svg {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fig-rpb {
+    --cycle: 10s;
+    --lit: color-mix(in srgb, var(--fig-agent) 30%, var(--fig-surface));
+  }
+
+  .fig-rpb-update {
+    animation: fig-rpb-lit-update var(--cycle) linear infinite;
+  }
+  .fig-rpb-arrow-update .fig-rpb-dot {
+    animation: fig-rpb-travel-update var(--cycle) linear infinite;
+  }
+  .fig-rpb-status-before {
+    animation: fig-rpb-status-before var(--cycle) linear infinite;
+  }
+  .fig-rpb-status-after {
+    animation: fig-rpb-status-after var(--cycle) linear infinite;
+  }
+  .fig-rpb-visits .fig-rpb-row {
+    animation: fig-rpb-lit-visits var(--cycle) linear infinite;
+  }
+  .fig-rpb-stmt-missing,
+  .fig-rpb-row-none {
+    animation: fig-rpb-missing var(--cycle) linear infinite;
+  }
+
+  @keyframes fig-rpb-lit-update {
+    0%,
+    6%,
+    24%,
+    100% {
+      background-color: var(--base);
+    }
+    9%,
+    21% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes fig-rpb-travel-update {
+    0%,
+    11% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    12% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    21% {
+      opacity: 1;
+      transform: translate(42px, 0);
+    }
+    22%,
+    100% {
+      opacity: 0;
+      transform: translate(42px, 0);
+    }
+  }
+  @keyframes fig-rpb-status-before {
+    0%,
+    22% {
+      opacity: 1;
+    }
+    24%,
+    96% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes fig-rpb-status-after {
+    0%,
+    22% {
+      opacity: 0;
+    }
+    24%,
+    96% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes fig-rpb-lit-visits {
+    0%,
+    22%,
+    36%,
+    100% {
+      background-color: var(--base);
+    }
+    25%,
+    33% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes fig-rpb-missing {
+    0%,
+    36% {
+      background-color: var(--fig-surface);
+    }
+    42%,
+    96% {
+      background-color: var(--fig-problem-soft);
+    }
+    100% {
+      background-color: var(--fig-surface);
+    }
+  }
+}
+</style>
+<figure class="fig fig-rpb" aria-label="cancelVisit を通らない更新処理が visits だけを書き換え、business_events に行が増えない図">
+<p class="fig-rpb-head">cancelVisit を通らない更新処理は、状態だけを書き換える</p>
+<div class="fig-rpb-caller">
+<span class="fig-rpb-caller-name"><span class="fig-rpb-mono">cancelVisit</span> を通らない更新処理</span>
+</div>
+<div class="fig-rpb-tx">
+<span class="fig-rpb-face-label fig-rpb-tx-label">トランザクション</span>
+<div class="fig-rpb-step">
+<div class="fig-rpb-stmt fig-rpb-update">
+<span class="fig-rpb-mono">UPDATE visits</span>
+<span class="fig-rpb-stmt-note">状態を書き換える</span>
+</div>
+<span class="fig-rpb-arrow fig-rpb-arrow-update">
+<svg viewBox="0 0 64 24" aria-hidden="true" focusable="false">
+<path class="fig-rpb-shaft" d="M4 12H56"></path>
+<path class="fig-rpb-head-mark" d="M46 5L60 12L46 19"></path>
+<circle class="fig-rpb-dot" cx="9" cy="12" r="5"></circle>
+</svg>
+</span>
+<div class="fig-rpb-store fig-rpb-visits">
+<span class="fig-rpb-store-name"><span class="fig-rpb-mono">visits</span>（現在の状態）</span>
+<span class="fig-rpb-row">
+<span class="fig-rpb-mono fig-rpb-cell">visit-pochi</span>
+<span class="fig-rpb-mono fig-rpb-cell fig-rpb-status">
+<span class="fig-rpb-status-before" aria-hidden="true">reserved</span>
+<span class="fig-rpb-status-after">cancelled</span>
+</span>
+</span>
+</div>
+</div>
+<div class="fig-rpb-step">
+<div class="fig-rpb-stmt fig-rpb-stmt-missing">
+<span class="fig-rpb-stmt-note">INSERT 文がない</span>
+</div>
+<span class="fig-rpb-arrow fig-rpb-arrow-insert">
+<svg viewBox="0 0 64 24" aria-hidden="true" focusable="false">
+<path class="fig-rpb-shaft" d="M4 12H56"></path>
+<path class="fig-rpb-head-mark" d="M46 5L60 12L46 19"></path>
+<circle class="fig-rpb-dot" cx="9" cy="12" r="5"></circle>
+</svg>
+</span>
+<div class="fig-rpb-store">
+<span class="fig-rpb-store-name"><span class="fig-rpb-mono">business_events</span>（記録）</span>
+<span class="fig-rpb-row fig-rpb-row-none">
+<span class="fig-rpb-cell">行が増えない</span>
+</span>
+</div>
+</div>
+</div>
+</figure>
