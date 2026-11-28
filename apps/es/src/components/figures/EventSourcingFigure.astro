@@ -721,7 +721,16 @@ const lit = (name: string): Record<string, string> =>
   .cfig.es[data-view="mechanism"] {
     --cycle: 14s;
   }
+  .cfig.es[data-view="burdens"] {
+    --cycle: 15s;
+  }
 
+  [data-link="append"] .arrow :global(.dot) {
+    animation: travel var(--cycle) linear infinite;
+  }
+  [data-link="build"] .arrow :global(.dot) {
+    animation: travel-late var(--cycle) linear infinite;
+  }
   .cfig.es[data-view="mechanism"] [data-link="sql"] .arrow :global(.dot),
   .cfig.es[data-view="mechanism"] [data-link="append"] .arrow :global(.dot) {
     animation: travel-twice var(--cycle) linear infinite;
@@ -749,6 +758,46 @@ const lit = (name: string): Record<string, string> =>
   }
   [data-lit="read"] {
     animation: lit-read var(--cycle) linear infinite;
+  }
+
+  @keyframes travel {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    1% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    11% {
+      opacity: 1;
+      transform: translate(var(--dx), var(--dy));
+    }
+    12%,
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy));
+    }
+  }
+  @keyframes travel-late {
+    0%,
+    54% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    55% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    65% {
+      opacity: 1;
+      transform: translate(var(--dx), var(--dy));
+    }
+    66%,
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy));
+    }
   }
 
   @keyframes travel-twice {
