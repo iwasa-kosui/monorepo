@@ -46,6 +46,7 @@ export type Post = {
   readonly text: string;
   readonly list?: readonly string[];
   readonly time?: string;
+  readonly day?: string;
   readonly channel?: string;
 };
 

@@ -176,6 +176,10 @@ const railActors = railActorIds.flatMap((id) => {
       </li>
     </template>
 
+    <template data-day>
+      <li class="day"><span data-day-label></span></li>
+    </template>
+
     <div class="composer">
       <div class="compose-box">
         {
@@ -490,6 +494,32 @@ const railActors = railActorIds.flatMap((id) => {
 }
 :global(.scene[data-scenario]) .post + .post {
   margin-top: var(--space-3);
+}
+:global(.scene[data-scenario]) .day {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  color: var(--c-fg);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+:global(.scene[data-scenario]) .post + .day {
+  margin-top: var(--space-4);
+}
+:global(.scene[data-scenario]) .day::before,
+:global(.scene[data-scenario]) .day::after {
+  flex: 1;
+  border-top: 1px solid var(--c-edge);
+  content: "";
+}
+:global(.scene[data-scenario]) .day span {
+  flex: none;
+  border: 1px solid var(--c-edge);
+  border-radius: var(--radius-pill);
+  background: var(--c-bg);
+  padding: var(--space-1) var(--space-3);
 }
 :global(.scene[data-scenario]) .post + .post.is-continued {
   margin-top: var(--space-1);
