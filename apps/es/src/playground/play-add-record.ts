@@ -299,7 +299,16 @@ const mount = (root: HTMLElement): void => {
 
   const plainCell = (value: Row[string] | undefined): HTMLElement => {
     const shown = text(value);
-    return element('td', { className: shown.length > longCellLength ? 'play-long' : '', text: shown });
+    const classes = [
+      ...(shown.length > longCellLength ? ['play-long'] : []),
+      ...(typeof value === 'number' ? ['play-num'] : []),
+    ];
+    return element('td', { className: classes.join(' '), text: shown });
+  };
+
+  const isNumericColumn = (rows: Row[], column: string): boolean => {
+    const values = rows.map((row) => row[column]).filter((value) => value !== null && value !== undefined);
+    return values.length > 0 && values.every((value) => typeof value === 'number');
   };
 
   const renderGrid = (container: HTMLElement, spec: GridSpec): void => {
@@ -307,7 +316,10 @@ const mount = (root: HTMLElement): void => {
       element('tr', {}, [
         element('td', { className: 'play-rownum' }),
         ...spec.columns.map((column) =>
-          element('th', { attributes: { scope: 'col' } }, [
+          element('th', {
+            ...(isNumericColumn(spec.rows, column) ? { className: 'play-num' } : {}),
+            attributes: { scope: 'col' },
+          }, [
             element('span', { className: 'play-col-name', text: column }),
             ...(spec.chips
               ? answersOfColumn(scene, column).map((answer) =>
