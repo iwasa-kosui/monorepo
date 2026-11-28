@@ -33,7 +33,12 @@ const oneLine = (sql: string): string => sql.replace(/\s+/g, ' ').trim();
 const renderCell = (cell: SqlCell): HTMLTableCellElement =>
   cell === null
     ? element('td', { className: 'playground-null', text: 'NULL' })
-    : element('td', { text: String(cell) });
+    : element('td', { ...(typeof cell === 'number' ? { className: 'playground-num' } : {}), text: String(cell) });
+
+const isNumericColumn = (rows: SqlCell[][], index: number): boolean => {
+  const values = rows.map((row) => row[index]).filter((cell) => cell !== null);
+  return values.length > 0 && values.every((cell) => typeof cell === 'number');
+};
 
 const renderStatement = (sql: string): HTMLElement =>
   element('p', { className: 'playground-statement' }, [
@@ -43,7 +48,16 @@ const renderStatement = (sql: string): HTMLElement =>
 const renderResult = (result: SqlStatementResult): HTMLElement => {
   const parts: HTMLElement[] = [renderStatement(result.sql)];
   if (result.kind === 'rows') {
-    const head = element('tr', {}, result.columns.map((name) => element('th', { text: name })));
+    const head = element(
+      'tr',
+      {},
+      result.columns.map((name, index) =>
+        element('th', {
+          ...(isNumericColumn(result.rows, index) ? { className: 'playground-num' } : {}),
+          text: name,
+        })
+      ),
+    );
     const body = result.rows.map((row) => element('tr', {}, row.map(renderCell)));
     parts.push(element('table', {}, [element('thead', {}, [head]), element('tbody', {}, body)]));
     parts.push(element('p', {

@@ -53,28 +53,39 @@ const config = JSON.stringify({
     </button>
   </div>
   <p class="playground-origin" data-role="origin" role="status" hidden></p>
-  <div class="playground-toolbar">
-    <button type="button" class="btn btn--soft" data-role="run" disabled>
-      実行する
-    </button>
-    <button type="button" class="btn btn--text" data-role="reset" disabled>
-      データベースを最初の状態に戻す
-    </button>
-    <button type="button" class="btn btn--text" data-role="reset-sql">
-      最初の SQL に戻す
-    </button>
-    <button type="button" class="btn btn--text" data-role="restore" hidden>
-      読み込む前の SQL に戻す
-    </button>
-    <span class="playground-hint">
-      Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
-    </span>
-  </div>
-  <div class="playground-panes">
-    <div class="playground-pane-editor">
-      <div class="playground-editor" data-role="editor"></div>
+  <div class="playground-cell">
+    <div class="playground-toolbar">
+      <button type="button" class="btn btn--soft" data-role="run" disabled>
+        実行する
+      </button>
+      <span class="playground-hint">
+        <span class="visually-hidden">
+          Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
+        </span>
+        <span class="playground-keys" aria-hidden="true">
+          <kbd>Ctrl Enter</kbd>
+          <span>/</span>
+          <kbd>⌘ Enter</kbd>
+        </span>
+      </span>
+      <div class="playground-toolbar-end">
+        <button type="button" class="btn btn--text" data-role="reset" disabled>
+          データベースを最初の状態に戻す
+        </button>
+        <button type="button" class="btn btn--text" data-role="reset-sql">
+          最初の SQL に戻す
+        </button>
+        <button type="button" class="btn btn--text" data-role="restore" hidden>
+          読み込む前の SQL に戻す
+        </button>
+      </div>
     </div>
-    <div class="playground-results" data-role="results" aria-live="polite">
+    <div class="playground-panes">
+      <div class="playground-pane-editor">
+        <div class="playground-editor" data-role="editor"></div>
+      </div>
+      <div class="playground-results" data-role="results" aria-live="polite">
+      </div>
     </div>
   </div>
   <script is:inline>
