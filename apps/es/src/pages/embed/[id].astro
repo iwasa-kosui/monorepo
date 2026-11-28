@@ -1,0 +1,31 @@
+---
+import CodePlayground from '../../components/CodePlayground.astro';
+import { embeds } from '../../components/questions/embeds';
+import IdeWindow from '../../components/questions/IdeWindow.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export const getStaticPaths = () =>
+  Object.entries(embeds).map(([id, embed]) => ({
+    params: { id },
+    props: { embed },
+  }));
+
+const { embed } = Astro.props;
+---
+
+<BaseLayout title={embed.title} chapterPage noindex>
+  <div class="content">
+    <IdeWindow scenario={embed.scenario} fill>
+      <Fragment slot="editor">
+        <CodePlayground {...embed.playground} />
+      </Fragment>
+    </IdeWindow>
+  </div>
+</BaseLayout>
+
+<style is:global>
+html,
+body {
+  background: transparent;
+}
+</style>

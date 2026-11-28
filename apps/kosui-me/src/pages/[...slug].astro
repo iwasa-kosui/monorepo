@@ -1,6 +1,7 @@
 ---
 import ArticleActions from '@/components/ArticleActions.astro';
 import AuthorCard from '@/components/AuthorCard.astro';
+import CodeEditor from '@/components/CodeEditor.astro';
 import ContentWarningModal from '@/components/ContentWarningModal.astro';
 import Figure from '@/components/Figure.astro';
 import MarkdownSourceLink from '@/components/MarkdownSourceLink.astro';
@@ -113,7 +114,7 @@ const jsonLd = isPrivate || isDraft ? [] : [
       )
     }
     <div class="prose">
-      <Content components={{ Figure }} />
+      <Content components={{ CodeEditor, Figure }} />
     </div>
     {
       !isPrivate && (

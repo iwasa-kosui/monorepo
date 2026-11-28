@@ -219,9 +219,13 @@ export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: 
 };
 ```
 
-`visitCancelledStore` は、業務イベントが持つ変更後の状態を `visits` に書き、同じ業務イベントを `business_events` に書きます。`visits` に書く値と `target_state` に残す値は同じ業務イベントから取るので、この2つは一致します。このコードは、[ハンズオンの資料](https://es.kosui.workers.dev/questions/)のエディタで、テストと一緒に動かせます。
+`visitCancelledStore` は、業務イベントが持つ変更後の状態を `visits` に書き、同じ業務イベントを `business_events` に書きます。`visits` に書く値と `target_state` に残す値は同じ業務イベントから取るので、この2つは一致します。
 
 <Figure name="event-record-event-centered" />
+
+このコードは、次のエディタで、テストと一緒に動かせます。
+
+<CodeEditor name="event-centered" title="来院のキャンセルを、業務イベントを返す関数と保存する処理で書いたコード" />
 
 このパターンでも、イベントストアは入れていません。現在の状態は今までどおり `visits` から読み、記録から状態を組み立て直すこともしません。ビジネスロジックが依存しているのは、業務イベントの型だけです。
 

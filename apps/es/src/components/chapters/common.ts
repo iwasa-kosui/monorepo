@@ -146,6 +146,7 @@ type LessonOptions = Pick<WorkspaceScenario, 'id' | 'label' | 'tabs'> & {
   readonly timeline?: readonly TimelineEvent[];
   readonly buttons?: readonly ChatButton[];
   readonly collapsed?: true;
+  readonly live?: false;
   readonly memo?: WorkspaceScenario['memo'];
   readonly gates?: WorkspaceScenario['gates'];
   readonly reply?: WorkspaceScenario['reply'];
@@ -175,7 +176,9 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
     placeholder: `${inquiryChannel} へのメッセージ`,
     buttons: options.buttons ?? [],
     ...(options.collapsed === true || docsOnly(options.tabs) ? { collapsed: true as const } : {}),
-    live: { channel: handsOnChannel, ...(options.ask ?? { label: `${handsOnChannel} へのメッセージ` }) },
+    ...(options.live === false
+      ? {}
+      : { live: { channel: handsOnChannel, ...(options.ask ?? { label: `${handsOnChannel} へのメッセージ` }) } }),
   },
   actors,
   history: options.history ?? [],

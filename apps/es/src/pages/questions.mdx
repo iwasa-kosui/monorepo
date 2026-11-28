@@ -13,6 +13,8 @@ import RecordPathFigure from '../components/figures/RecordPathFigure.astro';
 import { smallStartWithdrawn, storeRecording, storeWithdrawn } from '../components/questions/code';
 import CodeDiff from '../components/questions/CodeDiff.astro';
 import CssTabs from '../components/questions/CssTabs.astro';
+import { embeds } from '../components/questions/embeds';
+import IdeWindow from '../components/questions/IdeWindow.astro';
 import Quote from '../components/Quote.astro';
 import { cancelVisitOf } from '../lib/snapshots';
 
@@ -80,12 +82,11 @@ A. 3つあります。3つの形は、1つのシステムで併用できます�
 - `visits.ts` は、来院を読み、`Visit.cancel` を呼び、業務イベントを保存する流れを、1つのトランザクションにまとめます。
 - `business-event.ts` は、集約（来院のように、ID と状態を持つ対象）と業務イベントの型、業務イベントを作る関数、業務イベントを `business_events` に書く関数を持つユーティリティです。来院のキャンセル以外の更新処理でも使えます。
 
-<CodePlayground
-  exercise="chapter-2-event-centered"
-  editable={['visit.ts', 'visit-store.ts', 'visits.ts', 'business-event.ts']}
-  readonly={['visits.test.ts']}
-  testFile="visits.test.ts"
-/>
+<IdeWindow scenario={embeds['event-centered'].scenario}>
+<Fragment slot="editor">
+<CodePlayground {...embeds['event-centered'].playground} />
+</Fragment>
+</IdeWindow>
 
 </Fragment>
 <Fragment slot="tab-3">
