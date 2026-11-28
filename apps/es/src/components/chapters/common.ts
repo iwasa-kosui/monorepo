@@ -26,16 +26,20 @@ export const actors: Readonly<Record<'support' | 'you' | 'colleague' | 'finance'
 
 const startedAt = Date.UTC(2026, 10, 9, 9, 30, 0);
 
+export const incidentDay = '11月6日（金）';
+
 export const inquiry: Post = {
   actor: 'support',
   text: 'ポチちゃんの来院です（visit-pochi）。誰がいつなんでキャンセルしたか、わかりますか？',
   time: '18:20',
+  day: incidentDay,
 };
 
 export const whyNotRecorded: Post = {
   actor: 'support',
   text: 'なんで記録取ってないんですか',
   time: '18:24',
+  day: incidentDay,
 };
 
 export const thanks: Post = {

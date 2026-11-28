@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   channelOfPost,
   type ChannelState,
+  dayDividers,
+  dayOfPost,
   hasOpeningPost,
   openingChannel,
   openingChannelState,
@@ -14,6 +16,7 @@ import {
   receiveTyping,
   revealChannel,
   selectChannel,
+  todayLabel,
   totalUnread,
   typingLeadMs,
   typingStartMs,
@@ -369,5 +372,29 @@ describe('参加者が選んだチャンネルの状態', () => {
       const next = selectChannel(reading(dev, { [dev]: 1, [handsOn]: 3 }), handsOn);
       expect(totalUnread(next)).toBe(1);
     });
+  });
+});
+
+describe('日付の区切り', () => {
+  const friday = '11月6日（金）';
+  const old = (text: string): Post => ({ actor: 'support', text, day: friday });
+
+  it('日付を持たない発言は、今日の発言である', () => {
+    expect(todayLabel).toBe('今日');
+    expect(dayOfPost(support('a'))).toBe('今日');
+    expect(dayOfPost(old('a'))).toBe(friday);
+  });
+
+  it('今日の発言だけのときは、区切りを入れない', () => {
+    expect(dayDividers([support('a'), support('b')])).toEqual([null, null]);
+    expect(dayDividers([])).toEqual([]);
+  });
+
+  it('過去の日の発言で始まるときは、最初の発言の前にその日の区切りを入れる', () => {
+    expect(dayDividers([old('a'), old('b')])).toEqual([friday, null]);
+  });
+
+  it('日付が変わる発言の前に、その日の区切りを入れる', () => {
+    expect(dayDividers([old('a'), old('b'), support('c'), support('d')])).toEqual([friday, null, '今日', null]);
   });
 });

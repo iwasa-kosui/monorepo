@@ -1,11 +1,11 @@
 import {
   channelOfPost,
   type ChannelState,
+  dayDividers,
   hasOpeningPost,
   openingChannel,
   openingChannelState,
   placeholderOf,
-  postsInChannel,
   receiveAmbient,
   receivePost,
   receiveTyping,
@@ -73,6 +73,7 @@ export type Chat = {
 export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat => {
   const feed = must<HTMLElement>(root, '[data-feed]');
   const postTemplate = must<HTMLTemplateElement>(root, 'template[data-post]');
+  const dayTemplate = must<HTMLTemplateElement>(root, 'template[data-day]');
   const reason = root.querySelector<HTMLElement>('[data-reason]');
   const memoCells = [...root.querySelectorAll<HTMLElement>('[data-memo]')];
   const buttonOf = (name: ButtonName): HTMLButtonElement | null =>
@@ -115,16 +116,30 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     feed.toggleAttribute('data-empty', feed.childElementCount === 0 && !awaiting);
   };
 
+  const dividerOf = (label: string): HTMLElement => {
+    const divider = cloneFirst(dayTemplate, 'li');
+    fillText(divider, '[data-day-label]', label);
+    return divider;
+  };
+
+  const shownEntries = (): typeof entries =>
+    entries.filter((entry) => channelOfPost(entry.post, defaultChannel) === state.channel);
+
   const layoutFeed = (): void => {
-    const shown = new Set(postsInChannel(entries.map((entry) => entry.post), state.channel, defaultChannel));
+    const shown = shownEntries();
+    const dividers = dayDividers(shown.map((entry) => entry.post));
     let previous: string | null = null;
     const elements: HTMLElement[] = [];
-    for (const entry of entries) {
-      if (!shown.has(entry.post)) continue;
+    shown.forEach((entry, index) => {
+      const label = dividers[index] ?? null;
+      if (label !== null) {
+        elements.push(dividerOf(label));
+        previous = null;
+      }
       entry.element.classList.toggle('is-continued', previous === entry.post.actor);
       previous = entry.post.actor;
       elements.push(entry.element);
-    }
+    });
     feed.replaceChildren(...elements);
     renderEmpty();
     feed.scrollTop = feed.scrollHeight;
@@ -292,6 +307,11 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     }
     entries.push(live === undefined ? { post, element: copy } : { post, element: copy, liveId: live.id });
     if (shown) {
+      const label = dayDividers(shownEntries().map((entry) => entry.post)).at(-1) ?? null;
+      if (label !== null) {
+        copy.classList.remove('is-continued');
+        feed.append(dividerOf(label));
+      }
       feed.append(copy);
       renderEmpty();
       if (stick) feed.scrollTop = feed.scrollHeight;
