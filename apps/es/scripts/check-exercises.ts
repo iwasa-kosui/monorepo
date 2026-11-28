@@ -47,6 +47,7 @@ const snapshots: Snapshot[] = [
     scriptError: missingTable,
   },
   { dir: 'chapter-2-step-2', green: [...existing, ...step2], red: [], answers: true },
+  { dir: 'chapter-2-event-centered', green: [...existing, ...step2], red: [], answers: true },
 ];
 
 const sameFiles = [

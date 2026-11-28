@@ -5,11 +5,12 @@ topBar: true
 ---
 
 import CodeBlock from '../components/CodeBlock.astro';
+import CodePlayground from '../components/CodePlayground.astro';
 import ArchiveFigure from '../components/figures/ArchiveFigure.astro';
 import AreaChoiceFigure from '../components/figures/AreaChoiceFigure.astro';
 import EventCenteredFigure from '../components/figures/EventCenteredFigure.astro';
 import RecordPathFigure from '../components/figures/RecordPathFigure.astro';
-import { eventCenteredCode, smallStartWithdrawn, storeRecording, storeWithdrawn } from '../components/questions/code';
+import { smallStartWithdrawn, storeRecording, storeWithdrawn } from '../components/questions/code';
 import CodeDiff from '../components/questions/CodeDiff.astro';
 import CssTabs from '../components/questions/CssTabs.astro';
 import Quote from '../components/Quote.astro';
@@ -72,7 +73,19 @@ A. 3つあります。3つの形は、1つのシステムで併用できます�
 
 この形でも、現在の状態は `visits` から読みます。記録から現在の状態を組み立て直すことはしません。代わりに、既存の更新処理を書き直す作業が必要です。
 
-<CodeBlock code={eventCenteredCode} />
+次のエディタは、来院のキャンセルをこの形で書き直したコードです。テストは、第2章のステップ2と同じものです。
+
+- `visit.ts` は、来院の型と、業務イベント `VisitCancelled` を返す関数 `Visit.cancel` を持ちます。このファイルは DB に触れません。
+- `visit-store.ts` は、来院を `visits` から読む処理と、`VisitCancelled` を `visits` と `business_events` に書く処理を持ちます。
+- `visits.ts` は、来院を読み、`Visit.cancel` を呼び、業務イベントを保存する流れを、1つのトランザクションにまとめます。
+- `business-event.ts` は、集約（来院のように、ID と状態を持つ対象）と業務イベントの型、業務イベントを作る関数、業務イベントを `business_events` に書く関数を持つユーティリティです。来院のキャンセル以外の更新処理でも使えます。
+
+<CodePlayground
+  exercise="chapter-2-event-centered"
+  editable={['visit.ts', 'visit-store.ts', 'visits.ts', 'business-event.ts']}
+  readonly={['visits.test.ts']}
+  testFile="visits.test.ts"
+/>
 
 </Fragment>
 <Fragment slot="tab-3">
@@ -100,7 +113,7 @@ A. 古い業務イベントを DB の外へ書き出してから、DB から削�
 
 ## Q. 記録をやめるときは、どうしますか
 
-A. `business_events` への `INSERT` 文を削除します。`visits` への書き込みは残るので、現在の状態は失われません。
+A. `business_events` へ書く処理を削除します。`visits` への書き込みは残るので、現在の状態は失われません。
 
 <CssTabs name="withdraw" label="記録をやめるときに削除するコード" labels={['ハンズオンの形', 'イベント中心に書いた形']}>
 <Fragment slot="tab-1">
@@ -116,7 +129,7 @@ A. `business_events` への `INSERT` 文を削除します。`visits` への書�
 </Fragment>
 <Fragment slot="tab-2">
 
-保存する処理から `business_events` への `INSERT` 文を削除します。更新処理の関数が業務イベントを返す形は、そのまま残せます。
+保存する処理から、業務イベントを `business_events` に書く `recordBusinessEvent` の呼び出しを削除します。更新処理の関数が業務イベントを返す形は、そのまま残せます。
 
 <CodeDiff
   label="記録をやめるときに保存する処理から削除する行"
