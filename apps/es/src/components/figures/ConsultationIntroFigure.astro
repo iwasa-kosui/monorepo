@@ -21,6 +21,8 @@ const systems = excerpt.kind === 'architecture'
   ]
   : [];
 const link = excerpt.kind === 'architecture' ? excerpt.link : '';
+const recording = excerpt.kind === 'recording' ? excerpt : undefined;
+const calloutAt = recording === undefined ? 6 : 7;
 const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
 ---
 
@@ -131,21 +133,59 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
         )
       }
       {
-        excerpt.kind === 'columns' && (
-          <div class="tbl wide reveal" style={at(2)}>
-            <div class="tbl-head mono">{excerpt.table}</div>
-            <div class="tbl-body pairs">
-              {
-                excerpt.columns.map((pair) => (
-                  <div class="ev">
-                    <span class="pair-column mono">{pair.column}</span>
-                    <span class:list={['pair-value', { mono: pair.mono }]}>{
-                      pair.value
-                    }</span>
+        recording !== undefined && (
+          <div class="rec">
+            <div class="rec-top reveal" style={at(2)}>
+              <span class="person">{recording.person}</span>
+              <div class="rec-act">
+                <span class="bridge-label">{recording.action}</span>
+                <span class="bridge-arrow" aria-hidden="true"></span>
+                <span class="down-arrow bridge-down" aria-hidden="true"></span>
+              </div>
+              <div class="tbl rec-system">
+                <div class="tbl-head">{recording.system}</div>
+              </div>
+            </div>
+            <div class="rec-cols">
+              <div class="rec-col reveal" style={at(3)}>
+                <div class="rec-link">
+                  <span class="down-arrow" aria-hidden="true"></span>
+                  <span class="rec-link-label">{recording.update.label}</span>
+                </div>
+                <div class="tbl">
+                  <div class="tbl-head mono">{recording.update.table}</div>
+                  <div
+                    class="tbl-body"
+                    set:html={richHtml(recording.update.content)}
+                  />
+                </div>
+              </div>
+              <div class="rec-col reveal" style={at(4)}>
+                <div class="rec-link">
+                  <span class="down-arrow" aria-hidden="true"></span>
+                  <span class="rec-link-label">{recording.log.label}</span>
+                </div>
+                <div class="tbl">
+                  <div class="tbl-head mono">{recording.log.table}</div>
+                  <div class="tbl-body pairs">
+                    {
+                      recording.log.columns.map((
+                    pair,
+                  ) => (
+                        <div class="ev">
+                          <span class="pair-column mono">{pair.column}</span>
+                          <span
+                            class:list={['pair-value', { mono: pair.mono }]}
+                          >{pair.value}</span>
+                        </div>
+                      ))
+                    }
+                    <div class="ev ghost reveal" style={at(5)}>
+                      {recording.log.missing}
+                    </div>
                   </div>
-                ))
-              }
-              <div class="ev ghost reveal" style={at(4)}>{excerpt.missing}</div>
+                </div>
+              </div>
             </div>
           </div>
         )
@@ -155,7 +195,7 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
 
   <div
     class="cfig-callout callout reveal"
-    style={at(6)}
+    style={at(calloutAt)}
     data-tone="problem"
     data-tail="top"
   >
@@ -433,8 +473,76 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
   display: none;
 }
 
-.tbl.wide {
-  flex: 1 1 100%;
+.rec {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.rec-top {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+}
+.rec .person {
+  flex: none;
+  white-space: nowrap;
+}
+.rec-act {
+  display: grid;
+  flex: none;
+  grid-template-rows: 1fr auto 1fr;
+  width: 8rem;
+}
+.rec-act .bridge-label {
+  white-space: nowrap;
+}
+.rec-act .bridge-arrow {
+  margin-inline: 0.375rem var(--space-1);
+}
+.rec-act .bridge-arrow::after {
+  right: auto;
+  left: -0.3125rem;
+  border-right: 0.3125rem solid var(--role-accent-strong);
+  border-left: 0;
+}
+.rec-system {
+  flex: 1;
+}
+.rec-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.75fr);
+  align-items: start;
+  column-gap: var(--space-3);
+}
+.rec-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.rec-col .tbl {
+  flex: none;
+}
+.rec-link {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding-left: var(--space-4);
+  min-height: 1.5rem;
+}
+.rec-link .down-arrow {
+  flex: none;
+}
+.rec-link-label {
+  align-self: center;
+  white-space: nowrap;
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.rec .pairs {
+  gap: var(--space-1);
 }
 .pairs {
   display: flex;
@@ -477,6 +585,11 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
   .bridge-arrow.reveal {
     transform-origin: left center;
     animation-name: bridge-grow;
+  }
+  .rec-act .bridge-arrow {
+    transform-origin: right center;
+    animation: bridge-grow 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.35s);
   }
 }
 @keyframes reveal-in {
@@ -533,16 +646,32 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
   .tbl {
     flex: none;
   }
-  .arch {
+  .arch,
+  .rec {
     display: flex;
     flex-direction: column;
+    gap: var(--space-1);
+  }
+  .rec-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+  .rec .person {
+    align-self: center;
+  }
+  .rec-cols {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-1);
   }
   .sys {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
   }
-  .bridge {
+  .bridge,
+  .rec-act {
+    width: auto;
     grid-template-rows: none;
     grid-template-columns: 1fr 0.75rem 1fr;
     column-gap: var(--space-2);

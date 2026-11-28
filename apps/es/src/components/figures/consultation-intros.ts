@@ -16,6 +16,13 @@ export type SystemNode = {
   readonly detail?: string;
 };
 export type ColumnValue = { readonly column: string; readonly value: string; readonly mono: boolean };
+export type TableUpdate = { readonly label: string; readonly table: string; readonly content: string };
+export type TableLog = {
+  readonly label: string;
+  readonly table: string;
+  readonly columns: readonly ColumnValue[];
+  readonly missing: string;
+};
 export type Excerpt =
   | { readonly kind: 'counts'; readonly boxes: readonly CountBox[] }
   | {
@@ -25,10 +32,12 @@ export type Excerpt =
     readonly link: string;
   }
   | {
-    readonly kind: 'columns';
-    readonly table: string;
-    readonly columns: readonly ColumnValue[];
-    readonly missing: string;
+    readonly kind: 'recording';
+    readonly person: string;
+    readonly action: string;
+    readonly system: string;
+    readonly update: TableUpdate;
+    readonly log: TableLog;
   };
 export type ConsultationIntro = {
   readonly lead: string;
@@ -86,21 +95,28 @@ export const consultationIntros = {
     problem: 'キャンセルが届かなかったのか、届いたが反映しなかったのかを区別できない',
   },
   'audit-log': {
-    lead: '監査ログがあるシステムでも、変更の理由を聞かれると回答できないことがあります。',
+    lead: '予約システムは、変更前後の値と操作者を監査ログに記録しています。',
     label:
-      '情シスから、監査対応で reserved から cancelled への変更の理由を聞かれ、監査ログには変更前後の値と操作者だけがあり、理由を回答できないことを表す図',
+      '受付スタッフが予約システムでキャンセルすると、予約システムが visits を更新し、変更前後の値と操作者を audit_logs に記録する構成で、audit_logs に理由の列が無いため、情シスから聞かれた変更の理由を回答できないことを表す図',
     speaker: { name: '情シス', avatar: '情', role: '監査対応' },
     question: '`reserved` から `cancelled` に変更した理由は何か',
-    heading: 'いまのデータ',
+    heading: 'システムの構成といまのデータ',
     excerpt: {
-      kind: 'columns',
-      table: 'audit_logs',
-      columns: [
-        { column: 'old_value', value: 'reserved', mono: true },
-        { column: 'new_value', value: 'cancelled', mono: true },
-        { column: 'operated_by', value: '受付スタッフ', mono: false },
-      ],
-      missing: '理由の列は無い',
+      kind: 'recording',
+      person: '受付スタッフ',
+      action: 'キャンセルする',
+      system: '予約システム',
+      update: { label: '更新する', table: 'visits', content: '`status` を `cancelled` に変更' },
+      log: {
+        label: '変更を記録する',
+        table: 'audit_logs',
+        columns: [
+          { column: 'old_value', value: 'reserved', mono: true },
+          { column: 'new_value', value: 'cancelled', mono: true },
+          { column: 'operated_by', value: '受付スタッフ', mono: false },
+        ],
+        missing: '理由の列は無い',
+      },
     },
     problem: '変更前後の値と操作者は分かるが、業務上の理由を回答できない',
   },
