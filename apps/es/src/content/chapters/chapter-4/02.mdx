@@ -3,12 +3,9 @@ wide: true
 immersive: true
 ---
 
-import CodeBlock from '../../../components/CodeBlock.astro';
 import CodePlayground from '../../../components/CodePlayground.astro';
-import ConsoleTable from '../../../components/ConsoleTable.astro';
 import { chapter4SummaryTable } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
-import { readFunctionsOf } from '../../../lib/snapshots';
 
 <div class="visually-hidden">
 
@@ -21,57 +18,8 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 <CodePlayground
   exercise="chapter-4-summary-table-done"
   editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'why-this-count.ts']}
-  testFile="visits.test.ts"
+  readonly={['db.ts']}
   reveal="export const cancelVisit"
-  scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
 />
-</Fragment>
-<Fragment slot="memo">
-
-> この集計値はなぜこの値なのか。
-
-`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で `cancelVisit` は同じで、開発者は読み取り関数だけを足します。読み取り関数は、業務イベントを読んで問いに答える関数です。キャンセル数の3に対して、業務イベントから再計算した値は2です。差の1は、業務イベントを導入する前から残っているキャンセルです。この比較は差があることを示しますが、差の理由は示しません。
-
-実行結果の表は、キャンセル数の内訳を理由と操作者つきで示します。
-
-<div class="detail-row">
-
-<details>
-<summary>読み取り関数を見る</summary>
-
-<CodeBlock code={readFunctionsOf('chapter-4-summary-table-done', 'explainCancellationCount')} />
-
-</details>
-
-<details>
-<summary>出力例を見る</summary>
-
-<ConsoleTable
-  head={['(index)', 'eventId', 'eventAt', 'visitId', 'reason', 'operatedBy']}
-  rows={[
-    ['0', '1', "'2026-11-06T10:14:12.540Z'", "'visit-1'", "'飼い主の都合'", "'受付スタッフ'"],
-    ['1', '2', "'2026-11-06T10:14:12.541Z'", "'visit-2'", "'来院前に回復したため'", "'院長'"],
-  ]}
-/>
-
-<ConsoleTable
-  head={['(index)', 'recordedCount', 'recalculatedCount', 'difference']}
-  rows={[
-    ['0', '3', '2', '1'],
-  ]}
-/>
-
-</details>
-
-<details>
-<summary>手元の Node で動かすとき</summary>
-
-`chapter-4-summary-table-done` で `node why-this-count.ts` を実行します。
-
-</details>
-
-</div>
-
 </Fragment>
 </Workspace>

@@ -3,9 +3,14 @@ wide: true
 immersive: true
 ---
 
+import AdrOptions from '../../../components/adr/AdrOptions.astro';
+import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
+import AdrPanel from '../../../components/adr/AdrPanel.astro';
+import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
+import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import EventAsFunctionFigure from '../../../components/figures/EventAsFunctionFigure.astro';
 import RecordMappingFigure from '../../../components/figures/RecordMappingFigure.astro';
-import Quote from '../../../components/Quote.astro';
+import TableGrowthFigure from '../../../components/figures/TableGrowthFigure.astro';
 import { chapter2Table } from '../../../components/chapters/chapter-2';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
@@ -18,85 +23,63 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter2Table}>
 <Fragment slot="memo">
 
-- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
-- 日付: 2026-11-09
-- 作成者: 同僚
+<AdrTabs id="adr-2" labels={['背景', '決定', '列の対応', '結果', '検討した案']}>
 
-### 状況
+<AdrPanel lead="出来事ごとにテーブルを作ると、記録する出来事を追加するたびに、テーブルが増えます。">
 
-ADR 1 は、来院のキャンセルの記録を `visit_cancellations` テーブルに追記する方式を定めています。`visit_cancellations` テーブルは、名前と列の両方が、キャンセルの記録だけを対象にしています。診察の完了の処理（`completeVisit`）にも同じ方式で記録を追加すると、テーブルがもう1つ必要になります。記録する出来事が増えると、テーブルも増えます。
+<TableGrowthFigure />
 
-出来事ごとにテーブルを分割した場合の運用負荷は、次の発表が報告しています。
+<AdrPurpose
+  purpose="記録する出来事を追加しても、運用の負荷が高くならないようにする"
+/>
 
-<Quote source="SRE Kaigi 2026 の発表より">
+</AdrPanel>
 
-また、最初は集約やイベントごとにテーブルを分割していましたが、運用負荷が高かったため、必要になるまでは単一テーブルに寄せるようにしました。過剰な設計を避けるという判断です。
-
-</Quote>
-
-この ADR は、出来事の記録を保存するテーブルの構成を、次の3つの基準で決定します。
-
-- 記録する出来事を追加しても、テーブルと列が増えないこと
-- 値の有無を DB が検査できること
-- ほかのテーブルの行を指す値に、外部キー制約を設定できること
-
-### 決定
-
-出来事の記録を、1つのテーブルにまとめて保存します。
+<AdrPanel lead="出来事の記録を、1つのテーブルにまとめて保存します。">
 
 業務イベントは、業務で起きた1つの出来事を、「誰が」「いつ」「何を」「なぜ」とともに残す記録です。
 
-- 業務イベントは、出来事の種類や対象にかかわらず、`business_events` テーブルに追記します。
-- すべての出来事が持つ値は、列で保持します。出来事ごとに異なる値は、JSON にして1つの列に保存します。
-- 出来事が起きた時点の対象の状態も、業務イベントと一緒に保存します。
-- 対象のデータを削除した後も、業務イベントは残します。
+<TableGrowthFigure view="merged" />
 
-`visit_cancellations` テーブルの列は、`business_events` テーブルの列に、次の図のとおりに対応します。
+外部キー制約は優先しませんでした。来院のデータを削除した後も、業務イベントを残すためです。
+
+テーブルの分割は、1つのテーブルで運用の負荷が高くなった時点で検討します。
+
+</AdrPanel>
+
+<AdrPanel>
 
 <RecordMappingFigure />
 
-3つの基準をすべて満たす案はありません。採用した案は、テーブルと列が増えないことを優先しました。記録を1つのテーブルにまとめ、出来事ごとに異なる値を JSON にして `payload` の1列に保存すると、記録する出来事を追加したときに、テーブルと列が増えません。
+</AdrPanel>
 
-その代わり、DB による検査が減ります。DB は、`payload` の中の値の有無を検査しません。`payload` の中の値と `target_id` には、外部キー制約を設定できません。`payload` の中の値は列ではなく、`target_id` が指すテーブルは `target_type` によって変わるためです。
+<AdrPanel>
 
-外部キー制約を優先しなかった理由は、来院のデータを削除した後も業務イベントを残すためです。業務イベントから `visits` テーブルへ外部キー制約を設定すると、`visits` テーブルを論理削除にせざるを得ません。論理削除はできるだけ避けるため、整合性の検査よりも、記録を残すことを優先しました。
+<AdrOutcomes items={[
+  { kind: 'value', label: '顧客価値', text: '1つの来院に起きた出来事と、その時点の来院の状態を、1つのテーブルから時刻の順に読んで回答できます。' },
+  { kind: 'reduced', label: '低減するリスク', text: '記録する出来事が増えるほどテーブルと SQL が増えて、運用の負荷が高くなるリスクを低減します。' },
+  { kind: 'increased', label: '増大するリスク', text: '`payload` と `target_state` の内容を DB が検査せず、外部キー制約も設定できません。キーの名前を誤った業務イベントや、存在しない来院を指す業務イベントも保存されます。' },
+  { kind: 'remaining', label: '残るリスク', text: '現時点で記録する業務イベントは、来院のキャンセルの1種類だけです。予約、受付、診察の完了は、回答できません。' },
+]} />
 
-### 結果
+</AdrPanel>
 
-- 顧客価値: 動物病院から問い合わせを受けたときに、1つの来院に起きた出来事を、1つのテーブルから時刻の順に読んで回答できます。出来事が起きた時点の来院の状態も回答できます。来院のデータを削除した後も、回答できます。
-- 低減するリスク: 記録する出来事が増えるほどテーブルと SQL が増えて、運用の負荷が高くなるリスクを低減します。
-- 増大するリスク: `payload` と `target_state` の内容は、DB が検査しません。キーの名前を誤った業務イベントも保存され、問い合わせを受けたときに値を読み取れないリスクが増大します。`payload` の中の値と `target_id` には外部キー制約を設定できないので、存在しない来院を指す業務イベントが保存されても、DB は検出しません。来院の状態を `visits` と `business_events` の両方に保持するので、保存するデータ量も増えます。
-- 残るリスク: 現時点で記録する業務イベントは、来院のキャンセルの1種類だけです。予約、受付、診察の完了について問い合わせられても、回答できません。
+<AdrPanel>
 
-### 検討した案
+<AdrOptions
+  id="adr-2"
+  criteria={['テーブルと列が増えない', '値の有無を DB が検査できる', '外部キー制約を設定できる']}
+  options={[
+    { name: 'JSON にして `payload` の1列に保存する', adopted: true, marks: ['○', '×', '×'], merit: '記録する出来事を追加しても、テーブルも列も増えません。', demerit: 'DB が `payload` の中の値を検査せず、外部キー制約も設定できません。' },
+    { name: '出来事ごとにテーブルを分けたままにする', marks: ['×', '○', '○'], merit: '値の有無を DB が列ごとに検査でき、外部キー制約も設定できます。', demerit: '記録する出来事を追加するたびに、テーブルと、それを読み取る SQL が増えます。' },
+    { name: '出来事ごとに異なる値を列にする', marks: ['×', '×', '△'], merit: 'JSON から取り出さずに値を読み取れます。', demerit: '操作した人や理由が無い出来事もあるため列を必須にできず、記録する出来事を追加するたびに列も増えます。' },
+  ]}
+/>
 
-採用した案と、採用しなかった2つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、△は一部だけ満たすこと、×は満たさないことを表します。
+`target_state` を持つかどうかは、上の比較とは別の決定です。持たない場合は1行が小さくなりますが、`visits` の行はその後も変わるため、ある時点の状態を後から確認できません。
 
-<div data-alternatives-table>
-
-| 案 | テーブルと列が増えない | 値の有無を DB が検査できる | 外部キー制約を設定できる |
-|---|---|---|---|
-| JSON にして `payload` の1列に保存する（採用） | ○ | × | × |
-| 出来事ごとにテーブルを分けたままにする | × | ○ | ○ |
-| 出来事ごとに異なる値を列にする | × | × | △ |
-
-</div>
-
-#### 出来事ごとにテーブルを分けたままにする
-
-値の有無を DB が列ごとに検査でき、ほかのテーブルの行を指す列には外部キー制約を設定できます。テーブルの名前から記録の種類も分かります。記録する出来事が1種類の間は、この案で十分です。しかし、記録する出来事を追加するたびに、テーブルと、それを読み取る SQL が増えます。1つの来院に起きた出来事を時刻の順に読むには、すべてのテーブルを参照する必要があります。
-
-#### 出来事ごとに異なる値を列にする
-
-テーブルは1つにまとめ、操作した人と理由のように出来事ごとに異なる値を、`payload` ではなく列で保持する案です。JSON から取り出さずに値を読み取れ、ほかのテーブルの行を指す列には外部キー制約を設定できます。しかし、外部への送信の結果のように、操作した人や理由が無い出来事もあります。そのため列を必須にできず、値の有無を DB が検査する利点は得られません。記録する出来事を追加するたびに、列を追加する必要もあります。`target_id` には、採用した案と同じ理由で、外部キー制約を設定できません。
-
-#### `target_state` を持たない
-
-`target_state` の列を持つかどうかは、上の比較とは別の決定です。持たない場合は、1行のサイズが小さくなり、来院の状態を保持する場所は `visits` だけになります。しかし、`visits` の行はその後も変わります。ある時点の状態を後から確認するには、来院の変更をすべて記録して順にたどる必要があります。現時点で記録しているのは来院のキャンセルだけなので、この方法では状態を復元できません。
-
-### 参考
-
-`business_events` テーブルの設計は、[kosui.me の記事](https://kosui.me/posts/2025/05/06/142842)の設計を基にしています。記事の設計は PostgreSQL 向けで、`event_id` に UUID v7 を使います。予約システムは SQLite を使い、`event_id` を連番にします。
+</AdrPanel>
+</AdrTabs>
 
 </Fragment>
 <Fragment slot="explain">

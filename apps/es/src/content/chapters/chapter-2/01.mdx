@@ -4,7 +4,13 @@ wide: true
 immersive: true
 ---
 
-import RecordDecisionFigure from '../../../components/figures/RecordDecisionFigure.astro';
+import AdrOptions from '../../../components/adr/AdrOptions.astro';
+import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
+import AdrPanel from '../../../components/adr/AdrPanel.astro';
+import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
+import AdrTabs from '../../../components/adr/AdrTabs.astro';
+import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
+import { cancelDecisionSequence, cancelInquirySequence } from '../../../components/figures/sequences';
 import { chapter2Explain } from '../../../components/chapters/chapter-2';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
@@ -17,75 +23,54 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter2Explain}>
 <Fragment slot="memo">
 
-- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
-- 日付: 2026-11-09
-- 作成者: 同僚
+<AdrTabs id="adr-1" labels={['背景', '決定', '結果', '検討した案']}>
 
-### 状況
+<AdrPanel lead="来院を誰が、なぜキャンセルしたのか。動物病院からの問い合わせに、回答できませんでした。">
 
-動物病院から、来院を誰が、なぜキャンセルしたのかを問い合わせられました。しかし、来院のキャンセルの処理（`cancelVisit`）がキャンセルした人と理由を保存していないため、回答できませんでした。
+<SequenceFigure sequence={cancelInquirySequence} />
 
-この ADR は、キャンセルの記録を残す方法を、次の3つの基準で決定します。
+<AdrPurpose
+  purpose="同じ問い合わせに、回答できるようにする"
+/>
 
-- キャンセルした人と理由を、後から回答できること
-- 記録が欠落しないこと
-- `visits` テーブルを変更せず、既存の業務を止めないこと
+</AdrPanel>
 
-### 決定
+<AdrPanel lead="キャンセルした人、理由、日時を、来院の更新と同じトランザクションで、別のテーブルに追記します。">
 
-- キャンセルの記録は、来院をキャンセルする処理の中で保存します。
-- 記録は、キャンセルした人、理由、日時を持ちます。`visits` テーブルとは別のテーブルに、キャンセルのたびに1行を追記して残します。
-- 記録の追記と、`visits` の更新を、同じトランザクションで実行します。どちらかが失敗すると、DB は両方をロールバックします。
+<SequenceFigure sequence={cancelDecisionSequence} />
 
-次の図は、この決定を来院のキャンセルの処理（`cancelVisit`）に適用した例です。
+欠落した記録は、後から復元できません。そのため、回答できることと、記録が欠落しないことを優先しました。
 
-<RecordDecisionFigure />
+</AdrPanel>
 
-3つの基準をすべて満たす案はありません。欠落した記録は後から復元できないため、キャンセルした人と理由を回答できることと、記録が欠落しないことを優先しました。この2つを満たす案は、この案と、システム全体を作り直す案に限られます。このうち、既存の業務を止めるリスクが小さいこの案を採用しました。
+<AdrPanel>
 
-### 結果
+<AdrOutcomes items={[
+  { kind: 'value', label: '顧客価値', text: '来院を誰が、いつ、なぜキャンセルしたのかを問い合わせられたときに、回答できます。' },
+  { kind: 'reduced', label: '低減するリスク', text: '記録の保存に失敗すると来院の更新も取り消されるので、記録の無いキャンセルは発生しません。' },
+  { kind: 'increased', label: '増大するリスク', text: '記録の保存に不具合があると、来院のキャンセルも失敗します。' },
+  { kind: 'remaining', label: '残るリスク', text: '記録を追加する前のキャンセルと、SQL で直接 `UPDATE` した変更と、予約、受付、診察の完了は、回答できません。' },
+]} />
 
-- 顧客価値: 来院を誰が、いつ、なぜキャンセルしたのかを動物病院から問い合わせられたときに、カスタマーサポートが回答できます。
-- 低減するリスク: 今回と同じ問い合わせに、回答できないリスクを低減します。記録の保存に失敗すると来院の更新も取り消されるので、記録の無いキャンセルは発生しません。
-- 増大するリスク: 記録の保存に不具合があると、来院のキャンセルも失敗し、動物病院がキャンセルの業務を進められなくなります。`visits` テーブルは変更しないので、予約、受付、診察の完了には影響しません。
-- 残るリスク: 記録を追加する前のキャンセルと、SQL で直接 `UPDATE` した変更は、問い合わせられても回答できません。予約、受付、診察の完了も、更新処理ごとに記録を追加するまで回答できません。
+</AdrPanel>
 
-### 検討した案
+<AdrPanel>
 
-採用した案と、採用しなかった5つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、△は一部だけ満たすこと、×は満たさないことを表します。
+<AdrOptions
+  id="adr-1"
+  criteria={['人と理由を回答できる', '記録が欠落しない', '既存のデータモデルに影響を与えない']}
+  options={[
+    { name: '更新処理の中で追記する', adopted: true, marks: ['○', '○', '○'], merit: '問い合わせに回答でき、記録が欠落しません。', demerit: '記録の保存に不具合があると、来院のキャンセルも失敗します。' },
+    { name: 'ログに出力する', marks: ['○', '×', '○'], merit: 'DB の変更が不要です。', demerit: 'ログの出力は来院の更新と同じトランザクションに含められないため、記録が欠落します。' },
+    { name: '`visits` に列を追加する', marks: ['△', '○', '×'], merit: 'テーブルが増えず、来院ごとのキャンセルが1回だけであれば十分です。', demerit: '同じ来院を再びキャンセルすると前回の人と理由を上書きし、`visits` テーブルの変更も必要です。' },
+    { name: 'DB の機能で自動的に記録する', marks: ['×', '○', '○'], merit: '更新処理ごとのコードの追加が不要で、SQL で直接 `UPDATE` した変更も記録されます。', demerit: '自動的に記録できるのは変更前後の値だけで、キャンセルした人と理由は記録できません。' },
+    { name: '別のトランザクションで記録する', marks: ['○', '×', '○'], merit: '記録の不具合が来院のキャンセルを止めません。', demerit: '記録に失敗すると更新だけが成功し、そのキャンセルの記録は欠落します。' },
+    { name: 'システム全体を作り直す', marks: ['○', '○', '×'], merit: '記録の実装が漏れる更新処理が無くなります。', demerit: '全機能を一度に移行するため、停止と不具合のリスクが大きくなります。' },
+  ]}
+/>
 
-<div data-alternatives-table>
-
-| 案 | 人と理由を回答できる | 記録が欠落しない | `visits` を変更せず、業務を止めない |
-|---|---|---|---|
-| 更新処理の中で追記する（採用） | ○ | ○ | △ |
-| ログに出力する | ○ | × | ○ |
-| `visits` に列を追加する | △ | ○ | × |
-| DB の機能で自動的に記録する | × | ○ | ○ |
-| 別のトランザクションで記録する | ○ | × | ○ |
-| システム全体を作り直す | ○ | ○ | × |
-
-</div>
-
-#### ログに出力する
-
-DB の変更が不要で、今回と同じ問い合わせにもログを検索すれば回答できます。しかし、ログの出力は、来院の更新と同じトランザクションに含められません。ログの出力に失敗しても来院の更新は成功するため、記録が欠落します。
-
-#### `visits` に列を追加する
-
-テーブルは増えず、来院の行を参照するだけで回答できます。来院ごとのキャンセルが1回だけであれば、この案で十分です。しかし、1つの行が保持できるのは最後の1回分だけで、同じ来院を再びキャンセルすると、前回の人と理由を上書きします。`visits` テーブルの変更も必要です。
-
-#### DB の機能で自動的に記録する
-
-`visits` の変更を DB が自動的に記録するので、更新処理ごとのコードの追加が不要です。SQL で直接 `UPDATE` した変更も記録されます。しかし、DB が自動的に記録できるのは、変更前後の値だけです。キャンセルした人と理由を記録するには、`cancelVisit` がこの2つを DB に渡す必要があり、コードの追加が不要という利点は失われます。
-
-#### 別のトランザクションで記録する
-
-来院の更新を確定した後に記録するので、記録の不具合が来院のキャンセルを止めません。しかし、記録に失敗すると更新だけが成功し、そのキャンセルの記録は欠落します。
-
-#### システム全体を作り直す
-
-すべての更新を記録するので、記録の実装が漏れる更新処理は無くなります。しかし、全機能を一度に移行するため、停止と不具合のリスクが大きくなります。そのため、問い合わせを受けた更新処理の1か所から着手します。
+</AdrPanel>
+</AdrTabs>
 
 </Fragment>
 </Workspace>

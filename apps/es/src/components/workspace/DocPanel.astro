@@ -12,6 +12,7 @@ const { scenario, tab: definition, hidden } = Astro.props;
 const tab = expectTab(definition, 'doc');
 const config = tab.config;
 const approvable = config.approvable === true;
+const { updatedAt, updatedBy } = config;
 ---
 
 <div
@@ -41,14 +42,20 @@ const approvable = config.approvable === true;
           <span>社内ドキュメント</span>
         </p>
         <p class="doc-title">{config.title}</p>
-        <p class="doc-updated">
-          <span class="doc-avatar" aria-hidden="true">{
-            [...config.updatedBy][0]
-          }</span>
-          最終更新 <time datetime={config.updatedAt}>{
-            config.updatedAt
-          }</time>・{config.updatedBy}
-        </p>
+        {
+          !approvable && updatedAt !== undefined
+            && updatedBy !== undefined
+            && (
+            <p class="doc-updated">
+              <span class="doc-avatar" aria-hidden="true">{
+                [...updatedBy][0]
+              }</span>
+              最終更新 <time datetime={updatedAt}>{updatedAt}</time>・{
+                updatedBy
+              }
+            </p>
+          )
+        }
       </div>
       {
         approvable && (
@@ -258,6 +265,12 @@ const approvable = config.approvable === true;
   line-height: var(--leading-loose);
   overflow-wrap: anywhere;
 }
+:global(.scene[data-scenario]) .doc-scroll:has(.adr-tabs) {
+  padding-block: var(--space-1);
+}
+:global(.scene[data-scenario]) .doc-paper:has(.adr-tabs) {
+  padding-block: var(--space-1) var(--space-2);
+}
 :global(.scene[data-scenario]) .doc-paper > :global(:first-child) {
   margin-top: 0;
 }
@@ -376,23 +389,16 @@ const approvable = config.approvable === true;
 }
 :global(.scene[data-scenario]) .doc-paper :global(.cfig) {
   margin-block: var(--space-3);
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
-:global(.scene[data-scenario])
-  .doc-paper
-  :global([data-adr-status="approved"]) {
-  display: none;
-}
-:global(.scene[data-scenario])
-  .doc:has([data-approve][aria-pressed="true"])
-  .doc-paper
-  :global([data-adr-status="approved"]) {
-  display: inline;
-}
-:global(.scene[data-scenario])
-  .doc:has([data-approve][aria-pressed="true"])
-  .doc-paper
-  :global([data-adr-status="proposed"]) {
-  display: none;
+:global(.scene[data-scenario]) .doc-paper :global(.adr-tablist) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--dc-paper);
+  box-shadow: 0 calc(-1 * var(--space-3)) 0 var(--dc-paper);
 }
 @media (max-width: 767px) {
   :global(.content)

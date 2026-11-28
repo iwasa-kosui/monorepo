@@ -1,5 +1,5 @@
 import type { Post, TabDefinition, TableInfo, WorkspaceScenario } from '../../workspace/scenario';
-import { docTab, editorTab, lessonScenario, opening, posts, replyButton } from './common';
+import { docTab, editorTab, introDocTab, lessonScenario, opening, posts, replyButton } from './common';
 
 const overviewPosts: readonly Post[] = [
   posts.otherTeams,
@@ -45,7 +45,7 @@ const externalSyncSql = `SELECT
   received.payload ->> '$.operatedAt' AS operated_at,
   received.payload ->> '$.reason' AS cancel_reason,
   outcome.event_name AS result,
-  outcome.payload ->> '$.reason' AS rejected_reason
+  CASE WHEN outcome.event_name = 'ExternalCancellationRejected' THEN outcome.payload ->> '$.reason' END AS rejected_reason
 FROM business_events AS received
 JOIN business_events AS outcome
   ON outcome.payload ->> '$.receivedEventId' = received.event_id
@@ -88,7 +88,7 @@ const consoleTab = (pattern: Pattern): TabDefinition => ({
   },
 });
 
-const replyReason = 'エディタで確認用スクリプトを実行すると返信できます。';
+const replyReason = 'DB コンソールで SQL を実行すると返信できます。';
 
 type Consultation = {
   readonly id: string;
@@ -97,7 +97,7 @@ type Consultation = {
   readonly opened: readonly Post[];
   readonly answer: Post;
   readonly thanks: Post;
-  readonly doc: { readonly title: string; readonly path: string };
+  readonly doc?: { readonly title: string; readonly path: string };
   readonly pattern: Pattern;
   readonly thanksDelay?: number;
   readonly laterPosts?: readonly { readonly post: Post; readonly delay: number; readonly addTab?: string }[];
@@ -113,7 +113,7 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     buttons: replyButton('返信する'),
     gates: {
       reply: {
-        requires: [{ signal: 'code:run', reason: replyReason }],
+        requires: [{ signal: 'sql:executed', reason: replyReason }],
         reasons: { all: replyReason, several: replyReason },
       },
     },
@@ -131,7 +131,7 @@ const consultation = (options: Consultation): WorkspaceScenario =>
       ],
     },
     tabs: [
-      docTab('memo', options.doc.title, options.doc.path),
+      ...(options.doc === undefined ? [] : [docTab('memo', options.doc.title, options.doc.path)]),
       editorTab('editor', 'visits.ts', { snapshot: options.pattern.exercise }),
       consoleTab(options.pattern),
       ...(options.extraTabs ?? []),
@@ -163,6 +163,23 @@ const adrPage = (options: AdrPage): WorkspaceScenario =>
     history: options.history,
     timeline: opening(options.opened),
     tabs: [docTab('memo', options.doc.title, options.doc.path, true)],
+  });
+
+type IntroPage = {
+  readonly id: string;
+  readonly label: string;
+  readonly history: readonly Post[];
+  readonly opened: Post;
+  readonly doc: { readonly title: string; readonly path: string };
+};
+
+const introPage = (options: IntroPage): WorkspaceScenario =>
+  lessonScenario({
+    id: options.id,
+    label: options.label,
+    history: options.history,
+    timeline: opening(options.opened),
+    tabs: [introDocTab('memo', options.doc.title, options.doc.path)],
   });
 
 const summaryTable: Pattern = {
@@ -225,12 +242,12 @@ const auditLog: Pattern = {
 
 const comparisonPosts: readonly Post[] = [posts.comparisonMade, posts.chooseOne];
 
-export const chapter4Overview: WorkspaceScenario = lessonScenario({
-  id: 'chapter-4-overview',
-  label: '3つの相談を、普段の業務で運用しているシステムに近いかを考えながら見る',
+export const chapter4SummaryTableIntro: WorkspaceScenario = lessonScenario({
+  id: 'chapter-4-summary-table-intro',
+  label: '経理から、集計の件数について問い合わせが届く',
   history: [posts.tamaAsked, posts.tamaAnswer, posts.tamaAcknowledged],
   timeline: opening(...overviewPosts),
-  tabs: [docTab('memo', '相談の一覧', 'consultations/list')],
+  tabs: [introDocTab('memo', '相談1: 経理からの問い合わせ', 'consultations/1-finance')],
 });
 
 const summaryTableConsultation: Consultation = {
@@ -240,7 +257,6 @@ const summaryTableConsultation: Consultation = {
   opened: [posts.financeGreeting, posts.financeAsked],
   answer: posts.financeAnswer,
   thanks: posts.financeThanks,
-  doc: { title: '相談1: 集計の件数が合わない', path: 'consultations/summary-table' },
   pattern: summaryTable,
   laterPosts: [{ post: posts.migrateOldData, delay: 4.5 }],
 };
@@ -260,10 +276,18 @@ const migrationAdr: AdrPage = {
 
 export const chapter4MigrationAdr: WorkspaceScenario = adrPage(migrationAdr);
 
+export const chapter4ExternalSyncIntro: WorkspaceScenario = introPage({
+  id: 'chapter-4-external-sync-intro',
+  label: 'カスタマーサポートから、予約サイトのキャンセルについて問い合わせが届く',
+  history: postsOfAdr(migrationAdr),
+  opened: posts.secondConsultation,
+  doc: { title: '相談2: カスタマーサポートからの問い合わせ', path: 'consultations/2-support' },
+});
+
 const externalSyncConsultation: Consultation = {
   id: 'chapter-4-external-sync',
   label: '予約サイトのキャンセルが反映されたか分からない',
-  history: postsOfAdr(migrationAdr),
+  history: [...postsOfAdr(migrationAdr), posts.secondConsultation],
   opened: [posts.siteGreeting, posts.siteAsked],
   answer: posts.siteAnswer,
   thanks: posts.siteThanks,
@@ -288,10 +312,18 @@ const externalSyncAdr: AdrPage = {
 
 export const chapter4ExternalSyncAdr: WorkspaceScenario = adrPage(externalSyncAdr);
 
+export const chapter4AuditLogIntro: WorkspaceScenario = introPage({
+  id: 'chapter-4-audit-log-intro',
+  label: '情シスから、監査ログについて問い合わせが届く',
+  history: postsOfAdr(externalSyncAdr),
+  opened: posts.thirdConsultation,
+  doc: { title: '相談3: 情シスからの問い合わせ', path: 'consultations/3-it' },
+});
+
 const auditLogConsultation: Consultation = {
   id: 'chapter-4-audit-log',
   label: '監査ログに変更の理由がない',
-  history: postsOfAdr(externalSyncAdr),
+  history: [...postsOfAdr(externalSyncAdr), posts.thirdConsultation],
   opened: [posts.auditGreeting, posts.auditAsked],
   answer: posts.auditAnswer,
   thanks: posts.auditThanks,

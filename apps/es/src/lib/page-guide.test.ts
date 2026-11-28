@@ -89,8 +89,8 @@ describe('schedule の pageStarts', () => {
     expect(formatElapsed(elapsedMinutes(schedule, 'chapter-2', 4, 5))).toBe('0:19');
   });
 
-  it('第4章の判断表のページ（8ページ目）は、実演6分の後に始まる', () => {
-    expect(formatElapsed(elapsedMinutes(schedule, 'chapter-4', 8, 9))).toBe('0:35');
+  it('第4章の判断表のページ（10ページ目）は、実演6分の後に始まる', () => {
+    expect(formatElapsed(elapsedMinutes(schedule, 'chapter-4', 10, 11))).toBe('0:35');
   });
 });
 

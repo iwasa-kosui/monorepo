@@ -1,0 +1,450 @@
+---
+import './figure.css';
+
+type View = 'problem' | 'decision';
+type Props = { readonly view: View };
+
+const { view } = Astro.props;
+
+const label = view === 'problem'
+  ? '4月1日のキャンセル数の3と、業務イベントから数え直した2が一致しない図'
+  : '業務イベントを導入する前からある来院を VisitMigrated として取り込み、数え直した値を3に一致させる図';
+
+const recounted = view === 'problem' ? '2' : '3';
+
+const order = view === 'problem'
+  ? {
+    visits: 0,
+    bridge: 0,
+    daily: 0,
+    events: 1,
+    first: 2,
+    second: 3,
+    middle: 4,
+    dailyCount: 5,
+    eventsCount: 6,
+    sign: 7,
+    callout: 8,
+  }
+  : {
+    visits: 0,
+    bridge: 1,
+    daily: 7,
+    events: 2,
+    first: 3,
+    second: 3,
+    middle: 4,
+    dailyCount: 7,
+    eventsCount: 6,
+    sign: 7,
+    callout: 8,
+  };
+const at = (index: number): string => `--i:${index}`;
+---
+
+<section
+  class="cfig migration"
+  data-migration-figure
+  data-view={view}
+  aria-label={label}
+>
+  <div class="grid">
+    {
+      view === 'decision' && (
+        <div class="tbl visits reveal" style={at(order.visits)}>
+          <div class="tbl-head mono">visits</div>
+          <div class="tbl-body">業務イベントを導入する前からある来院</div>
+        </div>
+      )
+    }
+    {
+      view === 'decision' && (
+        <span class="bridge-label reveal" style={at(order.bridge)}
+        >移行用のイベントとして取り込む</span>
+      )
+    }
+    {
+      view === 'decision' && (
+        <span
+          class="bridge-arrow reveal"
+          style={at(order.bridge)}
+          aria-hidden="true"
+        ></span>
+      )
+    }
+
+    <div
+      class="tbl events reveal"
+      style={at(order.events)}
+      data-table="business_events"
+    >
+      <div class="events-top">
+        <div class="tbl-head mono">business_events</div>
+        <div class="tbl-body">
+          <div class="events-title">4月1日のキャンセル</div>
+          <div class="ev reveal" style={at(order.first)}>
+            <span class="mono">VisitCancelled</span>
+          </div>
+          <div class="ev reveal" style={at(order.second)}>
+            <span class="mono">VisitCancelled</span>
+          </div>
+        </div>
+      </div>
+      <div class="tbl-body events-mid">
+        {
+          view === 'problem'
+            ? (
+            <div class="ev ghost reveal" style={at(order.middle)}>
+              業務イベントを導入する前のキャンセル（行が無い）
+            </div>
+          )
+            : (
+            <div class="ev migrated reveal" style={at(order.middle)}>
+              <span class="mono">VisitMigrated</span>
+              <span class="ev-note">
+                移行した時点の状態だけ。理由と操作者は作らない
+              </span>
+            </div>
+          )
+        }
+      </div>
+      <div class="tbl-body count">
+        <span class="count-label">数え直した値</span>
+        <span class="count-value reveal" style={at(order.eventsCount)}>{
+          recounted
+        }</span>
+      </div>
+    </div>
+
+    <div
+      class="tbl daily reveal"
+      style={at(order.daily)}
+      data-table="daily_cancellation_counts"
+    >
+      <div class="tbl-head mono">
+        daily_<wbr />cancellation_<wbr />counts
+      </div>
+      <div class="tbl-body count">
+        <span class="count-label">4月1日のキャンセル数</span>
+        <span class="count-value reveal" style={at(order.dailyCount)}>3</span>
+      </div>
+    </div>
+
+    <div class="compare">
+      {
+        view === 'problem'
+          ? (
+          <>
+            <span class="sign reveal" style={at(order.sign)} aria-hidden="true"
+            >≠</span>
+            <span class="cfig-sr">一致しない</span>
+          </>
+        )
+          : (
+          <>
+            <span class="sign reveal" style={at(order.sign)} aria-hidden="true"
+            >＝</span>
+            <span class="cfig-sr">一致する</span>
+          </>
+        )
+      }
+    </div>
+
+    {
+      view === 'problem'
+        ? (
+        <div
+          class="cfig-callout callout reveal"
+          style={at(order.callout)}
+          data-tone="problem"
+          data-tail="top"
+        >
+          <span class="cfig-callout-label"
+          >課題</span>差の1が、導入する前のキャンセルなのか、業務イベントを通らない書き換えなのかを区別できない
+        </div>
+      )
+        : (
+        <div
+          class="cfig-callout callout reveal"
+          style={at(order.callout)}
+          data-tone="ok"
+          data-tail="top"
+        >
+          <span class="cfig-callout-label"
+          >解決</span>集計が正しいことを、数え直した値との一致で示せる
+        </div>
+      )
+    }
+  </div>
+</section>
+
+<style>
+.cfig.migration {
+  word-break: auto-phrase;
+  --fig-small: var(--text-note);
+  --fig-code: var(--text-note);
+  container-type: inline-size;
+}
+.mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+}
+
+.grid {
+  --link: 3.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) var(--link) minmax(0, 1.3fr);
+  grid-template-rows: auto auto auto 1fr auto;
+  align-items: start;
+  min-width: 34rem;
+}
+.cfig.migration[data-view="decision"] .grid {
+  --link: 9rem;
+}
+
+.tbl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 2px solid var(--role-accent-strong);
+  border-radius: var(--radius-md);
+  background: var(--role-ground);
+  overflow: hidden;
+  line-height: var(--leading-tight);
+}
+.tbl-head {
+  background: var(--role-accent-strong);
+  padding: 0 var(--space-2);
+  color: var(--role-on-strong);
+  font-size: var(--fig-code);
+  line-height: var(--leading-tight);
+}
+.tbl-body {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--fig-small);
+}
+
+.visits {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: stretch;
+}
+.visits .tbl-body {
+  display: flex;
+  flex: 1;
+  align-items: center;
+}
+.events {
+  grid-column: 3;
+  grid-row: 1 / 5;
+  align-self: stretch;
+}
+.cfig.migration[data-view="problem"] .events {
+  grid-row: 1 / 3;
+}
+.daily {
+  grid-column: 1;
+  grid-row: 3;
+  margin-top: var(--space-2);
+}
+.cfig.migration[data-view="problem"] .daily {
+  grid-row: 1;
+  margin-top: 0;
+}
+
+.events-title {
+  font-size: var(--fig-label);
+}
+.ev {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--role-surface);
+  padding: 0 var(--space-2);
+  font-size: var(--fig-small);
+  line-height: var(--leading-tight);
+}
+.events-top .ev:last-child,
+.events-mid .ev {
+  margin-bottom: 0;
+}
+.ev.ghost {
+  border: 2px dashed var(--role-ink-sub);
+  background: transparent;
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+  padding-block: var(--space-1);
+}
+.ev.migrated {
+  background: var(--role-marker);
+  color: var(--role-ink);
+  padding-block: 0.125rem;
+}
+.ev.migrated .mono {
+  line-height: var(--leading-tight);
+}
+.ev-note {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-tight);
+}
+
+.count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  padding-bottom: var(--space-1);
+}
+.events > .count {
+  margin-top: auto;
+}
+.count-label {
+  font-size: var(--fig-label);
+}
+.count-value {
+  font-size: 2rem;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.compare {
+  display: grid;
+  grid-column: 2;
+  grid-row: 3;
+  align-self: end;
+  place-items: center;
+  height: 2.75rem;
+  margin-bottom: calc(var(--space-2) + 2px);
+}
+.cfig.migration[data-view="problem"] .compare {
+  grid-row: 1;
+}
+.sign {
+  color: var(--role-accent-strong);
+  font-size: var(--text-heading);
+  line-height: 1;
+}
+
+.bridge-label {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  padding-inline: var(--space-1);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+  text-align: center;
+  text-wrap: balance;
+}
+.bridge-arrow {
+  position: relative;
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
+  height: 2px;
+  margin-inline: var(--space-1) 0.375rem;
+  background: var(--role-accent-strong);
+}
+.bridge-arrow::after {
+  position: absolute;
+  top: 50%;
+  right: -0.3125rem;
+  border: 0.3125rem solid transparent;
+  border-right: 0;
+  border-left-color: var(--role-accent-strong);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.callout {
+  grid-column: 1 / 4;
+  grid-row: 5;
+  margin-top: var(--space-2);
+}
+.cfig.migration[data-view="problem"] .callout {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    animation: reveal-in 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.35s);
+  }
+  .bridge-arrow.reveal {
+    transform-origin: left center;
+    animation-name: bridge-grow;
+  }
+  .sign.reveal {
+    animation-name: sign-in;
+  }
+  .callout.reveal {
+    transform-origin: center top;
+    animation-name: callout-in;
+  }
+  .ev.migrated.reveal {
+    animation-name: reveal-in, marker-in;
+    animation-delay:
+      calc(var(--i) * 0.35s),
+      calc((var(--i) + 1) * 0.35s);
+  }
+}
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes bridge-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes sign-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes callout-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes marker-in {
+  from {
+    background: var(--role-surface);
+  }
+  to {
+    background: var(--role-marker);
+  }
+}
+
+@container (max-width: 40rem) {
+  .grid {
+    --link: 2.5rem;
+  }
+  .cfig.migration[data-view="decision"] .grid {
+    --link: 5rem;
+  }
+}
+</style>
