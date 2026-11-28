@@ -33,7 +33,7 @@ const cancelColumns = timeline === undefined
   );
 ---
 
-<p class="cif-lead">{intro.lead}</p>
+<p class="cif-lead" set:html={richHtml(intro.lead)} />
 <section
   class="cfig cif"
   data-consultation-figure={consultation}
@@ -55,7 +55,11 @@ const cancelColumns = timeline === undefined
   </div>
 
   <div class="data">
-    <div class="data-label reveal" style={at(2)}>{intro.heading}</div>
+    {
+      intro.heading !== undefined && (
+        <div class="data-label reveal" style={at(2)}>{intro.heading}</div>
+      )
+    }
     <div class="excerpts">
       {
         timeline !== undefined && (
@@ -286,6 +290,14 @@ const cancelColumns = timeline === undefined
   font-size: var(--text-code);
   font-weight: var(--weight-regular);
   line-height: var(--leading-tight);
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  :global(.doc-paper)
+  .cif-lead
+  :global(code) {
+  background: var(--role-ground);
+  font-size: 1em;
 }
 .mono {
   font-family: var(--font-code);

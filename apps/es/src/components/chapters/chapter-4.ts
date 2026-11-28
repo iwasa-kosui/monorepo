@@ -97,7 +97,7 @@ type Consultation = {
   readonly opened: readonly Post[];
   readonly answer: Post;
   readonly thanks: Post;
-  readonly doc: { readonly title: string; readonly path: string };
+  readonly doc?: { readonly title: string; readonly path: string };
   readonly pattern: Pattern;
   readonly thanksDelay?: number;
   readonly laterPosts?: readonly { readonly post: Post; readonly delay: number; readonly addTab?: string }[];
@@ -131,7 +131,7 @@ const consultation = (options: Consultation): WorkspaceScenario =>
       ],
     },
     tabs: [
-      docTab('memo', options.doc.title, options.doc.path),
+      ...(options.doc === undefined ? [] : [docTab('memo', options.doc.title, options.doc.path)]),
       editorTab('editor', 'visits.ts', { snapshot: options.pattern.exercise }),
       consoleTab(options.pattern),
       ...(options.extraTabs ?? []),
@@ -257,7 +257,6 @@ const summaryTableConsultation: Consultation = {
   opened: [posts.financeGreeting, posts.financeAsked],
   answer: posts.financeAnswer,
   thanks: posts.financeThanks,
-  doc: { title: '相談1: 集計の件数が合わない', path: 'consultations/summary-table' },
   pattern: summaryTable,
   laterPosts: [{ post: posts.migrateOldData, delay: 4.5 }],
 };

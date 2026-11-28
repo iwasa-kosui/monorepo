@@ -24,13 +24,4 @@ import Workspace from '../../../components/workspace/Workspace.astro';
   scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
 />
 </Fragment>
-<Fragment slot="memo">
-
-> この集計値はなぜこの値なのか。
-
-`cancelVisit` は、キャンセル数の更新と業務イベントの記録を、同じトランザクションで書きます。
-
-確認用スクリプトは、業務イベントから数え直した値を、`daily_cancellation_counts` の値と比べます。業務イベントがあるキャンセルは、理由と操作者も表示します。
-
-</Fragment>
 </Workspace>

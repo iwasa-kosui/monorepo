@@ -876,7 +876,6 @@ describe('第1章から第4章とまとめの筋書き', () => {
         answer: financeAnswer,
         follows: [['finance', financeThanks], ['colleague', migrateOldData]],
         tabs: [
-          'memo:doc:相談1: 集計の件数が合わない',
           'editor:editor:visits.ts — clinic-api',
           'console:console:DB Console',
         ],
@@ -960,7 +959,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       if (scenario === undefined) throw new Error('筋書きがありません');
       const channels = (scenario.reply?.followUps ?? []).map((followUp) => [followUp.text, followUp.channel]);
       expect(channels).toEqual([[financeThanks, undefined], [migrateOldData, devChannel]]);
-      expect(scenario.tabs.map((tab) => tab.key)).toEqual(['memo', 'editor', 'console']);
+      expect(scenario.tabs.map((tab) => tab.key)).toEqual(['editor', 'console']);
     });
 
     it.each(
