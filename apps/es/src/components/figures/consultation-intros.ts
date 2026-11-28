@@ -1,9 +1,12 @@
 export type ConsultationKey = 'summary-table' | 'external-sync' | 'audit-log';
 
 export type Speaker = { readonly name: string; readonly avatar: string; readonly role?: string };
-export type CountBox = {
-  readonly table: string;
-  readonly note: string;
+export type TimelinePoint = { readonly kind: 'cancel' | 'introduction'; readonly label: string };
+export type TimelineCell = { readonly text: string; readonly tone: 'plain' | 'mono' | 'ghost' };
+export type TimelineRow = {
+  readonly name: string;
+  readonly note?: string;
+  readonly cells: readonly TimelineCell[];
   readonly count: string;
   readonly unit: string;
 };
@@ -24,7 +27,11 @@ export type TableLog = {
   readonly missing: string;
 };
 export type Excerpt =
-  | { readonly kind: 'counts'; readonly boxes: readonly CountBox[] }
+  | {
+    readonly kind: 'timeline';
+    readonly points: readonly TimelinePoint[];
+    readonly rows: readonly TimelineRow[];
+  }
   | {
     readonly kind: 'architecture';
     readonly source: SystemNode;
@@ -51,18 +58,42 @@ export type ConsultationIntro = {
 
 export const consultationIntros = {
   'summary-table': {
-    lead:
-      '既存のシステムに業務イベントを途中から導入すると、導入する前のキャンセルは業務イベントに残りません。このため、集計の件数と、業務イベントから数えた件数がずれます。',
+    lead: '業務イベントは、既存のシステムに途中から導入しました。',
     label:
-      '経理から、4月1日の診察のキャンセル件数について、集計の3件と業務イベントから数えた2件のどちらが正しいかを聞かれ、記録から示せないことを表す図',
+      '1件目のキャンセルの後に業務イベントを導入し、その後に2件目と3件目のキャンセルがあったため、集計の daily_cancellation_counts は3件、business_events の VisitCancelled は2件になり、経理から聞かれた件数のどちらが正しいかを記録から示せないことを表す図',
     speaker: { name: '経理', avatar: '経' },
     question: '4月1日の診察のキャンセル件数は、3件と2件のどちらが正しいか',
-    heading: 'いまのデータ',
+    heading: '4月1日の診察のキャンセルの記録',
     excerpt: {
-      kind: 'counts',
-      boxes: [
-        { table: 'daily_cancellation_counts', note: '集計', count: '3', unit: '件' },
-        { table: 'business_events', note: '導入した後の `VisitCancelled`', count: '2', unit: '件' },
+      kind: 'timeline',
+      points: [
+        { kind: 'cancel', label: '1件目のキャンセル' },
+        { kind: 'introduction', label: '業務イベントを導入' },
+        { kind: 'cancel', label: '2件目のキャンセル' },
+        { kind: 'cancel', label: '3件目のキャンセル' },
+      ],
+      rows: [
+        {
+          name: 'daily_cancellation_counts',
+          note: '集計',
+          cells: [
+            { text: '+1', tone: 'plain' },
+            { text: '+1', tone: 'plain' },
+            { text: '+1', tone: 'plain' },
+          ],
+          count: '3',
+          unit: '件',
+        },
+        {
+          name: 'business_events',
+          cells: [
+            { text: '記録なし', tone: 'ghost' },
+            { text: 'VisitCancelled', tone: 'mono' },
+            { text: 'VisitCancelled', tone: 'mono' },
+          ],
+          count: '2',
+          unit: '件',
+        },
       ],
     },
     problem: 'どちらが正しいかを、記録から示せない',
