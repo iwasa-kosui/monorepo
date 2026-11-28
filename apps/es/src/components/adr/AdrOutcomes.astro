@@ -1,0 +1,85 @@
+---
+import { richHtml } from '../figures/rich';
+
+type Item = {
+  readonly kind: 'value' | 'reduced' | 'increased' | 'remaining';
+  readonly label: string;
+  readonly text: string;
+};
+type Props = { readonly items: readonly Item[] };
+
+const { items } = Astro.props;
+---
+
+<div class="adr-outcomes">
+  {
+    items.map((item, index) => (
+      <div class="adr-outcome" data-kind={item.kind} style={`--i:${index}`}>
+        <span class="adr-outcome-label">{item.label}</span>
+        <span class="adr-outcome-text" set:html={richHtml(item.text)} />
+      </div>
+    ))
+  }
+</div>
+
+<style>
+.adr-outcomes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.adr-outcome {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+}
+.adr-outcome-label {
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+  text-align: center;
+}
+.adr-outcome-text {
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  :global(.doc-paper)
+  .adr-outcome-text
+  :global(code) {
+  font-size: 0.9em;
+}
+.adr-outcome[data-kind="value"] .adr-outcome-label {
+  background: var(--role-accent-strong);
+  color: var(--role-on-strong);
+}
+.adr-outcome[data-kind="reduced"] .adr-outcome-label {
+  background: var(--role-success-soft);
+  color: var(--role-success);
+}
+.adr-outcome[data-kind="increased"] .adr-outcome-label {
+  background: var(--role-danger-soft);
+  color: var(--role-danger);
+}
+.adr-outcome[data-kind="remaining"] .adr-outcome-label {
+  background: var(--role-surface);
+  color: var(--role-ink-sub);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .adr-outcome {
+    animation: adr-outcome-in 0.3s ease-out both;
+    animation-delay: calc(var(--i) * 0.12s);
+  }
+}
+@keyframes adr-outcome-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+</style>

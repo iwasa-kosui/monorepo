@@ -1,0 +1,501 @@
+---
+import './figure.css';
+import { richHtml } from './rich';
+import type { Sequence } from './sequences';
+
+type Props = { readonly sequence: Sequence };
+
+const { sequence } = Astro.props;
+const lanes = sequence.lanes;
+const frame = sequence.frame;
+
+const laneIndex = (id: string): number =>
+  Math.max(0, lanes.findIndex((lane) => lane.id === id));
+const laneName = (id: string): string => lanes[laneIndex(id)]?.name ?? id;
+const edgeOf = (index: number): 'start' | 'end' | 'center' =>
+  lanes.length < 2 || index === 0
+    ? 'start'
+    : index === lanes.length - 1
+    ? 'end'
+    : 'center';
+
+let order = 0;
+const slots = sequence.steps.map((step) => {
+  const at = order++;
+  const calloutAt = step.type !== 'divider' && step.callout !== undefined
+    ? order++
+    : undefined;
+  return { at, calloutAt };
+});
+---
+
+<section
+  class="cfig sequence"
+  data-sequence-figure={sequence.id}
+  aria-label={sequence.label}
+  style={`--lanes:${lanes.length}`}
+>
+  <div class="canvas">
+    <div class="heads" aria-hidden="true">
+      {
+        lanes.map((lane) => (
+          <div class="head" data-kind={lane.kind}>
+            <span set:html={richHtml(lane.name).replace(/_/g, '_<wbr />')} />
+          </div>
+        ))
+      }
+    </div>
+    <div class="body">
+      <div class="lives" aria-hidden="true">
+        {
+          lanes.map((_, index) => (
+            <span class="life" style={`--lane:${index}`}></span>
+          ))
+        }
+      </div>
+      <ol class="steps">
+        {
+          sequence.steps.map((step, index) => {
+            const slot = slots[index]
+              ?? { at: index, calloutAt: undefined };
+            const inFrame = frame !== undefined && index >= frame.from
+              && index <= frame.to;
+            const frameStart = frame !== undefined
+              && index === frame.from;
+            const frameEnd = frame !== undefined
+              && index === frame.to;
+            const frameAttrs = {
+              'data-frame': inFrame ? '' : undefined,
+              'data-frame-start': frameStart ? '' : undefined,
+              'data-frame-end': frameEnd ? '' : undefined,
+            };
+
+            if (step.type === 'divider') {
+              return (
+            <li
+              class="step"
+              data-step="divider"
+              style={`--i:${slot.at}`}
+              {...frameAttrs}
+            >
+              {
+                frameStart && frame !== undefined && (
+                  <span class="frame-tab">{frame.label}</span>
+                )
+              }
+              <span class="divider-line" aria-hidden="true"></span>
+              <span class="divider-text" set:html={richHtml(step.text)} />
+            </li>
+          );
+            }
+
+            if (step.type === 'note') {
+              const lane = laneIndex(step.lane);
+              return (
+            <li
+              class="step"
+              data-step="note"
+              style={`--lane:${lane};--i:${slot.at}`}
+              {...frameAttrs}
+            >
+              {
+                frameStart && frame !== undefined && (
+                  <span class="frame-tab">{frame.label}</span>
+                )
+              }
+              <div class="note-zone" data-align={edgeOf(lane)}>
+                <div class="note">
+                  <span
+                    class="cfig-sr"
+                    set:html={richHtml(`${laneName(step.lane)}: `)}
+                  />
+                  <span set:html={richHtml(step.text)} />
+                </div>
+              </div>
+              {
+                step.callout !== undefined && (
+                  <div
+                    class="callout-row"
+                    style={`--i:${slot.calloutAt ?? slot.at}`}
+                  >
+                    <div
+                      class="cfig-callout"
+                      data-tone={step.callout.tone}
+                      data-tail="top"
+                    >
+                      <span class="cfig-callout-label">
+                        {step.callout.label}
+                      </span>
+                      <span set:html={richHtml(step.callout.text)} />
+                    </div>
+                  </div>
+                )
+              }
+            </li>
+          );
+            }
+
+            const from = laneIndex(step.from);
+            const to = laneIndex(step.to);
+            return (
+            <li
+              class="step"
+              data-step="message"
+              data-style={step.style ?? 'call'}
+              data-dir={from <= to ? 'right' : 'left'}
+              style={`--min:${Math.min(from, to)};--max:${
+                Math.max(from, to)
+              };--lane:${to};--i:${slot.at}`}
+              {...frameAttrs}
+            >
+              {
+                frameStart && frame !== undefined && (
+                  <span class="frame-tab">{frame.label}</span>
+                )
+              }
+              <span
+                class="cfig-sr"
+                set:html={richHtml(
+                  `${laneName(step.from)}から${laneName(step.to)}へ: `,
+                )}
+              />
+              <div class="label">
+                <span class="label-text" set:html={richHtml(step.text)} />
+              </div>
+              <span class="arrow" aria-hidden="true"></span>
+              {
+                step.callout !== undefined && (
+                  <div
+                    class="callout-row"
+                    style={`--i:${slot.calloutAt ?? slot.at}`}
+                  >
+                    <div
+                      class="cfig-callout"
+                      data-tone={step.callout.tone}
+                      data-tail="top"
+                    >
+                      <span class="cfig-callout-label">
+                        {step.callout.label}
+                      </span>
+                      <span set:html={richHtml(step.callout.text)} />
+                    </div>
+                  </div>
+                )
+              }
+            </li>
+          );
+          })
+        }
+      </ol>
+    </div>
+  </div>
+</section>
+
+<style>
+.cfig.sequence {
+  word-break: auto-phrase;
+  --fig-small: var(--text-note);
+  --fig-code: var(--text-note);
+  container-type: inline-size;
+  gap: 0;
+  padding-block: var(--space-2);
+}
+.canvas {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+@container (max-width: 30rem) {
+  .canvas {
+    min-width: calc(var(--lanes) * 8rem);
+  }
+}
+
+.heads {
+  display: grid;
+  grid-template-columns: repeat(var(--lanes), minmax(0, 1fr));
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0.125rem;
+  border: 1px solid var(--role-border);
+  background: var(--role-ground);
+  padding: 0.125rem;
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.head[data-kind="person"] {
+  border-radius: var(--radius-xl);
+}
+.head[data-kind="system"] {
+  border-radius: var(--radius-sm);
+}
+.head[data-kind="table"] {
+  border-top: 0.25rem solid var(--role-accent-strong);
+  border-radius: var(--radius-sm);
+}
+:global(.content) .cfig.sequence .head :global(code) {
+  font-size: 0.9em;
+}
+
+.body {
+  position: relative;
+}
+.lives {
+  position: absolute;
+  inset: 0;
+}
+.life {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc((var(--lane) + 0.5) * 100% / var(--lanes));
+  border-left: 2px solid var(--role-rail);
+  transform: translateX(-1px);
+}
+.cfig .steps {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cfig .step {
+  position: relative;
+  margin: 0;
+  padding: 0;
+}
+:global(.scene[data-scenario]) :global(.doc-paper) .cfig .step + .step {
+  margin-top: 0;
+}
+
+.label {
+  position: relative;
+  left: calc(max(0.02, var(--min) - 1) * 100% / var(--lanes));
+  width: calc(
+    (
+      min(var(--lanes) - 0.02, var(--max) + 2) - max(0.02, var(--min) - 1)
+    ) *
+      100% /
+      var(--lanes)
+  );
+  font-size: var(--fig-label);
+  line-height: 1.2;
+  text-align: center;
+  text-wrap: balance;
+}
+.label-text {
+  background: var(--role-surface);
+  padding: 0 var(--space-1);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.label :global(code) {
+  font-size: 0.9em;
+}
+.arrow {
+  position: relative;
+  left: calc((var(--min) + 0.5) * 100% / var(--lanes));
+  display: block;
+  width: calc((var(--max) - var(--min)) * 100% / var(--lanes));
+  height: 0.375rem;
+  color: var(--role-fg);
+}
+.arrow::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  border-top: 2px solid currentColor;
+  transform: translateY(-50%);
+}
+.arrow::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent;
+  transform: translateY(-50%);
+}
+.step[data-dir="right"] .arrow::after {
+  right: 0;
+  border-width: 5px 0 5px 9px;
+  border-left-color: currentColor;
+}
+.step[data-dir="left"] .arrow::after {
+  left: 0;
+  border-width: 5px 9px 5px 0;
+  border-right-color: currentColor;
+}
+.step[data-style="return"] .arrow::before {
+  border-top-style: dashed;
+}
+.step[data-style="fail"] .label,
+.step[data-style="fail"] .arrow {
+  color: var(--role-danger);
+}
+
+.note-zone {
+  position: relative;
+  left: calc(max(0.02, var(--lane) - 0.45) * 100% / var(--lanes));
+  display: flex;
+  justify-content: center;
+  width: calc(
+    (
+      min(var(--lanes) - 0.02, var(--lane) + 1.45) -
+        max(0.02, var(--lane) - 0.45)
+    ) *
+      100% /
+      var(--lanes)
+  );
+}
+.note-zone[data-align="start"] {
+  justify-content: flex-start;
+}
+.note-zone[data-align="end"] {
+  justify-content: flex-end;
+}
+.note {
+  max-width: 100%;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-md);
+  background: var(--role-ground);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+  text-align: center;
+}
+.note :global(code) {
+  font-size: 0.9em;
+}
+
+.callout-row {
+  --cw: min(3, var(--lanes));
+  --bx: clamp(0, var(--lane) + 0.5 - var(--cw) / 2, var(--lanes) - var(--cw));
+  padding: 0.4375rem 0 0.0625rem;
+}
+.callout-row .cfig-callout {
+  --cfig-tail-at: calc((var(--lane) + 0.5 - var(--bx)) / var(--cw) * 100%);
+  left: calc(var(--bx) * 100% / var(--lanes));
+  width: calc(var(--cw) * 100% / var(--lanes));
+}
+.callout-row :global(code) {
+  font-size: 0.9em;
+}
+
+.step[data-step="divider"] {
+  display: flex;
+  align-items: center;
+  min-height: 1.25rem;
+}
+.divider-line {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  border-top: 1px dotted var(--role-muted);
+}
+.divider-text {
+  position: relative;
+  margin-left: var(--space-2);
+  background: var(--role-surface);
+  padding: 0 var(--space-1);
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: 1.2;
+}
+
+.step[data-frame]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-right: 1px solid var(--role-accent-strong);
+  border-left: 1px solid var(--role-accent-strong);
+  pointer-events: none;
+}
+.cfig .step[data-frame-start] {
+  padding-top: 1.25rem;
+}
+.step[data-frame-start]::before {
+  border-top: 1px solid var(--role-accent-strong);
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+.cfig .step[data-frame-end] {
+  padding-bottom: var(--space-1);
+}
+.step[data-frame-end]::before {
+  border-bottom: 1px solid var(--role-accent-strong);
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+.frame-tab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-top-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+  background: var(--role-accent-strong);
+  padding: 0 var(--space-2);
+  color: var(--role-on-strong);
+  font-size: var(--fig-label);
+  line-height: 1.25rem;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .step {
+    animation: step-in 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.45s);
+  }
+  .step[data-step="message"] .arrow {
+    animation: arrow-grow 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.45s);
+  }
+  .step[data-dir="right"] .arrow {
+    transform-origin: left center;
+  }
+  .step[data-dir="left"] .arrow {
+    transform-origin: right center;
+  }
+  .callout-row {
+    transform-origin: calc((var(--lane) + 0.5) * 100% / var(--lanes)) top;
+    animation: callout-in 0.3s ease-out both;
+    animation-delay: calc(var(--i) * 0.45s);
+  }
+}
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes arrow-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes callout-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+</style>

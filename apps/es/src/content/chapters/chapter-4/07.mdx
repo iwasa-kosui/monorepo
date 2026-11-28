@@ -3,7 +3,15 @@ wide: true
 immersive: true
 ---
 
+import AdrOptions from '../../../components/adr/AdrOptions.astro';
+import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
+import AdrPanel from '../../../components/adr/AdrPanel.astro';
+import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
+import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import { chapter4AuditLogAdr } from '../../../components/chapters/chapter-4';
+import AuditLogRoleFigure from '../../../components/figures/AuditLogRoleFigure.astro';
+import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
+import { auditReasonSequence } from '../../../components/figures/sequences';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
@@ -15,58 +23,52 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter4AuditLogAdr}>
 <Fragment slot="memo">
 
-- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
-- 日付: 2026-11-09
-- 作成者: 同僚
+<AdrTabs id="adr-5" labels={['背景', '決定', '結果', '検討した案']}>
 
-### 状況
+<AdrPanel lead="監査ログに残っている変更の理由を、情シスから確認されました。回答できるのは、来院のキャンセルだけです。">
 
-情シスから、監査ログに残っている変更の理由を確認したいという依頼がありました。しかし、`audit_logs` テーブルが持つのは変更前後の値と操作者で、業務上の理由は持ちません。
+<SequenceFigure sequence={auditReasonSequence} />
 
-予約システムは、ADR 1 と ADR 2 のとおり、来院のキャンセルを業務イベントとして記録しています。診察の完了は、まだ業務イベントを記録していません。
+<AdrPurpose
+  purpose="監査ログに残っている変更の、業務上の理由を回答できるようにする"
+  criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
+/>
 
-この ADR は、監査ログと業務イベントの役割の分け方を、次の3つの基準で決定します。
+</AdrPanel>
 
-- 変更の業務上の理由を答えられること
-- 業務イベントを記録していない変更も、変更前後の値と操作者を残せること
-- 記録の仕組みを、最終的に業務イベントの1つにそろえられること
+<AdrPanel lead="過渡期は、値と操作者を監査ログに、理由を業務イベントに残します。その後は、監査ログを業務イベントから生成します。">
 
-### 決定
+<AuditLogRoleFigure />
 
-- 記録の仕組みは、最終的に業務イベントの1つにそろえます。診察の完了のように業務イベントを記録していない変更にも、業務イベントを記録します。
-- すべての変更が業務イベントを記録するまでの過渡期は、監査ログで足りる領域と、業務イベントで残す領域を分けます。変更前後の値と操作者は、監査ログに残します。業務上の理由は、業務イベントに残します。
-- 過渡期の業務イベントは、監査ログの行を参照します。変更前後の値は、業務イベントに重ねて持ちません。
-- すべての変更が業務イベントを記録した後は、監査ログを業務イベントから生成します。イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
-- 業務イベントを導入する前の監査ログは、監査ログを業務イベントから生成した後も残します。
+イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
 
-### 結果
+</AdrPanel>
 
-- 社内への価値: 情シスから、監査ログに残っている変更の理由を問い合わせられたときに、業務イベントを記録している変更は、業務上の理由を回答できます。
-- 低減するリスク: 業務イベントを記録していない変更が、監査ログから消えるリスクを避けます。過渡期の間も、変更前後の値と操作者は監査ログに残ります。
-- 増大するリスク: 過渡期の間は、キャンセルを監査ログと業務イベントの両方に記録します。すべての変更が業務イベントを記録するまで、2つの記録の仕組みを保守する負担が続きます。
-- 残るリスク: 業務イベントを導入する前の変更と、業務イベントをまだ記録していない変更は、理由を問い合わせられても回答できません。
+<AdrPanel>
 
-### 検討した案
+<AdrOutcomes items={[
+  { kind: 'value', label: '社内への価値', text: '業務イベントを記録している変更は、業務上の理由を回答できます。' },
+  { kind: 'reduced', label: '低減するリスク', text: '業務イベントを記録していない変更が、監査ログから消えるリスクを避けます。' },
+  { kind: 'increased', label: '増大するリスク', text: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
+  { kind: 'remaining', label: '残るリスク', text: '業務イベントを導入する前の変更と、業務イベントをまだ記録していない変更は、理由を回答できません。' },
+]} />
 
-採用した案と、採用しなかった2つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
+</AdrPanel>
 
-<div data-alternatives-table>
+<AdrPanel>
 
-| 案 | 理由を答えられる | 業務イベントの無い変更も残せる | 業務イベントにそろえられる |
-|---|---|---|---|
-| 過渡期は領域を分け、その後は監査ログを業務イベントから生成する（採用） | ○ | ○ | ○ |
-| 監査ログだけで済ませる | × | ○ | × |
-| いますぐ監査ログを業務イベントから生成する | ○ | × | ○ |
+<AdrOptions
+  id="adr-5"
+  criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
+  options={[
+    { name: '過渡期は領域を分け、その後は監査ログを業務イベントから生成する', adopted: true, marks: ['○', '○', '○'], merit: '理由を回答でき、業務イベントを記録していない変更も監査ログに残ります。', demerit: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
+    { name: '監査ログだけで済ませる', marks: ['×', '○', '×'], merit: '記録の仕組みを変えずに済みます。', demerit: '監査ログは業務上の理由を持たないので、情シスの依頼に答えられません。' },
+    { name: 'いますぐ監査ログを業務イベントから生成する', marks: ['○', '×', '○'], merit: '記録が業務イベントだけになります。', demerit: '診察の完了はまだ業務イベントを記録していないため、監査ログから診察の完了の変更が消えます。' },
+  ]}
+/>
 
-</div>
-
-#### 監査ログだけで済ませる
-
-予約システムの記録の仕組みを変えずに済みます。しかし、監査ログは業務上の理由を持たないので、情シスの依頼に答えられません。記録も、業務イベントの1つにそろいません。
-
-#### いますぐ監査ログを業務イベントから生成する
-
-監査ログそのものを業務イベントから生成すると、記録は業務イベントだけになります。しかし、診察の完了は、まだ業務イベントを記録していません。いま生成すると、監査ログから診察の完了の変更が消えます。診察の完了が業務イベントを記録した後に、この案に移ります。
+</AdrPanel>
+</AdrTabs>
 
 </Fragment>
 </Workspace>

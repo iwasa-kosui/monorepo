@@ -3,7 +3,14 @@ wide: true
 immersive: true
 ---
 
+import AdrOptions from '../../../components/adr/AdrOptions.astro';
+import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
+import AdrPanel from '../../../components/adr/AdrPanel.astro';
+import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
+import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import { chapter4ExternalSyncAdr } from '../../../components/chapters/chapter-4';
+import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
+import { externalCancelDecisionSequence, externalCancelProblemSequence } from '../../../components/figures/sequences';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
@@ -15,58 +22,54 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter4ExternalSyncAdr}>
 <Fragment slot="memo">
 
-- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
-- 日付: 2026-11-09
-- 作成者: 同僚
+<AdrTabs id="adr-4" labels={['背景', '決定', '結果', '検討した案']}>
 
-### 状況
+<AdrPanel lead="予約サイトではキャンセル済み、予約システムでは診察済みです。飼い主からの連絡に、キャンセルが届いたのかを回答できません。">
 
-飼い主が予約サイトで来院をキャンセルすると、予約サイトはキャンセルを予約システムへ送ります。
+<SequenceFigure sequence={externalCancelProblemSequence} />
 
-予約システムは、届いたキャンセルを反映できないことがあります。診察が終わった来院に届いた場合です。このとき、予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。
+<AdrPurpose
+  purpose="キャンセルが届いたことと、反映しなかった理由を回答できるようにする"
+  criteria={['反映できなかったキャンセルを追える', '取り込み結果を計算し直せる', 'エンティティを増やさない']}
+/>
 
-この ADR は、予約サイトから届いたキャンセルの記録の方法を、次の3つの基準で決定します。
+</AdrPanel>
 
-- 業務のルールで反映できなかったキャンセルも、届いたことを追えること
-- 業務のルールを変えた後に、届いた内容から取り込み結果を計算し直せること
-- 予約システムが扱うエンティティを増やさないこと
+<AdrPanel lead="予約サイトから届いた事実と、取り込み結果を、別の業務イベントとして、同じトランザクションで記録します。">
 
-### 決定
+<SequenceFigure sequence={externalCancelDecisionSequence} />
 
-- 予約サイトから届いた事実と、予約システムが取り込んだ結果を、別の業務イベントとして記録します。
-- 届いた事実は、`ExternalCancellationReceived` として記録します。予約サイトが送ってきた内容だけを持ち、予約システムがどう反映したかは持ちません。
-- 取り込み結果は、キャンセルできた場合は `VisitCancelled` として、キャンセルできなかった場合は `ExternalCancellationRejected` として、理由と一緒に記録します。
-- 届いた事実と取り込み結果は、同じトランザクションで記録します。
-- 診察が終わった来院のように反映できないキャンセルは、事実は取り込み、状態は変化させません。
+反映できないキャンセルは、事実は取り込み、状態は変化させません。
 
-### 結果
+</AdrPanel>
 
-- 顧客価値: 飼い主から、予約サイトでキャンセルした来院が予約システムでキャンセルになっていないと連絡を受けたときに、キャンセルが届いたことと、反映しなかった理由を回答できます。
-- 低減するリスク: 業務のルールで反映できなかったキャンセルを、届いていないキャンセルと区別できないリスクを低減します。届いた内容から取り込み結果を計算し直せるので、業務のルールを変えた後に、過去に届いたキャンセルを新しいルールで扱えないリスクも低減します。
-- 増大するリスク: 届いたキャンセル1件につき、`business_events` テーブルの行が2行増え、保存するデータ量が増えます。
-- 残るリスク: 来院が見つからない場合や、予約サイトが送ってきた内容をパースできなかった場合は、処理が失敗して、届いた事実も残りません。この場合は、届いたかどうかを回答できません。業務イベントを導入する前に届いたキャンセルも、予約サイトから来たことと、届いた日時を回答できません。
+<AdrPanel>
 
-### 検討した案
+<AdrOutcomes items={[
+  { kind: 'value', label: '顧客価値', text: '飼い主から連絡を受けたときに、キャンセルが届いたことと、反映しなかった理由を回答できます。' },
+  { kind: 'reduced', label: '低減するリスク', text: '反映できなかったキャンセルを、届いていないキャンセルと区別できないリスクを低減します。' },
+  { kind: 'increased', label: '増大するリスク', text: '届いたキャンセル1件につき、`business_events` テーブルの行が2行増えます。' },
+  { kind: 'remaining', label: '残るリスク', text: '来院が見つからない場合や、届いた内容をパースできなかった場合は、届いた事実も残りません。' },
+]} />
 
-採用した案と、採用しなかった2つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
+</AdrPanel>
 
-<div data-alternatives-table>
+<AdrPanel>
 
-| 案 | 反映できなかったキャンセルを追える | 取り込み結果を計算し直せる | エンティティを増やさない |
-|---|---|---|---|
-| 届いた事実と取り込み結果を分けて記録する（採用） | ○ | ○ | ○ |
-| 取り込み結果だけを記録する | ○ | × | ○ |
-| 「取り込み依頼作成」イベントとして記録する | ○ | ○ | × |
+<AdrOptions
+  id="adr-4"
+  criteria={['反映できなかったキャンセルを追える', '取り込み結果を計算し直せる', 'エンティティを増やさない']}
+  options={[
+    { name: '届いた事実と取り込み結果を分けて記録する', adopted: true, marks: ['○', '○', '○'], merit: '反映できなかったキャンセルも追え、業務のルールを変えた後に取り込み結果を計算し直せます。', demerit: '届いたキャンセル1件につき、行が2行増えます。' },
+    { name: '取り込み結果だけを記録する', marks: ['○', '×', '○'], merit: '届いたキャンセル1件につき1行で済みます。', demerit: '届いた内容が残らないため、業務のルールを変えた後に取り込み結果を計算し直せません。' },
+    { name: '「取り込み依頼作成」イベントとして記録する', marks: ['○', '○', '×'], merit: '届いた内容をパースできなかった場合も、届いたことを残せます。', demerit: '予約システムが扱うエンティティに、取り込み依頼が増えます。' },
+  ]}
+/>
 
-</div>
+パースに失敗した場合の扱いは、別の ADR で決定します。
 
-#### 取り込み結果だけを記録する
-
-届いた内容は記録せず、`VisitCancelled` と `ExternalCancellationRejected` だけを記録します。届いたキャンセル1件につき1行で済みます。しかし、予約サイトが送ってきた内容（操作日時と理由）が残りません。業務のルールを変えた後に、当時届いた内容から取り込み結果を計算し直すことができません。
-
-#### 「取り込み依頼作成」イベントとして記録する
-
-「取り込み依頼」というエンティティがあるとみなして、予約サイトから届いた内容を「取り込み依頼作成」イベントとして永続化します。予約サイトが送ってきた内容を、予約システムのスキーマに合わせてパースできなかった場合も、届いたことを残せます。しかし、予約システムが扱うエンティティに、取り込み依頼が増えます。今回の基準は、届いた事実と取り込み結果を分けて記録することで満たせます。パースに失敗した場合の扱いは、別の ADR で決定します。
+</AdrPanel>
+</AdrTabs>
 
 </Fragment>
 </Workspace>

@@ -1,0 +1,50 @@
+---
+import { richHtml } from '../figures/rich';
+
+type Props = { readonly lead?: string };
+
+const { lead } = Astro.props;
+---
+
+<section class="adr-panel">
+  {lead !== undefined && <p class="adr-lead" set:html={richHtml(lead)} />}
+  <slot />
+</section>
+
+<style>
+.adr-panel {
+  padding-block: var(--space-1) 0;
+}
+.adr-panel > :global(:first-child) {
+  margin-top: 0;
+}
+:global(.content) :global(.scene[data-scenario]) :global(.doc-paper) .adr-lead {
+  margin-block: 0 var(--space-1);
+  font-size: var(--text-code);
+  line-height: var(--leading-tight);
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  :global(.doc-paper)
+  .adr-lead
+  :global(code) {
+  font-size: 0.9em;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  :global(.doc-paper)
+  .adr-panel
+  > :global(p:not(.adr-lead)) {
+  margin-block: var(--space-1) 0;
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  :global(.doc-paper)
+  .adr-panel
+  :global(.cfig) {
+  margin-block: var(--space-1);
+  padding-block: 0;
+}
+</style>
