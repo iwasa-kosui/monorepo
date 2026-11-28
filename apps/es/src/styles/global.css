@@ -409,17 +409,6 @@ body:not(.chapter-page):has(.top-page) .content {
   font-size: var(--text-note);
   line-height: var(--leading-normal);
 }
-.content .top-share {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  align-items: center;
-}
-.content .top-share-label {
-  color: var(--role-ink-sub);
-  font-size: var(--text-note);
-  font-weight: 700;
-}
 .content .top-share-list {
   display: flex;
   flex-wrap: wrap;
