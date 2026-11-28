@@ -27,6 +27,7 @@ export type NudgeContext = {
   readonly restoreRunShown?: boolean;
   readonly sqlMissed?: boolean;
   readonly resetSqlShown?: boolean;
+  readonly live?: { readonly channel: string; readonly shown: boolean; readonly written: boolean };
 };
 
 export const restoredKey = 'restored';
@@ -39,6 +40,10 @@ export const restoreRunSelector = `${restorePlaygroundSelector} [data-role="run"
 
 export const resetSqlSelector = '[data-playground="sql"] [data-role="reset-sql"]';
 
+export const liveInputSelector = '[data-live-input]';
+
+export const liveSendSelector = '[data-action="send"]';
+
 export const fewLogRows = 3;
 
 export const signalSelectors: Readonly<Partial<Record<SignalName, string>>> = {
@@ -48,7 +53,7 @@ export const signalSelectors: Readonly<Partial<Record<SignalName, string>>> = {
   'tests:passed': '[data-role="run-tests"]',
   'code:run': '[data-run-file]:not([data-role="run-tests"]), [data-play] [data-role="run"]',
   'figure:step': '[data-before-record-figure] [data-action="next"]',
-  'question:written': '[data-own-question] textarea',
+  'question:written': liveInputSelector,
 };
 
 export const unmetSignals = (fired: FiredSignals, condition: Condition): SignalRef[] => {
@@ -102,6 +107,10 @@ export const nudgeSpecOf = (signal: SignalRef, context: NudgeContext): NudgeSpec
     if (logs === undefined) return null;
     if (logs.key !== context.selected) return { tab: logs.key };
     return context.logs === undefined ? null : logNudgeOf(logs.key, context.logs);
+  }
+  if (name === 'question:written' && context.live !== undefined) {
+    if (!context.live.shown) return { selector: `button[data-channel="${quoted(context.live.channel)}"]` };
+    return { selector: context.live.written ? liveSendSelector : liveInputSelector };
   }
   const selector = signalSelectors[name];
   return selector === undefined ? null : { selector };

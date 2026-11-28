@@ -15,6 +15,13 @@ describe('wrangler の設定', () => {
     expect(config).toContain('"name":"AGENT_AUTH_FAILURE_LIMIT"');
   });
 
+  it('本番用の設定は、ハンズオンの部屋の Durable Object と、そのクラスを作るマイグレーションを持つ', () => {
+    const config = squash(read('wrangler.jsonc'));
+    expect(config).toContain('"durable_objects":{"bindings":[{"name":"HANDS_ON_ROOM","class_name":"HandsOnRoom"}]}');
+    expect(config).toContain('"migrations":[{"tag":"v1","new_sqlite_classes":["HandsOnRoom"]}]');
+    expect(read('worker/index.ts')).toContain('export { HandsOnRoom } from \'./hands-on/room\';');
+  });
+
   it('開発用の設定は、Workers AI のバインディングを除いて本番用と同じ', () => {
     const production = squash(read('wrangler.jsonc')).replace('"ai":{"binding":"AI"},', '');
     expect(squash(read('wrangler.dev.jsonc'))).toBe(production);
@@ -23,6 +30,8 @@ describe('wrangler の設定', () => {
   it('パスワードの値を設定ファイルと例のファイルに書かない', () => {
     expect(read('wrangler.jsonc')).not.toContain('AGENT_PASSWORD');
     expect(read('wrangler.dev.jsonc')).not.toContain('AGENT_PASSWORD');
+    expect(read('wrangler.jsonc')).not.toContain('HANDS_ON_ADMIN_PASSWORD');
+    expect(read('wrangler.dev.jsonc')).not.toContain('HANDS_ON_ADMIN_PASSWORD');
     expect(read('.dev.vars.example')).toMatch(/^AGENT_PASSWORD=ここに/);
   });
 });

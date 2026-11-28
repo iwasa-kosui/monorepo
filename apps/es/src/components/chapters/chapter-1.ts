@@ -9,6 +9,7 @@ export const chapter1Question: WorkspaceScenario = lessonScenario({
   history: introduction,
   timeline: opening(posts.afterIncident, posts.ownQuestion, posts.afterOwnQuestion),
   done: 'question:written',
+  ask: { saveAs: 'chapter-1', label: 'DB を見ても分からなかった質問' },
   tabs: [docTab('memo', 'データ変更の記録について', 'records/data-change-history')],
 });
 

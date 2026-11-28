@@ -3,7 +3,6 @@ wide: true
 immersive: true
 ---
 
-import OwnQuestion from '../../../components/OwnQuestion.astro';
 import OwnQuestionView from '../../../components/OwnQuestionView.astro';
 import Quote from '../../../components/Quote.astro';
 import { summaryDecide } from '../../../components/chapters/summary';
@@ -16,9 +15,6 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 </div>
 
 <Workspace scenario={summaryDecide}>
-<Fragment slot="composer">
-<OwnQuestion id="summary-update" label="選んだ更新処理と、記録する内容（誰が、いつ、何を）と変更理由（なぜ）" showLabel rows={2} />
-</Fragment>
 <Fragment slot="memo">
 
 捨てたデータは復元できませんが、記録を足した日から先の出来事は残せます。

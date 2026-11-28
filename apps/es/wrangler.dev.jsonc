@@ -10,6 +10,10 @@
     "html_handling": "auto-trailing-slash",
     "run_worker_first": ["/healthz", "/api/*"],
   },
+  "durable_objects": {
+    "bindings": [{ "name": "HANDS_ON_ROOM", "class_name": "HandsOnRoom" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HandsOnRoom"] }],
   "ratelimits": [
     {
       "name": "AGENT_RATE_LIMIT",

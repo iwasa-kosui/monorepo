@@ -62,7 +62,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-1/02': {
     flow: 'problem',
     mode: 'do',
-    role: '普段の業務で運用しているシステムについて聞かれて、DB を見ても分からなかった質問を1つ書く',
+    role: '普段の業務で運用しているシステムについて聞かれて、DB を見ても分からなかった質問を1つ書いて送る',
   },
   'chapter-1/03': {
     flow: 'try',
@@ -174,7 +174,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     flow: 'recap',
     mode: 'do',
     role:
-      'チャットの入力欄に、普段の業務で運用しているシステムで記録を足す更新処理を1つ書き、文書で持ち帰りの教材と、当日に演習を実施できなかったときの進め方を確かめる',
+      'チャットの入力欄に、普段の業務で運用しているシステムで記録を足す更新処理を1つ書いて送り、文書で持ち帰りの教材と、当日に演習を実施できなかったときの進め方を確かめる',
   },
 };
 

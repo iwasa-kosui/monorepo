@@ -87,3 +87,38 @@ export const saveQuestion = (id: string, question: string): boolean => {
     return false;
   }
 };
+
+const liveNameKey = 'es:live:name';
+const liveSenderKey = 'es:live:sender';
+
+export const loadLiveName = (): string | null => {
+  try {
+    return storage()?.getItem(liveNameKey) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveLiveName = (name: string): void => {
+  try {
+    storage()?.setItem(liveNameKey, name);
+  } catch {
+    return;
+  }
+};
+
+export const loadLiveSender = (): string | null => {
+  try {
+    return storage()?.getItem(liveSenderKey) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveLiveSender = (sender: string): void => {
+  try {
+    storage()?.setItem(liveSenderKey, sender);
+  } catch {
+    return;
+  }
+};

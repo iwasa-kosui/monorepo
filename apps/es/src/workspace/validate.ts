@@ -27,6 +27,14 @@ export const scenarioProblems = (scenario: WorkspaceScenario): string[] => {
     problems.push('利用者の発言者（self: true）がありません');
   }
 
+  const live = scenario.chat.live;
+  if (live !== undefined && !channelNames.has(live.channel)) {
+    problems.push(`chat.live のチャンネル ${live.channel} が chat.channels にありません`);
+  }
+  if (scenario.done === 'question:written' && live?.saveAs === undefined) {
+    problems.push('done が question:written なのに、chat.live.saveAs がありません');
+  }
+
   const checkActor = (actor: string, where: string): void => {
     if (!actorIds.has(actor)) problems.push(`${where} の発言者 ${actor} が actors にありません`);
   };

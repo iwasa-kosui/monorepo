@@ -188,11 +188,29 @@ describe('nudgeSpecOf', () => {
     });
   });
 
-  it('figure:step は図の「次へ」を、question:written は質問の入力欄を指す', () => {
+  it('figure:step は図の「次へ」を指す', () => {
     expect(nudgeSpecOf('figure:step', context)).toEqual({
       selector: '[data-before-record-figure] [data-action="next"]',
     });
-    expect(nudgeSpecOf('question:written', context)).toEqual({ selector: '[data-own-question] textarea' });
+  });
+
+  describe('question:written', () => {
+    const live = { channel: '# ハンズオン', shown: true, written: false };
+
+    it('入力欄が空なら、メッセージの入力欄を指す', () => {
+      expect(nudgeSpecOf('question:written', { ...context, live })).toEqual({ selector: '[data-live-input]' });
+    });
+
+    it('入力欄に書いてあれば、送信のボタンを指す', () => {
+      expect(nudgeSpecOf('question:written', { ...context, live: { ...live, written: true } })).toEqual({
+        selector: '[data-action="send"]',
+      });
+    });
+
+    it('ほかのチャンネルを表示していれば、送れるチャンネルのボタンを指す', () => {
+      expect(nudgeSpecOf('question:written', { ...context, live: { ...live, shown: false, written: true } }))
+        .toEqual({ selector: 'button[data-channel="# ハンズオン"]' });
+    });
   });
 
   it('ログのシグナルは、ログのタブが未選択ならそのタブのボタンを指す', () => {

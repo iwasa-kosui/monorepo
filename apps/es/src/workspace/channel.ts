@@ -99,6 +99,11 @@ export const receivePost = (
   return state.pinned ? counted : { ...counted, channel: post.channel };
 };
 
+export const receiveAmbient = (state: ChannelState, channel: string, visible: boolean): ChannelState =>
+  visible && channel === state.channel
+    ? state
+    : { ...state, unread: { ...state.unread, [channel]: unreadOf(state, channel) + 1 } };
+
 export const receiveTyping = (state: ChannelState, channel: string, visible: boolean): ChannelState => {
   if (state.pinned) return state;
   return visible ? showing(state, channel, false) : { ...state, channel };

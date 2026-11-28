@@ -1,1 +1,2 @@
 AGENT_PASSWORD=ここにローカル確認用の仮のパスワードを書く
+HANDS_ON_ADMIN_PASSWORD=ここに「# ハンズオン」のメッセージを消すための仮のパスワードを書く
