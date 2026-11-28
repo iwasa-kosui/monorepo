@@ -103,21 +103,20 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   :global([data-role="restore"]) {
   display: none !important;
 }
+
 :global(.scene[data-scenario]) .panel[data-kind="console"] {
   --db-bg: #ffffff;
-  --db-band: #eef2f5;
-  --db-side: #f5f7fa;
-  --db-head: #e4e9ee;
-  --db-fg: #1f2933;
-  --db-muted: #52606d;
-  --db-rule: #d5dbe1;
-  --db-grid: #c9d1d9;
+  --db-side: #ffffff;
+  --db-head: #fafafa;
+  --db-hover: #f4f4f5;
+  --db-fg: #18181b;
+  --db-muted: #71717a;
+  --db-rule: #e5e7eb;
   --db-edge: #7b8794;
-  --db-accent: #0b7a75;
-  --db-accent-strong: #09625e;
-  --db-online: #1f9d55;
+  --db-accent: #2563eb;
+  --db-online: #16a34a;
   --db-on-accent: #ffffff;
-  --db-soft: #d7f0ee;
+  --db-soft: rgb(37 99 235 / 0.08);
   --db-danger: #b42318;
   --db-danger-soft: #fdecea;
   --db-keyword: #7a2e9e;
@@ -125,10 +124,10 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   --db-number: #9a4a00;
   --db-comment: #5a6772;
   --db-func: #0b6b8f;
-  --pn-bg: var(--db-band);
+  --pn-bg: var(--db-head);
   --pn-fg: var(--db-fg);
   --pn-rule: var(--db-rule);
-  --ring: #0b7a75;
+  --ring: var(--db-accent);
   --role-surface: var(--db-bg);
   --role-sunken: var(--db-side);
   --role-fg: var(--db-fg);
@@ -160,31 +159,35 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
-  background: var(--db-accent);
-  padding: var(--space-3) var(--space-5);
-  color: var(--db-on-accent);
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--db-rule);
+  background: var(--db-bg);
+  padding: var(--space-2) var(--space-5);
+  color: var(--db-fg);
   line-height: var(--leading-tight);
 }
 :global(.scene[data-scenario]) .db-dot {
   flex: none;
-  width: 0.75rem;
-  height: 0.75rem;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
-  background: var(--db-on-accent);
+  background: var(--db-online);
 }
 :global(.scene[data-scenario]) .db-name {
   min-width: 0;
   overflow: hidden;
   font-family: var(--font-code);
-  font-size: var(--text-code);
-  font-weight: var(--weight-bold);
+  font-size: var(--text-note);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 :global(.scene[data-scenario]) .db-kind {
   flex: none;
   margin-left: auto;
+  border: 1px solid var(--db-rule);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+  color: var(--db-muted);
   font-size: var(--text-note);
 }
 :global(.scene[data-scenario]) .db-body {
@@ -197,6 +200,7 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   flex: none;
   max-height: 9rem;
   overflow: auto;
+  border-bottom: 1px solid var(--db-rule);
   background: var(--db-side);
   padding: var(--space-3) var(--space-4);
   font-family: var(--font-code);
@@ -205,8 +209,11 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   margin: 0 0 var(--space-1);
   color: var(--db-muted);
   font-family: var(--font-body);
-  font-size: var(--text-note);
+  font-size: calc(var(--text-note) * 0.85);
+  font-weight: 600;
+  letter-spacing: 0.04em;
   line-height: var(--leading-normal);
+  text-transform: uppercase;
 }
 :global(.scene[data-scenario]) .side-title::before {
   content: "▾" / "";
@@ -217,21 +224,21 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  min-height: var(--tap-min);
+  min-height: 2rem;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: transparent;
   padding: 0 var(--space-2);
   color: var(--db-fg);
   font-family: var(--font-code);
-  font-size: var(--text-code);
-  font-weight: var(--weight-bold);
+  font-size: var(--text-note);
+  font-weight: 500;
   line-height: var(--leading-tight);
   text-align: left;
   cursor: pointer;
 }
 :global(.scene[data-scenario]) .table-item:hover {
-  background: var(--db-soft);
+  background: var(--db-hover);
 }
 :global(.scene[data-scenario]) .table-item:focus-visible {
   outline: 2px solid var(--ring);
@@ -241,14 +248,14 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   flex: none;
   width: 0.75rem;
   height: 0.625rem;
-  border: 1.5px solid var(--db-accent);
+  border: 1.5px solid var(--db-muted);
   border-top-width: 3px;
   border-radius: 1px;
   background: linear-gradient(
     to right,
     transparent calc(50% - 0.5px),
-    var(--db-accent) calc(50% - 0.5px),
-    var(--db-accent) calc(50% + 0.5px),
+    var(--db-muted) calc(50% - 0.5px),
+    var(--db-muted) calc(50% + 0.5px),
     transparent calc(50% + 0.5px)
   );
 }
@@ -256,16 +263,25 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   margin: 0;
   padding: 0 0 var(--space-2) var(--space-5);
   list-style: none;
+  font-family: var(--font-code);
   font-size: var(--text-note);
   line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .columns li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 1.75rem;
   margin: 0;
 }
 :global(.scene[data-scenario]) .columns code {
+  min-width: 0;
   background: transparent;
   padding: 0;
+  color: var(--db-fg);
   font-size: var(--text-note);
+  overflow-wrap: anywhere;
 }
 :global(.scene[data-scenario]) .columns span {
   color: var(--db-muted);
@@ -291,15 +307,8 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
 }
 :global(.scene[data-scenario])
   .panel[data-kind="console"]
-  :global(.playground-status),
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-toolbar) {
-  margin-bottom: var(--space-3);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
   :global(.playground-status) {
+  margin-bottom: var(--space-3);
   color: var(--db-muted);
   font-size: var(--text-note);
 }
@@ -310,71 +319,8 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
 }
 :global(.scene[data-scenario])
   .panel[data-kind="console"]
-  :global(.playground-toolbar) {
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-4);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground button) {
-  min-width: var(--tap-min);
-  min-height: var(--tap-min);
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--db-soft);
-  padding: 0 var(--space-4);
-  color: var(--db-accent);
-  font-size: var(--text-code);
-  font-weight: var(--weight-bold);
-  line-height: var(--leading-tight);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground button:disabled) {
-  background: var(--db-head);
-  color: var(--db-muted);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground button[data-role="run"]),
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground button[data-role="run"]:hover:not(:disabled)) {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 3.25rem;
-  background: var(--db-accent);
-  padding: 0 var(--space-5);
-  color: var(--db-on-accent);
-  font-size: var(--text-body);
-  font-weight: var(--weight-bold);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground button[data-role="run"]:hover:not(:disabled)) {
-  background: var(--db-accent-strong);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground button[data-role="run"])::before {
-  content: "";
-  border-top: 0.375rem solid transparent;
-  border-bottom: 0.375rem solid transparent;
-  border-left: 0.625rem solid currentColor;
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground button[data-role="run"]:disabled) {
-  background: var(--db-head);
-  color: var(--db-muted);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-hint) {
-  color: var(--db-muted);
-  font-size: var(--text-note);
+  :global(.playground-cell) {
+  flex: 1 0 auto;
 }
 :global(.content)
   :global(.scene[data-scenario])
@@ -383,7 +329,7 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   display: flex;
   flex: 1 0 auto;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 0;
   min-width: 0;
   min-height: 0;
 }
@@ -403,8 +349,8 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   height: 5.5rem;
   min-height: 0;
   overflow: hidden;
-  border: 2px solid var(--db-rule);
-  border-radius: var(--radius-lg);
+  border: 0;
+  border-radius: 0;
 }
 :global(.content)
   :global(.scene[data-scenario])
@@ -438,7 +384,7 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   max-height: none;
   margin-top: 0;
   overflow: auto;
-  border: 1px solid var(--db-grid);
+  border-radius: 0;
   background: var(--db-bg);
   padding: 0;
 }
@@ -446,14 +392,6 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   .panel[data-kind="console"]
   :global(.playground-results > *) {
   flex: none;
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-results > .playground-note) {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  color: var(--db-muted);
-  font-size: var(--text-body);
 }
 :global(.scene[data-scenario])
   .panel[data-kind="console"]
@@ -465,109 +403,10 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
 }
 :global(.scene[data-scenario])
   .panel[data-kind="console"]
-  :global(.playground-result + .playground-result) {
-  border-top: 2px solid var(--db-grid);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result .playground-statement) {
-  margin: 0;
-  border-bottom: 1px solid var(--db-grid);
-  background: var(--db-band);
-  padding: var(--space-1) var(--space-3);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result .playground-statement code) {
-  background: transparent;
-  padding: 0;
-  color: var(--db-muted);
-  font-size: var(--text-note);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result table) {
-  margin: 0;
-  border-collapse: collapse;
-  font-family: var(--font-code);
-  font-size: var(--text-code);
-  line-height: var(--leading-normal);
-  counter-reset: row;
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result th),
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result td) {
-  border: 1px solid var(--db-grid);
-  padding: var(--space-1) var(--space-3);
-  text-align: left;
-  white-space: nowrap;
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result th) {
-  background: var(--db-head);
-  color: var(--db-muted);
-  font-size: var(--text-note);
-  font-weight: var(--weight-bold);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result tr)::before {
-  content: "";
-  display: table-cell;
-  width: 2rem;
-  border: 1px solid var(--db-grid);
-  background: var(--db-head);
-  padding: var(--space-1) var(--space-2);
-  color: var(--db-muted);
-  font-size: var(--text-note);
-  text-align: right;
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result tbody tr) {
-  counter-increment: row;
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result tbody tr)::before {
-  content: counter(row);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result tbody tr[aria-selected]) {
-  cursor: pointer;
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result tbody tr[aria-selected]:hover) {
-  background: var(--db-band);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result tbody tr[aria-selected="true"]) {
-  background: var(--db-soft);
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
-  :global(.playground-result tbody tr[aria-selected]:focus-visible) {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-:global(.scene[data-scenario])
-  .panel[data-kind="console"]
   :global(.playground-result > .playground-note) {
   position: sticky;
   bottom: 0;
   margin: auto 0 0;
-  border-top: 1px solid var(--db-grid);
-  background: var(--db-band);
-  padding: var(--space-1) var(--space-3);
-  color: var(--db-muted);
-  font-size: var(--text-note);
 }
 :global(.scene[data-scenario])
   .panel[data-kind="console"]
@@ -616,6 +455,8 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   :global(.scene[data-scenario]) .tables {
     width: 12rem;
     max-height: none;
+    border-right: 1px solid var(--db-rule);
+    border-bottom: 0;
   }
 }
 @media (prefers-reduced-motion: no-preference) {

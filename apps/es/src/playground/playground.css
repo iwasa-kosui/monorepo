@@ -39,7 +39,6 @@
 }
 .playground-hint {
   align-self: center;
-  margin-left: auto;
   color: var(--role-ink-sub);
   font-size: var(--text-note);
 }
@@ -179,6 +178,248 @@
   background: rgb(255 255 255 / 0.08);
 }
 
+.playground[data-playground="sql"] {
+  --pg-bg: var(--db-bg, var(--role-ground));
+  --pg-line: var(--db-rule, var(--role-rail));
+  --pg-head: var(--db-head, var(--role-surface));
+  --pg-fg: var(--db-fg, var(--role-ink));
+  --pg-muted: var(--db-muted, var(--role-ink-sub));
+  --pg-accent: var(--db-accent, var(--role-accent));
+  --pg-accent-soft: var(--db-soft, var(--role-accent-soft));
+  --pg-hover: var(--db-hover, var(--role-surface));
+}
+.playground-cell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--pg-line);
+  border-radius: var(--radius-md);
+  background: var(--pg-bg);
+}
+.playground[data-playground="sql"] .playground-toolbar {
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  border-bottom: 1px solid var(--pg-line);
+  background: var(--pg-head);
+  padding: var(--space-1) var(--space-2);
+}
+.playground[data-playground="sql"] .playground-toolbar button {
+  min-width: 0;
+  min-height: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 var(--space-2);
+  color: var(--pg-muted);
+  font-size: var(--text-note);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-tight);
+  cursor: pointer;
+}
+.playground[data-playground="sql"]
+  .playground-toolbar
+  button:hover:not(:disabled) {
+  background: var(--pg-hover);
+}
+.playground[data-playground="sql"] .playground-toolbar button:disabled {
+  background: transparent;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.playground[data-playground="sql"] .playground-toolbar button:focus-visible {
+  outline: 2px solid var(--pg-accent);
+  outline-offset: -2px;
+}
+.playground[data-playground="sql"] .playground-toolbar button[data-role="run"] {
+  color: var(--pg-accent);
+  font-weight: 600;
+}
+.playground[data-playground="sql"]
+  .playground-toolbar
+  button[data-role="run"]:hover:not(:disabled) {
+  background: var(--pg-accent-soft);
+}
+.playground[data-playground="sql"]
+  .playground-toolbar
+  button[data-role="run"]::before {
+  content: "";
+  border-top: 0.3125rem solid transparent;
+  border-bottom: 0.3125rem solid transparent;
+  border-left: 0.5rem solid currentColor;
+}
+.playground[data-playground="sql"] .playground-toolbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+.playground[data-playground="sql"] .playground-hint {
+  color: var(--pg-muted);
+}
+.playground-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.playground-keys kbd {
+  border: 1px solid var(--pg-line);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  color: var(--pg-muted);
+  font-family: var(--font-code);
+  font-size: calc(var(--text-note) * 0.85);
+  line-height: var(--leading-normal);
+  white-space: nowrap;
+}
+.playground[data-playground="sql"] .playground-editor {
+  background: var(--pg-bg);
+}
+.playground[data-playground="sql"] .cm-editor {
+  color: var(--pg-fg);
+}
+.playground[data-playground="sql"] .cm-gutters {
+  color: var(--pg-muted);
+}
+.playground[data-playground="sql"] .cm-activeLine,
+.playground[data-playground="sql"] .cm-activeLineGutter {
+  background: var(--pg-head);
+}
+.playground[data-playground="sql"] .playground-results {
+  margin-top: 0;
+}
+.playground[data-playground="sql"] .playground-results:not(:empty) {
+  border-top: 1px solid var(--pg-line);
+}
+.playground[data-playground="sql"] .playground-results > .playground-note {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--pg-muted);
+  font-size: var(--text-note);
+}
+.playground[data-playground="sql"] .playground-result {
+  margin-bottom: 0;
+}
+.playground[data-playground="sql"] .playground-result + .playground-result {
+  border-top: 1px solid var(--pg-line);
+}
+.playground[data-playground="sql"] .playground-result .playground-statement {
+  margin: 0;
+  border-bottom: 1px solid var(--pg-line);
+  background: var(--pg-head);
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-code);
+}
+.playground[data-playground="sql"]
+  .playground-result
+  .playground-statement
+  code {
+  background: transparent;
+  padding: 0;
+  color: var(--pg-muted);
+  font-family: var(--font-code);
+  font-size: var(--text-note);
+}
+.playground[data-playground="sql"] .playground-result > .playground-note {
+  margin: 0;
+  border-top: 1px solid var(--pg-line);
+  background: var(--pg-head);
+  padding: var(--space-1) var(--space-3);
+  color: var(--pg-muted);
+  font-family: var(--font-code);
+  font-size: var(--text-note);
+  text-align: right;
+}
+.playground[data-playground="sql"] .playground-result table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-code);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+  counter-reset: row;
+}
+.playground[data-playground="sql"] .playground-result th,
+.playground[data-playground="sql"] .playground-result td {
+  border: 0;
+  border-bottom: 1px solid var(--pg-line);
+  padding: var(--space-1) var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+}
+.playground[data-playground="sql"] .playground-result th {
+  background: var(--pg-head);
+  color: var(--pg-muted);
+  font-size: var(--text-note);
+  font-weight: 600;
+}
+.playground[data-playground="sql"] .playground-result th.playground-num,
+.playground[data-playground="sql"] .playground-result td.playground-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.playground[data-playground="sql"] .playground-result tr::before {
+  content: "";
+  display: table-cell;
+  width: 2rem;
+  border-bottom: 1px solid var(--pg-line);
+  padding: var(--space-1) var(--space-2);
+  color: var(--pg-muted);
+  text-align: right;
+}
+.playground[data-playground="sql"] .playground-result thead tr::before {
+  position: sticky;
+  top: 0;
+  background: var(--pg-head);
+}
+.playground[data-playground="sql"] .playground-result tbody tr {
+  counter-increment: row;
+}
+.playground[data-playground="sql"] .playground-result tbody tr::before {
+  content: counter(row);
+}
+.playground[data-playground="sql"] .playground-result tbody tr:hover > td,
+.playground[data-playground="sql"] .playground-result tbody tr:hover::before {
+  background: var(--pg-head);
+}
+.playground[data-playground="sql"] .playground-result tbody tr[aria-selected] {
+  cursor: pointer;
+}
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected]:not([aria-selected="true"]):hover
+  > td,
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected]:not([aria-selected="true"]):hover::before {
+  background: var(--pg-hover);
+}
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected="true"]
+  > td,
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected="true"]::before {
+  background: var(--pg-accent-soft);
+}
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
 @media (min-width: 768px) {
   .content .chapter-body > .playground {
     display: flex;
@@ -198,6 +439,7 @@
   }
   .chapter-body [data-playground="sql"] .playground-panes {
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 0;
   }
   .chapter-body .playground-pane-editor {
     display: flex;
@@ -223,6 +465,16 @@
     border-radius: var(--radius-sm);
     background: var(--role-ground);
     padding: var(--space-2);
+  }
+  .chapter-body
+    .playground[data-playground="sql"]
+    .playground-results:not(:empty),
+  .chapter-body .playground[data-playground="sql"] .playground-results:empty {
+    border-top: 0;
+    border-left: 1px solid var(--pg-line);
+    border-radius: 0;
+    background: var(--pg-bg);
+    padding: 0;
   }
 }
 

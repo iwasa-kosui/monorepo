@@ -147,22 +147,6 @@ const initial = 'SELECT * FROM visits;';
 .restore :global([data-role="restore"]) {
   display: none !important;
 }
-.restore :global(.playground button) {
-  min-width: var(--tap-min);
-  min-height: var(--tap-min);
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--role-accent-soft);
-  padding: 0 var(--space-4);
-  color: var(--role-accent);
-  font-size: var(--text-code);
-  font-weight: var(--weight-bold);
-  line-height: var(--leading-tight);
-}
-.restore :global(.playground button:disabled) {
-  background: var(--role-rail);
-  color: var(--role-ink-sub);
-}
 .restore :global(.playground-status),
 .restore :global(.playground-origin),
 .restore :global(.playground-hint),
