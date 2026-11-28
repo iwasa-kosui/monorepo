@@ -45,7 +45,7 @@ const externalSyncSql = `SELECT
   received.payload ->> '$.operatedAt' AS operated_at,
   received.payload ->> '$.reason' AS cancel_reason,
   outcome.event_name AS result,
-  outcome.payload ->> '$.reason' AS rejected_reason
+  CASE WHEN outcome.event_name = 'ExternalCancellationRejected' THEN outcome.payload ->> '$.reason' END AS rejected_reason
 FROM business_events AS received
 JOIN business_events AS outcome
   ON outcome.payload ->> '$.receivedEventId' = received.event_id
@@ -88,7 +88,7 @@ const consoleTab = (pattern: Pattern): TabDefinition => ({
   },
 });
 
-const replyReason = 'エディタで確認用スクリプトを実行すると返信できます。';
+const replyReason = 'DB コンソールで SQL を実行すると返信できます。';
 
 type Consultation = {
   readonly id: string;
@@ -113,7 +113,7 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     buttons: replyButton('返信する'),
     gates: {
       reply: {
-        requires: [{ signal: 'code:run', reason: replyReason }],
+        requires: [{ signal: 'sql:executed', reason: replyReason }],
         reasons: { all: replyReason, several: replyReason },
       },
     },

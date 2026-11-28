@@ -18,10 +18,8 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <CodePlayground
   exercise="chapter-4-audit-log-done"
   editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'why-changed.ts']}
-  testFile="visits.test.ts"
+  readonly={['db.ts']}
   reveal="export const cancelVisit"
-  scripts={[{ file: 'why-changed.ts', label: 'why-changed.ts を実行する' }]}
 />
 </Fragment>
 <Fragment slot="memo">
@@ -32,7 +30,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 `cancelVisit` は監査ログの ID を業務イベントの `payload` に入れます。`payload` は変更前後の値を持ちません。
 
-実行結果の表の1行目は、業務イベントを導入する前の変更です。2行目と3行目は、変更前後の値が同じです。担当者は `reason` で2つを見分けられます。4行目の診察の完了は、まだ業務イベントを記録していないので、`reason` が `null` です。
+SQL の結果は、業務イベントに紐づかない監査ログの変更です。1行目は、業務イベントを導入する前のキャンセルです。2行目の診察の完了は、まだ業務イベントを記録していません。この2件は、業務上の理由を回答できません。
 
 監査ログそのものをイベントログから生成してしまう方法もあります。イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
 

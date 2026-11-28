@@ -18,10 +18,8 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <CodePlayground
   exercise="chapter-4-external-sync-done"
   editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'what-was-imported.ts']}
-  testFile="visits.test.ts"
+  readonly={['db.ts']}
   reveal="export const importExternalCancellation"
-  scripts={[{ file: 'what-was-imported.ts', label: 'what-was-imported.ts を実行する' }]}
 />
 </Fragment>
 <Fragment slot="memo">
@@ -35,7 +33,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - バリデーションエラー時の記録喪失: 外部データの不備で処理が失敗した際、イベントが保存されないと「そもそも外部からデータが来たこと」自体が追えなくなります。
 - ビジネスルールの変更に弱い: 「外部のこのデータ（事実）を、当時はこういう解釈（取り込み結果）で処理したが、仕様変更後に再計算（リプレイ）したい」というイベントソーシング最大のメリットが活かせなくなります。
 
-実行結果の表の1行目は、届いたキャンセルを取り込み、来院をキャンセルした例です。2行目は、診察が終わった来院に、予約サイトからキャンセルが届いた例です。予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。事実は取り込み、状態は変化させません。`result` の `rejected` は、届いたキャンセルで来院の状態を変えなかったことを表します。`rejectedReason` は、状態を変えなかった理由です。
+SQL の結果の1行目は、届いたキャンセルを取り込み、来院をキャンセルした例です。2行目は、診察が終わった来院に、予約サイトからキャンセルが届いた例です。予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。事実は取り込み、状態は変化させません。`result` の `ExternalCancellationRejected` は、届いたキャンセルで来院の状態を変えなかったことを表します。`rejected_reason` は、状態を変えなかった理由です。
 
 そもそも自プロダクトのスキーマに合わせたパースに失敗した場合などを考えると、「取り込み依頼」というエンティティがあるとみなして「取り込み依頼作成」イベントとして永続化しておく方法もあります。
 

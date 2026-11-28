@@ -922,7 +922,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     ] as const;
 
     it.each(consultations)(
-      '$id は、直前のやり取りを履歴に持ち、相手が 2 件投稿し、コードを実行した合図の後に返信できる',
+      '$id は、直前のやり取りを履歴に持ち、相手が 2 件投稿し、SQL を実行した合図の後に返信できる',
       (item) => {
         const scenario = lessonScenarios[item.id];
         if (scenario === undefined) throw new Error('筋書きがありません');
@@ -930,7 +930,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         expect(opened(scenario)).toEqual(item.opened);
         expect(summary(scenario)).toEqual(item.tabs);
         expect(scenario.chat.buttons.map((button) => [button.name, button.label])).toEqual([['reply', '返信する']]);
-        expect(scenario.gates?.reply.requires.map((requirement) => requirement.signal)).toEqual(['code:run']);
+        expect(scenario.gates?.reply.requires.map((requirement) => requirement.signal)).toEqual(['sql:executed']);
         expect(scenario.reply?.lines).toEqual([{ text: item.answer }]);
         expect(scenario.reply?.followUps.map((followUp) => [followUp.actor, followUp.text])).toEqual(item.follows);
         expect(scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]))).toEqual(item.waiting);
