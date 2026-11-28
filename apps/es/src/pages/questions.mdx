@@ -51,20 +51,9 @@ A. 3つあります。3つの形は、1つのシステムで併用できます�
 <CssTabs
   name="start"
   label="業務イベントの記録を始める3つの形"
-  labels={['ビジネスロジックをイベント中心に書く', 'ハンズオンの形で小さく始める', '特定の領域だけイベント中心に書く']}
+  labels={['ハンズオンの形で小さく始める', 'ビジネスロジックをイベント中心に書く', '特定の領域だけイベント中心に書く']}
 >
 <Fragment slot="tab-1">
-
-更新処理の関数は、DB に書き込まず、業務イベントを返します。保存する処理は、業務イベントが持つ変更後の状態を `visits` に書き、同じトランザクションで同じ業務イベントを `business_events` に書きます。`visits` に書く値と `target_state` に書く値は同じ業務イベントから取るので、一致します。
-
-<EventCenteredFigure />
-
-この形でも、現在の状態は `visits` から読みます。記録から現在の状態を組み立て直すことはしません。代わりに、既存の更新処理を書き直す作業が必要です。
-
-<CodeBlock code={eventCenteredCode} />
-
-</Fragment>
-<Fragment slot="tab-2">
 
 既存の更新処理に `INSERT` 文を1つ足します。ビジネスロジックは変えません。記録と状態の食い違いは残ります。
 
@@ -73,6 +62,17 @@ A. 3つあります。3つの形は、1つのシステムで併用できます�
   before={cancelVisitOf('chapter-1-start')}
   after={cancelVisitOf('chapter-2-step-2')}
 />
+
+</Fragment>
+<Fragment slot="tab-2">
+
+更新処理の関数は、DB に書き込まず、業務イベントを返します。保存する処理は、業務イベントが持つ変更後の状態を `visits` に書き、同じトランザクションで同じ業務イベントを `business_events` に書きます。`visits` に書く値と `target_state` に書く値は同じ業務イベントから取るので、一致します。
+
+<EventCenteredFigure />
+
+この形でも、現在の状態は `visits` から読みます。記録から現在の状態を組み立て直すことはしません。代わりに、既存の更新処理を書き直す作業が必要です。
+
+<CodeBlock code={eventCenteredCode} />
 
 </Fragment>
 <Fragment slot="tab-3">
