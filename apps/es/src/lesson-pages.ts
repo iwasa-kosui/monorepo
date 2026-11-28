@@ -118,8 +118,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-4/01': {
     flow: 'explain',
     mode: 'listen',
-    role:
-      '文書の「相談の一覧」で、ほかのチームから届いた3つの相談と、3つのパターンの実演を見た後に判断表で1つ選ぶというこの章の進め方を読む',
+    role: '経理からの問い合わせの内容と、いまのデータでは回答できない点を、文書の図で読む',
   },
   'chapter-4/02': {
     flow: 'demo',
@@ -133,33 +132,43 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     role: '同僚が書いた ADR 3 を読み、業務イベントを導入する前のデータの扱いを確認する',
   },
   'chapter-4/04': {
+    flow: 'explain',
+    mode: 'listen',
+    role: 'カスタマーサポートからの問い合わせの内容と、いまのデータでは回答できない点を、文書の図で読む',
+  },
+  'chapter-4/05': {
     flow: 'demo',
     mode: 'do',
     role:
       'カスタマーサポートからの質問について、予約サイトから届いたキャンセルと取り込んだ結果を業務イベントに残す方法を、エディタの完成コードと DB コンソールの SQL で確かめて返信する',
   },
-  'chapter-4/05': {
+  'chapter-4/06': {
     flow: 'explain',
     mode: 'listen',
     role: '同僚が書いた ADR 4 を読み、予約サイトから届いたキャンセルの記録の方法を確認する',
   },
-  'chapter-4/06': {
+  'chapter-4/07': {
+    flow: 'explain',
+    mode: 'listen',
+    role: '情シスからの問い合わせの内容と、いまのデータでは回答できない点を、文書の図で読む',
+  },
+  'chapter-4/08': {
     flow: 'demo',
     mode: 'do',
     role:
       '情シスからの質問について、監査ログで足りる領域と、イベントで残す領域を分ける方法を、エディタの完成コードと DB コンソールの SQL で確かめて返信する',
   },
-  'chapter-4/07': {
+  'chapter-4/09': {
     flow: 'explain',
     mode: 'listen',
     role: '同僚が書いた ADR 5 を読み、監査ログと業務イベントの役割の分け方を確認する',
   },
-  'chapter-4/08': {
+  'chapter-4/10': {
     flow: 'try',
     mode: 'do',
     role: '文書の比較表で、3つのパターンを同じ軸で比べ、普段の業務で運用しているシステムに近いパターンを1つ選ぶ',
   },
-  'chapter-4/09': {
+  'chapter-4/11': {
     flow: 'recap',
     mode: 'listen',
     role:

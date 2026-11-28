@@ -3,7 +3,13 @@ wide: true
 immersive: true
 ---
 
+import AdrOptions from '../../../components/adr/AdrOptions.astro';
+import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
+import AdrPanel from '../../../components/adr/AdrPanel.astro';
+import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
+import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import { chapter4MigrationAdr } from '../../../components/chapters/chapter-4';
+import MigrationCountFigure from '../../../components/figures/MigrationCountFigure.astro';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
@@ -15,62 +21,52 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter4MigrationAdr}>
 <Fragment slot="memo">
 
-- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
-- 日付: 2026-11-09
-- 作成者: 同僚
+<AdrTabs id="adr-3" labels={['背景', '決定', '結果', '検討した案']}>
 
-### 状況
+<AdrPanel lead="キャンセル数の集計は3件、業務イベントから数え直すと2件です。業務イベントを導入する前のキャンセルが、業務イベントに無いためです。">
 
-予約システムは、ADR 1 と ADR 2 のとおり、来院のキャンセルを業務イベント `VisitCancelled` として `business_events` テーブルに追記しています。業務イベントを導入する前のキャンセルは、`business_events` テーブルに行がありません。
+<MigrationCountFigure view="problem" />
 
-`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。4月1日のキャンセル数は3ですが、業務イベントから数え直すと2です。差の1は、業務イベントを導入する前のキャンセルです。
+<AdrPurpose
+  purpose="集計が正しいことを、数え直した値との一致で回答できるようにする"
+/>
 
-この ADR は、業務イベントを導入する前のデータの扱いを、次の3つの基準で決定します。
+</AdrPanel>
 
-- キャンセル数が正しいまま、業務イベントから数え直した値と一致すること
-- 記録に残っていない理由と操作者を作らないこと
-- 業務イベントを導入した後の出来事と、導入する前のデータを区別できること
+<AdrPanel lead="業務イベントを導入する前からある来院を、移行用のイベント `VisitMigrated` として取り込みます。">
 
-### 決定
+<MigrationCountFigure view="decision" />
 
-- 業務イベントを導入する前からある来院を、移行用のイベント `VisitMigrated` として `business_events` テーブルに取り込みます。
-- 移行用のイベントは、業務イベントを導入した後の `VisitCancelled` とは別の種類にします。
-- 移行用のイベントには、移行した時点の来院の状態だけを保存します。業務イベントを導入する前のキャンセルの理由と操作者は、どこにも残っていないので、作りません。
-- キャンセル数を業務イベントから数え直すときは、キャンセル済みの来院の `VisitMigrated` も数えます。
+キャンセル数を数え直すときは、キャンセル済みの来院の `VisitMigrated` も数えます。
 
-### 結果
+</AdrPanel>
 
-- 社内への価値: 経理から、キャンセル数の集計が正しいかを問い合わせられたときに、業務イベントから数え直した値と一致することを示して回答できます。
-- 低減するリスク: 集計と数え直した値に差が出たときに、原因を特定できないリスクを低減します。差が示すのは、業務イベントを通らないキャンセル数の書き換えだけになります。理由と操作者を作らないので、事実でない理由と操作者を回答するリスクも生じません。
-- 増大するリスク: `business_events` テーブルの行が、業務イベントを導入する前からある来院の数だけ増え、保存するデータ量が増えます。
-- 残るリスク: 業務イベントを導入する前のキャンセルは、理由、操作者、キャンセルした日時を問い合わせられても回答できません。
+<AdrPanel>
 
-### 検討した案
+<AdrOutcomes items={[
+  { kind: 'value', label: '社内への価値', text: '経理から問い合わせられたときに、集計が数え直した値と一致することを示して回答できます。' },
+  { kind: 'reduced', label: '低減するリスク', text: '集計と数え直した値の差が示すのは、業務イベントを通らないキャンセル数の書き換えだけになります。' },
+  { kind: 'increased', label: '増大するリスク', text: '`business_events` テーブルの行が、業務イベントを導入する前からある来院の数だけ増えます。' },
+  { kind: 'remaining', label: '残るリスク', text: '業務イベントを導入する前のキャンセルは、理由、操作者、キャンセルした日時を回答できません。' },
+]} />
 
-採用した案と、採用しなかった3つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
+</AdrPanel>
 
-<div data-alternatives-table>
+<AdrPanel>
 
-| 案 | キャンセル数が正しいまま一致する | 理由と操作者を作らない | 導入の前後を区別できる |
-|---|---|---|---|
-| `VisitMigrated` として取り込む（採用） | ○ | ○ | ○ |
-| 取り込まない | × | ○ | ○ |
-| キャンセル数を業務イベントから作り直す | × | ○ | ○ |
-| `VisitCancelled` として取り込む | ○ | × | × |
+<AdrOptions
+  id="adr-3"
+  criteria={['キャンセル数が正しいまま一致する', '理由と操作者を作らない', '導入の前後を区別できる']}
+  options={[
+    { name: '`VisitMigrated` として取り込む', adopted: true, marks: ['○', '○', '○'], merit: '集計が数え直した値と一致し、導入の前後も区別できます。', demerit: '`business_events` テーブルの行が、導入する前からある来院の数だけ増えます。' },
+    { name: '取り込まない', marks: ['×', '○', '○'], merit: '移行の作業が要りません。', demerit: '数え直した値が集計より少ないままになり、差の原因を区別できません。' },
+    { name: 'キャンセル数を業務イベントから作り直す', marks: ['×', '○', '○'], merit: 'キャンセル数が、数え直した値と常に一致します。', demerit: '導入する前のキャンセルが消え、4月1日は正しい3件ではなく2件になります。' },
+    { name: '`VisitCancelled` として取り込む', marks: ['○', '×', '×'], merit: 'キャンセル数を数え直す SQL を変えずに済みます。', demerit: '残っていない理由と操作者を空にするか作るかになり、導入した後のキャンセルと区別できません。' },
+  ]}
+/>
 
-</div>
-
-#### 取り込まない
-
-移行の作業が要らず、`business_events` テーブルには業務イベントを導入した後の出来事だけが残ります。しかし、業務イベントから数え直した値は、キャンセル数より少ないままです。差が出たときに、差が業務イベントを導入する前のキャンセルなのか、業務イベントを通らないキャンセル数の書き換えなのかを、区別できません。
-
-#### キャンセル数を業務イベントから作り直す
-
-キャンセル数が業務イベントだけから決まるので、業務イベントから数え直した値と常に一致します。しかし、業務イベントを導入する前のキャンセルが、キャンセル数から消えます。4月1日のキャンセル数は2になりますが、正しい件数は3です。
-
-#### `VisitCancelled` として取り込む
-
-キャンセル数を数え直す SQL を変えずに済みます。しかし、`VisitCancelled` の `payload` は、キャンセルの理由と操作者を持ちます。業務イベントを導入する前のキャンセルには、理由と操作者が残っていないので、空にするか、作るかになります。業務イベントを導入した後のキャンセルと区別することもできません。
+</AdrPanel>
+</AdrTabs>
 
 </Fragment>
 </Workspace>

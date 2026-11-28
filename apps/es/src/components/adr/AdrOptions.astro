@@ -1,0 +1,353 @@
+---
+import { richHtml } from '../figures/rich';
+
+type Mark = '○' | '△' | '×';
+type Option = {
+  readonly name: string;
+  readonly adopted?: boolean;
+  readonly marks: readonly Mark[];
+  readonly merit: string;
+  readonly demerit: string;
+};
+type Props = {
+  readonly id: string;
+  readonly criteria: readonly string[];
+  readonly options: readonly Option[];
+};
+
+const { id, criteria, options } = Astro.props;
+
+const headRem = 1;
+const emWidth = (text: string): number =>
+  text.split('`').reduce(
+    (sum, part, index) => sum + part.length * (index % 2 === 1 ? 0.6 : 1),
+    0,
+  );
+const columnRem = (text: string): number =>
+  Math.max(4, Math.ceil((emWidth(text) / 2 + 1) * headRem * 4) / 4);
+const columns = criteria.map((criterion) => `${columnRem(criterion)}rem`).join(
+  ' ',
+);
+
+const selected = Math.max(
+  0,
+  options.findIndex((option) => option.adopted === true),
+);
+const meaning: Record<Mark, string> = {
+  '○': '満たす',
+  '△': '一部だけ満たす',
+  '×': '満たさない',
+};
+---
+
+<div class="adr-options" data-adr-options style={`--adr-columns:${columns}`}>
+  {
+    options.map((_, index) => (
+      <input
+        class="adr-sr"
+        type="radio"
+        name={`${id}-option`}
+        id={`${id}-option-${index}`}
+        checked={index === selected}
+      />
+    ))
+  }
+  <div class="adr-body">
+    <div class="adr-list">
+      <div class="adr-head">
+        <span>案</span>
+        {criteria.map((criterion) => <span set:html={richHtml(criterion)} />)}
+      </div>
+      {
+        options.map((option, index) => (
+          <label class="adr-row" for={`${id}-option-${index}`}>
+            <span class="adr-name">
+              <span set:html={richHtml(option.name)} />
+              {option.adopted === true && <span class="adr-badge">採用</span>}
+            </span>
+            {
+              option.marks.map((mark) => (
+                <span class="adr-mark" data-mark={mark}>
+                  <span aria-hidden="true">{mark}</span>
+                  <span class="adr-sr">{meaning[mark]}</span>
+                </span>
+              ))
+            }
+          </label>
+        ))
+      }
+    </div>
+    <div class="adr-detail">
+      {
+        options.map((option) => (
+          <div class="adr-detail-item">
+            <div class="adr-detail-row">
+              <span class="adr-tag" data-kind="merit">利点</span>
+              <span set:html={richHtml(option.merit)} />
+            </div>
+            <div class="adr-detail-row">
+              <span class="adr-tag" data-kind="demerit">欠点</span>
+              <span set:html={richHtml(option.demerit)} />
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</div>
+
+<style>
+.adr-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.adr-options {
+  container-type: inline-size;
+  margin-top: var(--space-1);
+  font-size: var(--text-code);
+  line-height: var(--leading-tight);
+}
+.adr-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+}
+.adr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.adr-head,
+.adr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--adr-columns);
+  align-items: center;
+  gap: var(--space-1);
+}
+.adr-head {
+  align-items: end;
+  padding-inline: var(--space-2);
+  color: var(--role-muted);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+  text-align: center;
+  text-wrap: balance;
+  word-break: auto-phrase;
+}
+.adr-head > :first-child {
+  text-align: left;
+}
+.adr-head :global(code) {
+  font-size: inherit;
+}
+.adr-row {
+  border-radius: var(--radius-md);
+  padding: 0.125rem var(--space-2);
+  cursor: pointer;
+}
+.adr-row:hover {
+  background: var(--role-sunken);
+}
+.adr-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  word-break: auto-phrase;
+}
+.adr-badge {
+  border-radius: var(--radius-sm);
+  background: var(--role-ink-sub);
+  padding: 0 var(--space-1);
+  color: var(--role-on-strong);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.adr-mark {
+  text-align: center;
+  font-size: var(--text-code);
+  line-height: 1.1;
+}
+.adr-mark[data-mark="○"] {
+  color: var(--role-success);
+}
+.adr-mark[data-mark="△"] {
+  color: var(--role-ink-sub);
+}
+.adr-mark[data-mark="×"] {
+  color: var(--role-danger);
+}
+.adr-detail-item {
+  display: none;
+}
+.adr-detail-row {
+  margin-top: var(--space-1);
+  line-height: var(--leading-normal);
+}
+.adr-tag {
+  margin-right: var(--space-1);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  font-size: var(--text-note);
+}
+.adr-tag[data-kind="merit"] {
+  background: var(--role-success-soft);
+  color: var(--role-success);
+}
+.adr-tag[data-kind="demerit"] {
+  background: var(--role-danger-soft);
+  color: var(--role-danger);
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  :global(.doc-paper)
+  .adr-options
+  :global(code) {
+  font-size: 0.9em;
+}
+.adr-options
+  > input:nth-of-type(1):checked
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(1),
+.adr-options
+  > input:nth-of-type(2):checked
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(2),
+.adr-options
+  > input:nth-of-type(3):checked
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(3),
+.adr-options
+  > input:nth-of-type(4):checked
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(4),
+.adr-options
+  > input:nth-of-type(5):checked
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(5),
+.adr-options
+  > input:nth-of-type(6):checked
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(6),
+.adr-options
+  > input:nth-of-type(7):checked
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(7),
+.adr-options
+  > input:nth-of-type(8):checked
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(8) {
+  background: var(--role-accent-soft);
+}
+.adr-options
+  > input:nth-of-type(1):focus-visible
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(1),
+.adr-options
+  > input:nth-of-type(2):focus-visible
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(2),
+.adr-options
+  > input:nth-of-type(3):focus-visible
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(3),
+.adr-options
+  > input:nth-of-type(4):focus-visible
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(4),
+.adr-options
+  > input:nth-of-type(5):focus-visible
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(5),
+.adr-options
+  > input:nth-of-type(6):focus-visible
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(6),
+.adr-options
+  > input:nth-of-type(7):focus-visible
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(7),
+.adr-options
+  > input:nth-of-type(8):focus-visible
+  ~ .adr-body
+  .adr-list
+  > label:nth-of-type(8) {
+  outline: 2px solid var(--role-accent);
+  outline-offset: 1px;
+}
+.adr-options
+  > input:nth-of-type(1):checked
+  ~ .adr-body
+  .adr-detail
+  > :nth-child(1),
+.adr-options
+  > input:nth-of-type(2):checked
+  ~ .adr-body
+  .adr-detail
+  > :nth-child(2),
+.adr-options
+  > input:nth-of-type(3):checked
+  ~ .adr-body
+  .adr-detail
+  > :nth-child(3),
+.adr-options
+  > input:nth-of-type(4):checked
+  ~ .adr-body
+  .adr-detail
+  > :nth-child(4),
+.adr-options
+  > input:nth-of-type(5):checked
+  ~ .adr-body
+  .adr-detail
+  > :nth-child(5),
+.adr-options
+  > input:nth-of-type(6):checked
+  ~ .adr-body
+  .adr-detail
+  > :nth-child(6),
+.adr-options
+  > input:nth-of-type(7):checked
+  ~ .adr-body
+  .adr-detail
+  > :nth-child(7),
+.adr-options
+  > input:nth-of-type(8):checked
+  ~ .adr-body
+  .adr-detail
+  > :nth-child(8) {
+  display: block;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .adr-detail-item {
+    animation: adr-detail-in 0.2s ease-out both;
+  }
+}
+@keyframes adr-detail-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+</style>

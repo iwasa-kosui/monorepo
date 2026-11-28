@@ -65,3 +65,88 @@
   background: var(--role-rail);
   font-weight: var(--weight-bold);
 }
+.content .cfig .cfig-callout {
+  --cfig-callout-line: var(--role-danger);
+  --cfig-callout-bg: var(--role-danger-soft);
+  position: relative;
+  box-sizing: border-box;
+  border: 1px solid var(--cfig-callout-line);
+  border-radius: var(--radius-md);
+  background: var(--cfig-callout-bg);
+  padding: var(--space-1) var(--space-2);
+  color: var(--role-fg);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+.content .cfig .cfig-callout[data-tone="ok"] {
+  --cfig-callout-line: var(--role-success);
+  --cfig-callout-bg: var(--role-success-soft);
+}
+.content .cfig .cfig-callout-label {
+  margin-right: var(--space-1);
+  color: var(--cfig-callout-line);
+  font-size: var(--fig-label);
+}
+.content .cfig .cfig-callout[data-tail]::before,
+.content .cfig .cfig-callout[data-tail]::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent;
+}
+.content .cfig .cfig-callout[data-tail="top"]::before {
+  top: -8px;
+  left: calc(var(--cfig-tail-at, 50%) - 7px);
+  border-width: 0 7px 8px;
+  border-bottom-color: var(--cfig-callout-line);
+}
+.content .cfig .cfig-callout[data-tail="top"]::after {
+  top: -7px;
+  left: calc(var(--cfig-tail-at, 50%) - 6px);
+  border-width: 0 6px 7px;
+  border-bottom-color: var(--cfig-callout-bg);
+}
+.content .cfig .cfig-callout[data-tail="bottom"]::before {
+  bottom: -8px;
+  left: calc(var(--cfig-tail-at, 50%) - 7px);
+  border-width: 8px 7px 0;
+  border-top-color: var(--cfig-callout-line);
+}
+.content .cfig .cfig-callout[data-tail="bottom"]::after {
+  bottom: -7px;
+  left: calc(var(--cfig-tail-at, 50%) - 6px);
+  border-width: 7px 6px 0;
+  border-top-color: var(--cfig-callout-bg);
+}
+.content .cfig .cfig-callout[data-tail="left"]::before {
+  left: -8px;
+  top: calc(var(--cfig-tail-at, 50%) - 7px);
+  border-width: 7px 8px 7px 0;
+  border-right-color: var(--cfig-callout-line);
+}
+.content .cfig .cfig-callout[data-tail="left"]::after {
+  left: -7px;
+  top: calc(var(--cfig-tail-at, 50%) - 6px);
+  border-width: 6px 7px 6px 0;
+  border-right-color: var(--cfig-callout-bg);
+}
+.content .cfig .cfig-callout[data-tail="right"]::before {
+  right: -8px;
+  top: calc(var(--cfig-tail-at, 50%) - 7px);
+  border-width: 7px 0 7px 8px;
+  border-left-color: var(--cfig-callout-line);
+}
+.content .cfig .cfig-callout[data-tail="right"]::after {
+  right: -7px;
+  top: calc(var(--cfig-tail-at, 50%) - 6px);
+  border-width: 6px 0 6px 7px;
+  border-left-color: var(--cfig-callout-bg);
+}
+
+.content .cfig {
+  --role-accent: var(--role-ink-sub);
+  --role-accent-strong: var(--role-ink-sub);
+  --role-accent-soft: var(--role-ground);
+}

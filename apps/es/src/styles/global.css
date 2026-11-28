@@ -409,6 +409,31 @@ body:not(.chapter-page):has(.top-page) .content {
   font-size: var(--text-note);
   line-height: var(--leading-normal);
 }
+.content .top-share-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.content .top-share-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--role-surface);
+  width: var(--tap-min);
+  height: var(--tap-min);
+  color: var(--role-ink-sub);
+}
+.content .top-share-link:hover {
+  color: var(--role-ink);
+}
+.content .top-share-link:focus-visible {
+  outline: 3px solid var(--role-ink);
+  outline-offset: 2px;
+}
 .content .top-flow-panel {
   display: flex;
   flex: 1 1 27.5rem;

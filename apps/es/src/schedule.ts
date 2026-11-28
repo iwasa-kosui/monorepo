@@ -22,7 +22,7 @@ export const schedule: readonly ScheduleRow[] = [
     title: '第4章 3パターンを比較する',
     minutes: 8,
     parts: '実演6分、判断表で比べて選ぶ2分',
-    pageStarts: [0, 0, 1, 2, 3, 4, 5, 6, 7],
+    pageStarts: [0, 0, 1, 2, 2, 3, 4, 4, 5, 6, 7],
   },
   { id: 'summary', title: 'まとめ', minutes: 3 },
 ];

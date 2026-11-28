@@ -1,0 +1,515 @@
+---
+import './figure.css';
+
+type Props = { readonly view?: 'split' | 'merged' };
+type Fn = {
+  readonly name: string;
+  readonly note?: string;
+  readonly ghost?: true;
+};
+type Table = {
+  readonly name: string;
+  readonly note: string;
+  readonly ghost?: true;
+};
+type Column = { readonly name: string; readonly note: string };
+
+const { view = 'split' } = Astro.props;
+const merged = view === 'merged';
+
+const fns: readonly Fn[] = [
+  { name: 'cancelVisit', note: '来院のキャンセル' },
+  { name: 'completeVisit', note: '診察の完了' },
+  { name: 'これから記録する出来事', ghost: true },
+];
+const tables: readonly Table[] = [
+  { name: 'visit_cancellations', note: 'ADR 1 で追加' },
+  { name: '診察の完了を記録するテーブル', note: '追加が必要', ghost: true },
+  { name: '出来事ごとのテーブル', note: '追加が必要', ghost: true },
+];
+const columns: readonly Column[] = [
+  { name: 'event_name', note: '出来事の種類' },
+  { name: 'payload', note: '出来事ごとに異なる値（JSON）' },
+  { name: 'target_state', note: 'その時点の対象の状態' },
+];
+const mergedName = 'business_events';
+const label = merged
+  ? '出来事の記録を1つのテーブルにまとめると、記録する出来事を追加してもテーブルが増えない図'
+  : '出来事ごとにテーブルを作ると、記録する出来事を追加するたびにテーブルが増える図';
+---
+
+<section
+  class="cfig growth"
+  data-table-growth-figure
+  data-view={view}
+  aria-label={label}
+>
+  <div class="grid">
+    <div class="col col-write">
+      <div class="col-head">更新処理</div>
+      {
+        fns.map((fn, index) => (
+          <div
+            class:list={['fn', { ghost: fn.ghost === true }]}
+            style={`--i:${index}`}
+          >
+            {
+              fn.ghost === true
+            ? (
+                <span class="fn-name">{fn.name}</span>
+              )
+            : <span class="fn-name mono">{fn.name}</span>
+            }
+            {fn.note !== undefined && <span class="note">{fn.note}</span>}
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="link link-write" aria-hidden="true">
+      {
+        fns.map((fn, index) => (
+          <span
+            class:list={[
+              'hline',
+              {
+                ghost: merged
+                  ? fn.ghost === true
+                  : tables[index]?.ghost === true,
+              },
+            ]}
+            style={`--i:${3 + index}`}
+          >
+          </span>
+        ))
+      }
+    </div>
+
+    {
+      merged
+        ? (
+        <div class="col col-tables">
+          <div class="col-head">1つのテーブル</div>
+          <span class="cfig-sr">
+            左の3つの更新処理すべてが、このテーブルに書き込みます。
+          </span>
+          <div class="tbl tbl-merged" style="--i: 3">
+            <div class="tbl-head">
+              <span
+                class="mono"
+                set:html={mergedName.replace(/_/g, '_<wbr />')}
+              />
+            </div>
+            {
+              columns.map((column, index) => (
+                <div class="tbl-row" style={`--i:${3 + index}`}>
+                  <span class="mono tbl-col">{column.name}</span>
+                  <span class="note">{column.note}</span>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )
+        : (
+        <div class="col col-tables">
+          <div class="col-head">出来事ごとのテーブル</div>
+          <span class="cfig-sr">
+            左の更新処理が、上から順に1つずつ書き込みます。
+          </span>
+          {
+            tables.map((table, index) => (
+              <div
+                class:list={['tbl', { ghost: table.ghost === true }]}
+                style={`--i:${3 + index}`}
+              >
+                <div class="tbl-head">
+                  {
+                    table.ghost === true
+              ? (
+                      <span>{table.name}</span>
+                    )
+              : (
+                      <span
+                        class="mono"
+                        set:html={table.name.replace(/_/g, '_<wbr />')}
+                      />
+                    )
+                  }
+                </div>
+                <div class="tbl-body note">{table.note}</div>
+              </div>
+            ))
+          }
+        </div>
+      )
+    }
+
+    {
+      merged
+        ? (
+        <div class="link link-read single" aria-hidden="true" style="--i: 6">
+          <span class="hline"></span>
+        </div>
+      )
+        : (
+        <div class="link link-read" aria-hidden="true" style="--i: 6">
+          <span class="merge first"></span>
+          <span class="merge mid"><span class="out"></span></span>
+          <span class="merge last"></span>
+        </div>
+      )
+    }
+
+    <div class="col col-read">
+      <div class="col-head">読み取り</div>
+      <span class="cfig-sr">
+        {
+          merged
+            ? '中央のテーブルを読みます。'
+            : '中央の3つのテーブルすべてを読みます。'
+        }
+      </span>
+      <div class="fn read" style="--i: 7">
+        <span class="fn-name">
+          1つの来院に起きた出来事を、時刻の順に読む SQL
+        </span>
+      </div>
+    </div>
+
+    {
+      merged
+        ? (
+        <>
+          <div
+            class="cfig-callout callout-tables"
+            data-tone="ok"
+            data-tail="top"
+            style="--i: 8"
+          >
+            <span class="cfig-callout-label"
+            >解決</span>記録する出来事を追加しても、テーブルと SQL が増えない
+          </div>
+          <div
+            class="cfig-callout callout-read"
+            data-tone="problem"
+            data-tail="top"
+            style="--i: 9"
+          >
+            <span class="cfig-callout-label">引き換え</span>
+            <code>payload</code> の中の値は DB
+            が検査せず、外部キー制約も設定できない
+          </div>
+        </>
+      )
+        : (
+        <>
+          <div
+            class="cfig-callout callout-tables"
+            data-tone="problem"
+            data-tail="top"
+            style="--i: 8"
+          >
+            <span class="cfig-callout-label"
+            >課題</span>記録する出来事を追加するたびに、テーブルと SQL が増える
+          </div>
+          <div
+            class="cfig-callout callout-read"
+            data-tone="problem"
+            data-tail="top"
+            style="--i: 9"
+          >
+            <span class="cfig-callout-label"
+            >課題</span>すべてのテーブルを参照する必要がある
+          </div>
+        </>
+      )
+    }
+  </div>
+</section>
+
+<style>
+.cfig.growth {
+  word-break: auto-phrase;
+  --fig-small: var(--text-note);
+  --fig-code: var(--text-note);
+  container-type: inline-size;
+}
+.mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+}
+
+.grid {
+  --link: 2rem;
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.05fr) var(--link) minmax(0, 1.3fr) var(--link)
+    minmax(0, 0.95fr);
+  grid-template-rows: auto auto auto auto auto;
+  min-width: 34rem;
+}
+
+.col {
+  display: grid;
+  grid-row: 1 / span 4;
+  grid-template-rows: subgrid;
+  min-width: 0;
+}
+.col-write {
+  grid-column: 1;
+}
+.col-tables {
+  grid-column: 3;
+}
+.col-read {
+  grid-column: 5;
+}
+.col-head {
+  padding-bottom: 0.125rem;
+  font-size: var(--fig-small);
+  line-height: var(--leading-tight);
+}
+
+.fn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+  margin-block: 0.125rem;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--role-ground);
+  padding: var(--space-1) var(--space-2);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+.fn-name {
+  font-size: var(--fig-small);
+}
+.fn .mono {
+  font-size: var(--fig-code);
+}
+.note {
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+.fn.read {
+  grid-row: 2 / 5;
+  align-items: center;
+  text-align: center;
+}
+
+.tbl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-block: 0.125rem;
+  border: 2px solid var(--role-accent-strong);
+  border-radius: var(--radius-md);
+  background: var(--role-ground);
+  overflow: hidden;
+}
+.tbl-head {
+  background: var(--role-accent-strong);
+  padding: 0 var(--space-2);
+  color: var(--role-on-strong);
+  font-size: var(--fig-small);
+  line-height: var(--leading-tight);
+}
+.tbl-head .mono {
+  font-size: var(--fig-code);
+}
+.tbl-body {
+  padding: 0 var(--space-2);
+}
+.tbl-merged {
+  grid-row: 2 / 5;
+}
+.tbl-row {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 var(--space-2);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+.tbl-row:nth-child(even) {
+  background: var(--role-surface);
+}
+.fn.ghost,
+.tbl.ghost {
+  border: 2px dashed var(--role-ink-sub);
+  background: transparent;
+}
+.tbl.ghost .tbl-head {
+  border-bottom: 2px dashed var(--role-ink-sub);
+  background: transparent;
+  color: var(--role-fg);
+}
+.fn.ghost .fn-name {
+  color: var(--role-muted);
+}
+
+.link {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: 2 / span 3;
+  min-width: 0;
+}
+.link-write {
+  grid-column: 2;
+}
+.link-read {
+  grid-column: 4;
+}
+.link-read.single .hline {
+  grid-row: 1 / -1;
+}
+.hline {
+  position: relative;
+  align-self: center;
+  height: 2px;
+  margin-inline: var(--space-1) 0.375rem;
+  background: var(--role-accent-strong);
+}
+.hline::after {
+  position: absolute;
+  top: 50%;
+  right: -0.3125rem;
+  border: 0.3125rem solid transparent;
+  border-right: 0;
+  border-left-color: var(--role-accent-strong);
+  content: "";
+  transform: translateY(-50%);
+}
+.hline.ghost {
+  background: var(--role-ink-sub);
+}
+.hline.ghost::after {
+  border-left-color: var(--role-ink-sub);
+}
+
+.merge {
+  position: relative;
+}
+.merge::before {
+  position: absolute;
+  top: calc(50% - 1px);
+  right: 50%;
+  left: 0;
+  height: 2px;
+  background: var(--role-accent-strong);
+  content: "";
+}
+.merge::after {
+  position: absolute;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--role-accent-strong);
+  content: "";
+}
+.merge.first::after {
+  top: 50%;
+  bottom: 0;
+}
+.merge.mid::after {
+  top: 0;
+  bottom: 0;
+}
+.merge.last::after {
+  top: 0;
+  bottom: 50%;
+}
+.out {
+  position: absolute;
+  top: calc(50% - 1px);
+  right: 0.375rem;
+  left: 50%;
+  height: 2px;
+  background: var(--role-accent-strong);
+}
+.out::after {
+  position: absolute;
+  top: 50%;
+  right: -0.3125rem;
+  border: 0.3125rem solid transparent;
+  border-right: 0;
+  border-left-color: var(--role-accent-strong);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.callout-tables {
+  grid-column: 1 / 4;
+  grid-row: 5;
+  justify-self: end;
+  width: min(100%, 21rem);
+  margin-top: var(--space-1);
+}
+.callout-read {
+  grid-column: 4 / 6;
+  grid-row: 5;
+  justify-self: end;
+  width: 100%;
+  margin-top: var(--space-1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fn,
+  .tbl,
+  .tbl-row,
+  .link-read,
+  .cfig-callout {
+    animation: fig-in 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.35s);
+  }
+  .hline {
+    animation: fig-in-x 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.35s);
+  }
+  .cfig-callout {
+    transform-origin: 50% top;
+    animation-name: fig-pop;
+  }
+}
+@keyframes fig-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fig-in-x {
+  from {
+    opacity: 0;
+    transform: translateX(-0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fig-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@container (max-width: 40rem) {
+  .callout-tables {
+    width: min(100%, 18rem);
+  }
+}
+</style>

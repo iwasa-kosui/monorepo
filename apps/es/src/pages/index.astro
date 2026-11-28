@@ -1,6 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 
+import ShareLinks from '../components/ShareLinks.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { buildChapterPages, pagePath } from '../lib/chapter-routes';
 import { formatClock, schedule, withTimeRanges } from '../schedule';
@@ -62,6 +63,7 @@ const meterLabel = `教材の流れ。${
         の UPDATE と INSERT が読めることです。TypeScript
         は読めれば十分です。手元で動かす方は、事前準備を当日までに済ませてください。
       </p>
+      <ShareLinks pageUrl={new URL('/', Astro.site).href} title={siteTitle} />
     </section>
     <section class="top-flow-panel">
       <div class="top-flow-head">

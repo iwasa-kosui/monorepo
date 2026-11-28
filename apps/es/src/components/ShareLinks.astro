@@ -1,0 +1,35 @@
+---
+import { buildShareLinks } from '../lib/share-links';
+
+type Props = { pageUrl: string; title: string };
+
+const { pageUrl, title } = Astro.props;
+const links = buildShareLinks(pageUrl, title);
+---
+
+<ul class="top-share-list" aria-label="シェア">
+  {
+    links.map((link) => (
+      <li>
+        <a
+          class="top-share-link"
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={link.ariaLabel}
+          title={link.ariaLabel}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d={link.iconPath} />
+          </svg>
+        </a>
+      </li>
+    ))
+  }
+</ul>
