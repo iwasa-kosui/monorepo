@@ -271,6 +271,26 @@
   padding: var(--main-pad-top) var(--main-pad-x) var(--space-5);
 }
 
+/* スマホでワークを全画面にしているあいだは、ページ送りの帯を畳み、押すボタンがあるときだけ作業の帯を残す */
+html[data-work-full] .lesson-bar {
+  display: none;
+}
+html[data-work-full] .lesson-main {
+  position: relative;
+  overflow: clip;
+}
+html[data-work-full] .action-bar {
+  padding-block: var(--space-2);
+}
+html[data-work-full] .action-bar__text {
+  display: none;
+}
+html[data-work-full]
+  .action-bar:not(:has(.action-bar__slot
+    > button, .action-bar__next:not([hidden]))) {
+  display: none;
+}
+
 @media (max-width: 1023px) {
   .lesson-bar {
     display: grid;

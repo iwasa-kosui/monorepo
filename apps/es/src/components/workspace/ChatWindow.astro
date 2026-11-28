@@ -902,6 +902,13 @@ const railActors = railActorIds.flatMap((id) => {
   :global(.scene[data-scenario]) .chat-rail {
     display: none;
   }
+  /* スマホの幅では投稿の欄を広く取るため、チャンネルは横の一覧でなく上の列に出す */
+  :global(.scene[data-scenario]) .chat-side {
+    display: none;
+  }
+  :global(.scene[data-scenario]) .chat-channels {
+    display: flex;
+  }
   :global(.scene[data-scenario]) .feed {
     flex: 1 1 0;
     min-height: 14rem;
@@ -910,6 +917,13 @@ const railActors = railActorIds.flatMap((id) => {
   :global(.scene[data-scenario]) .ph,
   :global(.scene[data-scenario]) .send-shape {
     display: none;
+  }
+  /* 右下に浮かぶ全画面のボタンと、返信のボタンが重ならないよう右を空ける */
+  :global(.scene[data-scenario]) .compose-foot {
+    padding-right: var(--space-4);
+  }
+  :global(.scene[data-scenario]) .actions button {
+    padding-inline: var(--space-2);
   }
 }
 @media (min-width: 1024px) {
