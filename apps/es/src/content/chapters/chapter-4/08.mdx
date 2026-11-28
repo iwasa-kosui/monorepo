@@ -3,12 +3,9 @@ wide: true
 immersive: true
 ---
 
-import CodeBlock from '../../../components/CodeBlock.astro';
 import CodePlayground from '../../../components/CodePlayground.astro';
-import ConsoleTable from '../../../components/ConsoleTable.astro';
 import { chapter4AuditLog } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
-import { readFunctionsOf } from '../../../lib/snapshots';
 
 <div class="visually-hidden">
 
@@ -38,47 +35,6 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 実行結果の表の1行目は、業務イベントを導入する前の変更です。2行目と3行目は、変更前後の値が同じです。担当者は `reason` で2つを見分けられます。4行目の診察の完了は、まだ業務イベントを記録していないので、`reason` が `null` です。
 
 監査ログそのものをイベントログから生成してしまう方法もあります。イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
-
-<div class="detail-row">
-
-<details>
-<summary>読み取り関数を見る</summary>
-
-<CodeBlock code={readFunctionsOf('chapter-4-audit-log-done', 'explainChange')} />
-
-</details>
-
-<details>
-<summary>出力例を見る</summary>
-
-<ConsoleTable
-  head={['(index)', 'auditLogId', 'oldValue', 'newValue', 'operatedBy', 'operatedAt', 'eventName', 'reason']}
-  rows={[
-    ['0', '1', "'reserved'", "'cancelled'", "'受付スタッフ'", "'2026-10-15T01:20:00.000Z'", 'null', 'null'],
-    ['1', '2', "'reserved'", "'cancelled'", "'受付スタッフ'", "'2026-11-27T17:16:45.456Z'", "'VisitCancelled'", "'飼い主の都合'"],
-    ['2', '3', "'reserved'", "'cancelled'", "'受付スタッフ'", "'2026-11-27T17:16:45.457Z'", "'VisitCancelled'", "'来院前に回復したため'"],
-    ['3', '4', "'reserved'", "'completed'", "'獣医師'", "'2026-11-27T17:16:45.457Z'", 'null', 'null'],
-  ]}
-/>
-
-<ConsoleTable
-  head={['(index)', 'auditLogId', 'rowId', 'oldValue', 'newValue', 'operatedBy', 'operatedAt']}
-  rows={[
-    ['0', '1', "'visit-4'", "'reserved'", "'cancelled'", "'受付スタッフ'", "'2026-10-15T01:20:00.000Z'"],
-    ['1', '4', "'visit-3'", "'reserved'", "'completed'", "'獣医師'", "'2026-11-27T17:16:45.457Z'"],
-  ]}
-/>
-
-</details>
-
-<details>
-<summary>手元の Node で動かすとき</summary>
-
-`chapter-4-audit-log-done` で `node why-changed.ts` を実行します。
-
-</details>
-
-</div>
 
 </Fragment>
 </Workspace>

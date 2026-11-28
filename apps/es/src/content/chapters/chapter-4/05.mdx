@@ -3,12 +3,9 @@ wide: true
 immersive: true
 ---
 
-import CodeBlock from '../../../components/CodeBlock.astro';
 import CodePlayground from '../../../components/CodePlayground.astro';
-import ConsoleTable from '../../../components/ConsoleTable.astro';
 import { chapter4ExternalSync } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
-import { readFunctionsOf } from '../../../lib/snapshots';
 
 <div class="visually-hidden">
 
@@ -41,37 +38,6 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 実行結果の表の1行目は、届いたキャンセルを取り込み、来院をキャンセルした例です。2行目は、診察が終わった来院に、予約サイトからキャンセルが届いた例です。予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。事実は取り込み、状態は変化させません。`result` の `rejected` は、届いたキャンセルで来院の状態を変えなかったことを表します。`rejectedReason` は、状態を変えなかった理由です。
 
 そもそも自プロダクトのスキーマに合わせたパースに失敗した場合などを考えると、「取り込み依頼」というエンティティがあるとみなして「取り込み依頼作成」イベントとして永続化しておく方法もあります。
-
-<div class="detail-row">
-
-<details>
-<summary>読み取り関数を見る</summary>
-
-<CodeBlock code={readFunctionsOf('chapter-4-external-sync-done', 'findImportRecords')} />
-
-</details>
-
-<details>
-<summary>出力例を見る</summary>
-
-<ConsoleTable
-  head={['(index)', 'visitId', 'petName', 'operatedAt', 'receivedAt', 'cancelReason', 'result', 'rejectedReason']}
-  rows={[
-    ['0', "'visit-1'", "'ポチ'", "'2026-11-20T09:00:00.000Z'", "'2026-11-27T14:36:07.121Z'", "'飼い主の都合'", "'applied'", 'null'],
-    ['1', "'visit-2'", "'コタロウ'", "'2026-11-20T09:30:00.000Z'", "'2026-11-27T14:36:07.122Z'", "'来院前に回復したため'", "'rejected'", "'診察が終わった来院はキャンセルできません'"],
-  ]}
-/>
-
-</details>
-
-<details>
-<summary>手元の Node で動かすとき</summary>
-
-`chapter-4-external-sync-done` で `node what-was-imported.ts` を実行します。
-
-</details>
-
-</div>
 
 </Fragment>
 </Workspace>
