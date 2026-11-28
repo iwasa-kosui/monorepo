@@ -1,6 +1,7 @@
 import type { Post, TimelineEvent } from './scenario';
 
 type Channeled = Pick<Post, 'channel'>;
+type Dated = Pick<Post, 'day'>;
 
 export const typingLeadMs = 1500;
 
@@ -28,6 +29,20 @@ export const postsInChannel = <T extends Channeled>(
 
 export const placeholderOf = (channel: string, defaultChannel: string, defaultPlaceholder: string): string =>
   channel === defaultChannel ? defaultPlaceholder : defaultPlaceholder.replace(defaultChannel, () => channel);
+
+export const todayLabel = '今日';
+
+export const dayOfPost = (post: Dated): string => post.day ?? todayLabel;
+
+export const dayDividers = (posts: readonly Dated[]): (string | null)[] => {
+  let previous: string | null = null;
+  return posts.map((post) => {
+    const day = dayOfPost(post);
+    const label = previous === null ? (post.day === undefined ? null : day) : day === previous ? null : day;
+    previous = day;
+    return label;
+  });
+};
 
 export const typingStartMs = (atSeconds: number): number => atSeconds * 1000 - typingLeadMs;
 

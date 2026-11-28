@@ -57,7 +57,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-1/01': {
     flow: 'try',
     mode: 'do',
-    role: 'アクセスログとDBバックアップで、ポチのキャンセルを調べる',
+    role: 'アクセスログとDBバックアップで、3ヶ月前のポチの受付を調べる',
   },
   'chapter-1/02': {
     flow: 'problem',
