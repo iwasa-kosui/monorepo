@@ -7,7 +7,6 @@ import AdrOptions from '../../../components/adr/AdrOptions.astro';
 import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
 import AdrPanel from '../../../components/adr/AdrPanel.astro';
 import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
-import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import { chapter4ExternalSyncAdr } from '../../../components/chapters/chapter-4';
 import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
 import { externalCancelDecisionSequence, externalCancelProblemSequence } from '../../../components/figures/sequences';
@@ -22,9 +21,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter4ExternalSyncAdr}>
 <Fragment slot="memo">
 
-<AdrTabs id="adr-4" labels={['背景', '決定', '結果', '検討した案']}>
-
-<AdrPanel lead="予約サイトではキャンセル済み、予約システムでは診察済みです。飼い主からの連絡に、キャンセルが届いたのかを回答できません。">
+<AdrPanel heading="背景" lead="予約サイトではキャンセル済み、予約システムでは診察済みです。飼い主からの連絡に、キャンセルが届いたのかを回答できません。">
 
 <SequenceFigure sequence={externalCancelProblemSequence} />
 
@@ -34,7 +31,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel lead="予約サイトから届いた事実と、取り込み結果を、別の業務イベントとして、同じトランザクションで記録します。">
+<AdrPanel heading="決定" lead="予約サイトから届いた事実と、取り込み結果を、別の業務イベントとして、同じトランザクションで記録します。">
 
 <SequenceFigure sequence={externalCancelDecisionSequence} />
 
@@ -42,7 +39,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="結果">
 
 <AdrOutcomes items={[
   { kind: 'value', label: '顧客価値', text: '飼い主から連絡を受けたときに、キャンセルが届いたことと、反映しなかった理由を回答できます。' },
@@ -53,10 +50,9 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="検討した案">
 
 <AdrOptions
-  id="adr-4"
   criteria={['反映できなかったキャンセルを追える', '取り込み結果を計算し直せる', 'エンティティを増やさない']}
   options={[
     { name: '届いた事実と取り込み結果を分けて記録する', adopted: true, marks: ['○', '○', '○'], merit: '反映できなかったキャンセルも追え、業務のルールを変えた後に取り込み結果を計算し直せます。', demerit: '届いたキャンセル1件につき、行が2行増えます。' },
@@ -68,7 +64,6 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 パースに失敗した場合の扱いは、別の ADR で決定します。
 
 </AdrPanel>
-</AdrTabs>
 
 </Fragment>
 </Workspace>

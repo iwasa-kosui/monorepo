@@ -7,6 +7,8 @@ import { isMet, record } from '../../workspace/conditions';
 import { type Post, type SignalName, signalNames, type WorkspaceScenario } from '../../workspace/scenario';
 import { createScheduler } from '../../workspace/scheduler';
 import { scenarioProblems } from '../../workspace/validate';
+import { cancelRecordOptions } from '../adr/adr-options';
+import { cancelDecisionSequence } from '../figures/sequences';
 import { evidenceScenario } from '../intro/evidence-scenario';
 import { incidentScenario } from '../intro/incident-scenario';
 import { adoptedOption } from './chapter-2';
@@ -44,9 +46,9 @@ const textsOf = (scenario: WorkspaceScenario): string[] => [
   ...scenario.tabs.flatMap((tab) => [tab.title, tab.label, tab.url, tab.note ?? '']),
   ...scenario.tabs.flatMap((tab) =>
     tab.kind === 'doc'
-      ? [tab.config.title, tab.config.updatedBy ?? '', tab.config.choice?.pendingTitle ?? '']
+      ? [tab.config.title, tab.config.updatedBy ?? '']
       : tab.kind === 'pr'
-      ? [tab.config.title, tab.config.owner, tab.config.name]
+      ? [tab.config.title, tab.config.owner, tab.config.name, tab.config.review?.pendingTitle ?? '']
       : tab.kind === 'editor'
       ? [tab.config.project, tab.config.branch, ...projectFilesOf(tab.config.snapshot)]
       : []
@@ -342,7 +344,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     const source = mdxOf(id);
     expect(source).toContain(`scenario={`);
     const slots = [...source.matchAll(/<Fragment slot="([^"]+)">/g)].map((match) => match[1]);
-    const slotted = scenario.tabs.filter((tab) => tab.kind !== 'console').map((tab) => tab.key);
+    const slotted = scenario.tabs.filter((tab) => tab.kind !== 'console' && tab.kind !== 'agent').map((tab) => tab.key);
     expect(slots.sort()).toEqual(slotted.sort());
   });
 
@@ -485,13 +487,12 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(found).toEqual(asked);
   });
 
-  it('折りたたむのは、演習の 2 ページと、タブが文書だけのページ', () => {
+  it('折りたたむのは、演習の 2 ページと、タブが文書だけのページで、ADR 1 は折りたたまない', () => {
     const docsOnly = entries
       .filter(([, scenario]) => scenario.tabs.every((tab) => tab.kind === 'doc'))
       .map(([id]) => id);
     expect(docsOnly).toEqual([
       'chapter-1/02',
-      'chapter-2/01',
       'chapter-2/03',
       'chapter-3/02',
       'chapter-3/03',
@@ -508,6 +509,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(entries.filter(([, scenario]) => scenario.chat.collapsed === true).map(([id]) => id).sort()).toEqual(
       ['chapter-2/02', 'chapter-2/04', ...docsOnly].sort(),
     );
+    expect(lessonScenarios['chapter-2/01']?.chat.collapsed).toBeUndefined();
   });
 
   it('返信の後のカスタマーサポートの発言は 0.6 秒で届き、経理と情シスの発言は 1.2 秒で届く', () => {
@@ -696,10 +698,11 @@ describe('第1章から第4章とまとめの筋書き', () => {
       }
     });
 
-    describe('ADR 1 は、参加者が叩き台から案を決めてレビューを依頼し、同僚のレビューを受ける', () => {
+    describe('ADR 1 は、参加者がエージェントと対話して案を決め、プルリクエストを提出して、同僚のレビューを受ける', () => {
       const scenario = lessonScenarios['chapter-2/01'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       const source = mdxOf('chapter-2/01');
+      const optionsSource = readFileSync(new URL('../adr/adr-options.ts', import.meta.url), 'utf8');
       const optionIds = [
         'append-in-update',
         'write-to-log',
@@ -718,27 +721,136 @@ describe('第1章から第4章とまとめの筋書き', () => {
         expect(isMet(fired, scenario.done ?? 'workspace:started')).toBe(true);
       });
 
-      it('文書のタブは、案を選ぶ前の表題を持ち、本来の表題はタブの名前に残す', () => {
-        const tab = scenario.tabs[0];
-        if (tab?.kind !== 'doc') throw new Error('文書のタブがありません');
-        expect(tab.config.choice).toEqual({
+      it('タブは、最初から表示するエージェントと、後から追加するプルリクエストの 2 つで、チャットは畳まれない', () => {
+        expect(scenario.tabs.map((tab) => [tab.key, tab.kind, tab.initial])).toEqual([
+          ['agent', 'agent', undefined],
+          ['memo', 'pr', false],
+        ]);
+        expect(scenario.chat.collapsed).toBeUndefined();
+      });
+
+      it('エージェントのタブは、導入の障害対応のエージェントのタブと同じ表題、ラベル、URL の形式、ファビコンを持つ', () => {
+        const intro = incidentScenario.tabs.find((tab) => tab.kind === 'agent');
+        const agent = scenario.tabs[0];
+        if (intro === undefined || agent === undefined) throw new Error('エージェントのタブがありません');
+        expect([agent.title, agent.label, agent.url, agent.favicon]).toEqual([
+          intro.title,
+          intro.label,
+          intro.url,
+          intro.favicon,
+        ]);
+        expect(scenario.agent?.brand).toBe(incidentScenario.agent?.brand);
+        expect(scenario.agent?.session).toBe('キャンセルの記録の ADR');
+      });
+
+      it('プルリクエストのタブは、表題と番号と作成者と、Approved の前後の ADR の表題を持つ', () => {
+        const tab = scenario.tabs[1];
+        if (tab?.kind !== 'pr') throw new Error('プルリクエストのタブがありません');
+        expect(tab.title).toBe('ADR 1: キャンセルの記録を、どこに、どう残すか');
+        expect(tab.config.title).toBe(tab.title);
+        expect([tab.config.owner, tab.config.name, tab.config.number, tab.config.status]).toEqual([
+          'clinic',
+          'clinic-api',
+          1,
+          'Open',
+        ]);
+        expect(tab.config.review).toMatchObject({
+          file: 'docs/adr/1-cancel-record.md',
+          author: 'you',
+          reviewer: 'colleague',
           pendingTitle: 'キャンセルの記録を、どこに、どう残すか',
+          documentTitle: 'ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する',
           draftLabel: 'コーディングエージェントが作成した叩き台',
+          comments: adrReviews,
         });
-        expect(tab.config.approvable).toBe(true);
-        expect(tab.title).toBe('ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する');
-        for (const word of ['トランザクション', '追記', 'ADR', 'record-in']) {
-          expect(`${tab.config.choice?.pendingTitle}${tab.url}`).not.toContain(word);
+        for (const word of ['トランザクション', '追記', 'record-in']) {
+          expect(`${tab.config.review?.pendingTitle}${tab.url}`).not.toContain(word);
         }
       });
 
-      it('レビューが表示されたとき、同僚が「# dev」に、採用案には承認の発言を、別の案にはコメントした発言を、案ごとの合図で 1 件ずつ出す', () => {
+      it('エージェントの対話の設定は、依頼の文と発言と、6 つの案と採用案を持つ', () => {
+        const decision = scenario.agent?.decision;
+        if (decision === undefined) throw new Error('対話の設定がありません');
+        expect(scenario.agent?.stepDelayMs).toBe(incidentScenario.agent?.stepDelayMs);
+        expect(decision.request).toBe('キャンセルの記録をどう残すかを決めたいです。ADR の叩き台を作ってください。');
+        expect(decision.drafting).toBe(
+          'ADR の叩き台を作ります。背景には、来院を誰が、なぜキャンセルしたのかという問い合わせに、回答できなかった経緯を書きます。',
+        );
+        expect(decision.listing).toBe('記録の残し方の案を6つ挙げました。それぞれの利点と欠点を書いています。');
+        expect(decision.asking).toBe(
+          'どの案を採用するかは、何を優先するかで決まります。優先することを決めるのは、チームです。どの案にしますか。',
+        );
+        expect(decision.choose).toBe('この案にする');
+        expect(decision.first).toEqual({
+          you: '「{name}」にします。',
+          agent: '「{name}」を決定として ADR に書き、プルリクエストを作成しました。同僚にレビューを依頼しています。',
+        });
+        expect(decision.again).toEqual({
+          you: '「{name}」に変更します。',
+          agent: '決定を「{name}」に書き換えて、プルリクエストを更新しました。もう一度レビューを依頼しています。',
+        });
+        expect(decision.changesRequested).toBe(
+          'プルリクエストが Changes requested になりました。同僚のコメントを確認して、別の案を選んでください。',
+        );
+        expect(decision.approved).toBe('プルリクエストが Approved になりました。ADR に、決定と結果を追記しました。');
+        expect(decision.options.map((option) => option.id)).toEqual(optionIds);
+        expect(decision.adopted).toBe(adoptedOption);
+      });
+
+      it('案のデータは、文書とエージェントの画面で同じものを参照し、評価と採用はエージェントの案に含まない', () => {
+        const decision = scenario.agent?.decision;
+        if (decision === undefined) throw new Error('対話の設定がありません');
+        expect(decision.options.map(({ id, name, merit, demerit, sequence }) => ({
+          id,
+          name,
+          merit,
+          demerit,
+          sequence,
+        }))).toEqual(cancelRecordOptions.map(({ id, name, merit, demerit, sequence }) => ({
+          id,
+          name,
+          merit,
+          demerit,
+          sequence,
+        })));
+        for (const option of decision.options) {
+          expect(Object.keys(option).sort(), option.id).toEqual(['demerit', 'id', 'merit', 'name', 'sequence']);
+        }
+      });
+
+      it('6 つの案すべてに図があり、採用案の図は決定の節の図とは別の、吹き出しのない図である', () => {
+        expect(cancelRecordOptions.map((option) => option.id)).toEqual(optionIds);
+        const sequenceIds = cancelRecordOptions.map((option) => option.sequence.id);
+        expect(new Set(sequenceIds).size).toBe(optionIds.length);
+        expect(cancelRecordOptions[0]?.sequence).not.toBe(cancelDecisionSequence);
+        expect(source).toContain('sequence={cancelDecisionSequence}');
+      });
+
+      it('プルリクエストのタブは、案を選んだ合図で追加し、別の案のレビューの合図では、エージェントのタブに未読の表示を付ける', () => {
         const waiting = scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]));
+        const tabEvents = waiting.flatMap((event) => (event.kind === 'tab' ? [event] : []));
+        expect(
+          tabEvents.filter((event) => event.when === 'option:chosen').map((
+            event,
+          ) => [event.key, event.tab, event.action]),
+        )
+          .toEqual(optionIds.map((id) => [id, 'memo', 'open']));
+        expect(
+          tabEvents.filter((event) => event.when === 'option:reviewed').map((
+            event,
+          ) => [event.key, event.tab, event.action]),
+        )
+          .toEqual(optionIds.filter((id) => id !== adoptedOption).map((id) => [id, 'agent', 'unseen']));
+      });
+
+      it('レビューが表示されたとき、同僚が「# dev」に、採用案には承認の発言を、別の案にはコメントした発言を、案ごとの合図で 1 件ずつ出す', () => {
+        const waiting = scenario.timeline.flatMap((
+          event,
+        ) => (event.when === undefined || event.kind !== 'post' ? [] : [event]));
         expect(waiting).toHaveLength(optionIds.length);
         expect(waiting.map((event) => event.key)).toEqual(optionIds);
         for (const event of waiting) {
           expect(event.when).toBe('option:reviewed');
-          if (event.kind !== 'post') throw new Error('投稿ではありません');
           expect(event.post.actor).toBe('colleague');
           expect(event.post.channel).toBe(devChannel);
           expect(event.post.text).toBe(event.key === adoptedOption ? reviewApproved : reviewCommented);
@@ -776,38 +888,54 @@ describe('第1章から第4章とまとめの筋書き', () => {
         expect(Object.keys(changesComments)).toEqual(optionIds.filter((option) => option !== adoptedOption));
       });
 
-      it('レビューのコメントが対象にする案の識別子は、MDX の案の識別子と一致する', () => {
-        const mdxIds = [...source.matchAll(/\{ id: '([a-z-]+)', name:/g)].map((match) => match[1]);
-        expect(Object.keys(adrReviews)).toEqual(mdxIds);
+      it('レビューのコメントが対象にする案の識別子は、案のデータの識別子と一致する', () => {
+        const ids = [...optionsSource.matchAll(/id: '([a-z-]+)',/g)].map((match) => match[1]);
+        expect(Object.keys(adrReviews)).toEqual(ids);
       });
 
-      it('レビューのコメントは、MDX の本文の文をそのまま含めない', () => {
-        const sentences = source.split(/[。\n]/).map((line) => line.trim()).filter((line) => line.length >= 12);
+      it('レビューのコメントは、MDX と案のデータの本文の文をそのまま含めない', () => {
+        const sentences = `${source}\n${optionsSource}`.split(/[。\n]/).map((line) => line.trim()).filter((line) =>
+          line.length >= 12
+        );
         for (const paragraph of Object.values(adrReviews).flat()) {
           for (const sentence of sentences) expect(paragraph, sentence).not.toContain(sentence);
         }
       });
 
-      it('MDX は、6 つの案に識別子を付け、採用する案を 1 つだけ決め、案を選べる形で部品を使う', () => {
-        expect([...source.matchAll(/\{ id: '([a-z-]+)', name:/g)].map((match) => match[1])).toEqual(optionIds);
-        expect([...source.matchAll(/adopted: true/g)]).toHaveLength(1);
-        expect(source).toMatch(/\{ id: 'append-in-update', name: '[^']+', adopted: true,/);
-        expect(source).toMatch(/<AdrOptions\n\s+id="adr-1"\n\s+choosable\n/);
-        expect(source).toContain(`labels={['背景', '決定', '結果', '検討した案']} initial={3} locked={[1, 2]}`);
+      it('案のデータは、採用する案を 1 つだけ決め、MDX は案を選べる形で、節を縦に並べて部品を使う', () => {
+        expect(cancelRecordOptions.filter((option) => option.adopted === true).map((option) => option.id)).toEqual([
+          adoptedOption,
+        ]);
+        expect(source).toMatch(/<AdrOptions\n\s+choosable\n/);
+        expect(source).toContain('options={cancelRecordOptions}');
+        expect(source).not.toContain('AdrTabs');
+        const headings = [...source.matchAll(/<AdrPanel heading="([^"]+)"( locked)?/g)].map((match) => [
+          match[1],
+          match[2] !== undefined,
+        ]);
+        expect(headings).toEqual([['背景', false], ['決定', true], ['結果', true], ['検討した案', false]]);
       });
 
-      it('他の ADR のページは、案を選ぶ形にしない', () => {
+      it('他の ADR のページは、案を選ぶ形にせず、節を縦に並べる', () => {
         for (const [id, other] of entries) {
           if (id === 'chapter-2/01') continue;
-          for (const tab of other.tabs) expect(tab.kind === 'doc' && tab.config.choice, id).toBeFalsy();
+          expect(other.agent?.decision, id).toBeUndefined();
           expect(mdxOf(id), id).not.toContain('choosable');
+          expect(mdxOf(id), id).not.toContain('AdrTabs');
+        }
+        const sections = (id: string): string[] =>
+          [...mdxOf(id).matchAll(/<AdrPanel heading="([^"]+)"/g)].map((match) => match[1] ?? '');
+        expect(sections('chapter-2/03')).toEqual(['背景', '決定', '列の対応', '結果', '検討した案']);
+        for (const id of ['chapter-4/03', 'chapter-4/06', 'chapter-4/09']) {
+          expect(sections(id), id).toEqual(['背景', '決定', '結果', '検討した案']);
         }
       });
     });
 
     it('タブの種類と名前', () => {
       expect(summary(lessonScenarios['chapter-2/01'] as WorkspaceScenario)).toEqual([
-        'memo:doc:ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する',
+        'agent:agent:Coding Agent',
+        'memo:pr:ADR 1: キャンセルの記録を、どこに、どう残すか',
       ]);
       expect(summary(lessonScenarios['chapter-2/02'] as WorkspaceScenario)).toEqual([
         'editor:editor:visits.ts — clinic-api',
@@ -872,6 +1000,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         context: 3,
       });
       expect(tab.config.status).toBe('Open');
+      expect(tab.config.number).toBe(2);
       expect(opened(scenario as WorkspaceScenario)).toEqual([['colleague', prSeen], ['colleague', prRemaining]]);
     });
   });

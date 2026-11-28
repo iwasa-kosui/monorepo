@@ -2,7 +2,6 @@ import { openingSchedule } from '../../workspace/channel';
 import type {
   Actor,
   ChatButton,
-  DocChoice,
   DocConfig,
   EditorConfig,
   LiveConfig,
@@ -192,6 +191,7 @@ type LessonOptions = Pick<WorkspaceScenario, 'id' | 'label' | 'tabs'> & {
   readonly reply?: WorkspaceScenario['reply'];
   readonly done?: WorkspaceScenario['done'];
   readonly ask?: Omit<LiveConfig, 'channel'>;
+  readonly agent?: WorkspaceScenario['agent'];
 };
 
 const docsOnly = (tabs: readonly TabDefinition[]): boolean => tabs.every((tab) => tab.kind === 'doc');
@@ -226,6 +226,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
   ...(options.gates === undefined ? {} : { gates: options.gates }),
   ...(options.reply === undefined ? {} : { reply: options.reply }),
   ...(options.done === undefined ? {} : { done: options.done }),
+  ...(options.agent === undefined ? {} : { agent: options.agent }),
 });
 
 export const opening = (...group: readonly Post[]): TimelineEvent[] =>
@@ -246,15 +247,22 @@ export const docTab = (
   title: string,
   path: string,
   approvable = false,
-  choice?: DocChoice,
 ): TabDefinition =>
   documentTab(key, title, path, {
     title,
     updatedAt: '2026-11-09',
     updatedBy: '同僚',
     ...(approvable ? { approvable } : {}),
-    ...(choice === undefined ? {} : { choice }),
   });
+
+export const agentTab = (key: string): TabDefinition => ({
+  key,
+  kind: 'agent',
+  title: 'Coding Agent',
+  label: 'エージェント',
+  url: 'https://agent.internal.example/sessions/1',
+  favicon: { tone: 'coral', shape: 'rounded' },
+});
 
 export const introDocTab = (key: string, title: string, path: string): TabDefinition =>
   documentTab(key, title, path, { title });

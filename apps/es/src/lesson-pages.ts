@@ -73,7 +73,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     flow: 'try',
     mode: 'do',
     role:
-      'コーディングエージェントに ADR（設計上の決定を残す文書）の叩き台を作成させ、自分で案を決めてプルリクエストを提出し、同僚のレビューを受ける',
+      'コーディングエージェントと対話して ADR（設計上の決定を残す文書）の叩き台を作成し、自分で案を決めてプルリクエストを提出し、同僚のレビューを受ける',
   },
   'chapter-2/02': {
     flow: 'exercise',

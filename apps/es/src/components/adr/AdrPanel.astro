@@ -1,22 +1,36 @@
 ---
 import { richHtml } from '../figures/rich';
 
-type Props = { readonly lead?: string };
+type Props = {
+  readonly heading: string;
+  readonly lead?: string;
+  readonly locked?: boolean;
+};
 
-const { lead } = Astro.props;
+const { heading, lead, locked = false } = Astro.props;
 ---
 
-<section class="adr-panel">
+<section class="adr-panel" data-locked={locked ? '' : undefined}>
+  <h2 class="adr-heading">{heading}</h2>
   {lead !== undefined && <p class="adr-lead" set:html={richHtml(lead)} />}
   <slot />
 </section>
 
 <style>
-.adr-panel {
-  padding-block: var(--space-1) 0;
+.adr-panel + .adr-panel {
+  margin-top: var(--space-5);
 }
-.adr-panel > :global(:first-child) {
-  margin-top: 0;
+:global(.panel[data-choice="pending"]) .adr-panel[data-locked] {
+  display: none;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  :global(.doc-paper)
+  .adr-heading {
+  margin-block: 0 var(--space-2);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
 }
 :global(.content) :global(.scene[data-scenario]) :global(.doc-paper) .adr-lead {
   margin-block: 0 var(--space-1);

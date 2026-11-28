@@ -7,7 +7,6 @@ import AdrOptions from '../../../components/adr/AdrOptions.astro';
 import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
 import AdrPanel from '../../../components/adr/AdrPanel.astro';
 import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
-import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import EventAsFunctionFigure from '../../../components/figures/EventAsFunctionFigure.astro';
 import RecordMappingFigure from '../../../components/figures/RecordMappingFigure.astro';
 import TableGrowthFigure from '../../../components/figures/TableGrowthFigure.astro';
@@ -23,9 +22,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter2Table}>
 <Fragment slot="memo">
 
-<AdrTabs id="adr-2" labels={['背景', '決定', '列の対応', '結果', '検討した案']}>
-
-<AdrPanel lead="出来事ごとにテーブルを作ると、記録する出来事を追加するたびに、テーブルが増えます。">
+<AdrPanel heading="背景" lead="出来事ごとにテーブルを作ると、記録する出来事を追加するたびに、テーブルが増えます。">
 
 <TableGrowthFigure />
 
@@ -35,7 +32,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel lead="出来事の記録を、1つのテーブルにまとめて保存します。">
+<AdrPanel heading="決定" lead="出来事の記録を、1つのテーブルにまとめて保存します。">
 
 業務イベントは、業務で起きた1つの出来事を、「誰が」「いつ」「何を」「なぜ」とともに残す記録です。
 
@@ -47,13 +44,13 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="列の対応">
 
 <RecordMappingFigure />
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="結果">
 
 <AdrOutcomes items={[
   { kind: 'value', label: '顧客価値', text: '1つの来院に起きた出来事と、その時点の来院の状態を、1つのテーブルから時刻の順に読んで回答できます。' },
@@ -64,10 +61,9 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="検討した案">
 
 <AdrOptions
-  id="adr-2"
   criteria={['テーブルと列が増えない', '値の有無を DB が検査できる', '外部キー制約を設定できる']}
   options={[
     { name: 'JSON にして `payload` の1列に保存する', adopted: true, marks: ['○', '×', '×'], merit: '記録する出来事を追加しても、テーブルも列も増えません。', demerit: 'DB が `payload` の中の値を検査せず、外部キー制約も設定できません。' },
@@ -79,7 +75,6 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 `target_state` を持つかどうかは、上の比較とは別の決定です。持たない場合は1行が小さくなりますが、`visits` の行はその後も変わるため、ある時点の状態を後から確認できません。
 
 </AdrPanel>
-</AdrTabs>
 
 </Fragment>
 <Fragment slot="explain">

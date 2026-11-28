@@ -8,11 +8,10 @@ import AdrOptions from '../../../components/adr/AdrOptions.astro';
 import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
 import AdrPanel from '../../../components/adr/AdrPanel.astro';
 import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
-import AdrTabs from '../../../components/adr/AdrTabs.astro';
+import { cancelRecordCriteria, cancelRecordOptions } from '../../../components/adr/adr-options';
 import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
 import { cancelDecisionSequence, cancelInquirySequence } from '../../../components/figures/sequences';
 import { chapter2Explain } from '../../../components/chapters/chapter-2';
-import { actors, adrReviews } from '../../../components/chapters/common';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
@@ -24,9 +23,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter2Explain}>
 <Fragment slot="memo">
 
-<AdrTabs id="adr-1" labels={['背景', '決定', '結果', '検討した案']} initial={3} locked={[1, 2]}>
-
-<AdrPanel lead="来院を誰が、なぜキャンセルしたのか。動物病院からの問い合わせに、回答できませんでした。">
+<AdrPanel heading="背景" lead="来院を誰が、なぜキャンセルしたのか。動物病院からの問い合わせに、回答できませんでした。">
 
 <SequenceFigure sequence={cancelInquirySequence} />
 
@@ -36,7 +33,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel lead="キャンセルした人、理由、日時を、来院の更新と同じトランザクションで、別のテーブルに追記します。">
+<AdrPanel heading="決定" locked lead="キャンセルした人、理由、日時を、来院の更新と同じトランザクションで、別のテーブルに追記します。">
 
 <SequenceFigure sequence={cancelDecisionSequence} />
 
@@ -44,7 +41,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="結果" locked>
 
 <AdrOutcomes items={[
   { kind: 'value', label: '顧客価値', text: '来院を誰が、いつ、なぜキャンセルしたのかを問い合わせられたときに、回答できます。' },
@@ -55,26 +52,15 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="検討した案">
 
 <AdrOptions
-  id="adr-1"
   choosable
-  reviews={adrReviews}
-  reviewer={actors.colleague}
-  criteria={['人と理由を回答できる', '記録が欠落しない', '既存のデータモデルに影響を与えない']}
-  options={[
-    { id: 'append-in-update', name: '更新処理の中で追記する', adopted: true, marks: ['○', '○', '○'], merit: '問い合わせに回答でき、記録が欠落しません。', demerit: '記録の保存に不具合があると、来院のキャンセルも失敗します。' },
-    { id: 'write-to-log', name: 'ログに出力する', marks: ['○', '×', '○'], merit: 'DB の変更が不要です。', demerit: 'ログの出力は来院の更新と同じトランザクションに含められないため、記録が欠落します。' },
-    { id: 'add-visits-column', name: '`visits` に列を追加する', marks: ['△', '○', '×'], merit: 'テーブルが増えず、来院ごとのキャンセルが1回だけであれば十分です。', demerit: '同じ来院を再びキャンセルすると前回の人と理由を上書きし、`visits` テーブルの変更も必要です。' },
-    { id: 'db-feature', name: 'DB の機能で自動的に記録する', marks: ['×', '○', '○'], merit: '更新処理ごとのコードの追加が不要で、SQL で直接 `UPDATE` した変更も記録されます。', demerit: '自動的に記録できるのは変更前後の値だけで、キャンセルした人と理由は記録できません。' },
-    { id: 'separate-transaction', name: '別のトランザクションで記録する', marks: ['○', '×', '○'], merit: '記録の不具合が来院のキャンセルを止めません。', demerit: '記録に失敗すると更新だけが成功し、そのキャンセルの記録は欠落します。' },
-    { id: 'rebuild-system', name: 'システム全体を作り直す', marks: ['○', '○', '×'], merit: '記録の実装が漏れる更新処理が無くなります。', demerit: '全機能を一度に移行するため、停止と不具合のリスクが大きくなります。' },
-  ]}
+  criteria={cancelRecordCriteria}
+  options={cancelRecordOptions}
 />
 
 </AdrPanel>
-</AdrTabs>
 
 </Fragment>
 </Workspace>

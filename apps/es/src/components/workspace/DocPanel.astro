@@ -1,5 +1,4 @@
 ---
-import { titleOf } from '../../workspace/choice';
 import {
   expectTab,
   panelIdOf,
@@ -13,8 +12,8 @@ const { scenario, tab: definition, hidden } = Astro.props;
 const tab = expectTab(definition, 'doc');
 const config = tab.config;
 const approvable = config.approvable === true;
-const { updatedAt, updatedBy, choice } = config;
-const title = titleOf(config.title, choice, false);
+const { updatedAt, updatedBy } = config;
+const title = config.title;
 ---
 
 <div
@@ -24,8 +23,6 @@ const title = titleOf(config.title, choice, false);
   aria-labelledby={tabIdOf(scenario, tab.key)}
   data-tool={tab.key}
   data-kind="doc"
-  data-choice={choice === undefined ? undefined : 'pending'}
-  data-draft={choice === undefined ? undefined : 'none'}
   hidden={hidden}
 >
   <div class="doc">
@@ -43,20 +40,9 @@ const title = titleOf(config.title, choice, false);
             <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20">
             </path>
           </svg>
-          <span>{
-            choice === undefined
-              ? '社内ドキュメント'
-              : 'プルリクエスト'
-          }</span>
+          <span>社内ドキュメント</span>
         </p>
         <p class="doc-title" data-doc-title>{title}</p>
-        {
-          choice !== undefined && (
-            <p class="doc-draft" data-doc-draft hidden>
-              {choice.draftLabel}
-            </p>
-          )
-        }
         {
           !approvable && updatedAt !== undefined
             && updatedBy !== undefined
@@ -73,27 +59,7 @@ const title = titleOf(config.title, choice, false);
         }
       </div>
       {
-        choice !== undefined && (
-          <div class="doc-review-slot" role="status">
-            <p class="doc-review" data-review data-state="none" hidden>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M5 12.5l4.5 4.5L19 7.5"></path>
-              </svg>
-              <span data-review-label />
-            </p>
-          </div>
-        )
-      }
-      {
-        approvable && choice === undefined && (
+        approvable && (
           <button
             class="doc-approve"
             type="button"
@@ -124,16 +90,6 @@ const title = titleOf(config.title, choice, false);
       data-doc-region
     >
       <article class="doc-paper">
-        {
-          choice !== undefined && (
-            <div class="doc-draft-start" data-draft-start>
-              <button type="button" class="doc-draft-button" data-draft-button>
-                コーディングエージェントに叩き台を作成させる
-              </button>
-              <p class="doc-draft-status" role="status" data-draft-status></p>
-            </div>
-          )
-        }
         <slot />
       </article>
     </div>
@@ -295,57 +251,6 @@ const title = titleOf(config.title, choice, false);
 }
 :global(.scene[data-scenario]) .doc-review[data-state="approved"] svg {
   display: block;
-}
-:global(.scene[data-scenario]) .doc-draft-start {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding-block: var(--space-4);
-}
-:global(.scene[data-scenario]) .doc-draft-button {
-  min-height: var(--tap-min);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--dc-accent);
-  color: var(--dc-on-accent);
-  padding: 0 var(--space-4);
-  font: inherit;
-  font-size: var(--text-code);
-  font-weight: var(--weight-bold);
-  line-height: var(--leading-tight);
-  cursor: pointer;
-}
-:global(.scene[data-scenario]) .doc-draft-button:disabled {
-  background: var(--dc-sunken);
-  color: var(--dc-muted);
-  cursor: not-allowed;
-}
-:global(.scene[data-scenario]) .doc-draft-button:focus-visible {
-  outline: 3px solid var(--ring);
-  outline-offset: 2px;
-}
-:global(.scene[data-scenario]) .doc-draft-status {
-  margin: 0;
-  color: var(--dc-muted);
-  font-size: var(--text-note);
-  line-height: var(--leading-normal);
-}
-:global(.scene[data-scenario]) .doc-draft-status:empty {
-  display: none;
-}
-:global(.scene[data-scenario]) .panel[data-draft="made"] .doc-draft-start {
-  display: none;
-}
-:global(.scene[data-scenario])
-  .panel[data-draft="none"]
-  .doc-paper
-  > :global(:not([data-draft-start])),
-:global(.scene[data-scenario])
-  .panel[data-draft="making"]
-  .doc-paper
-  > :global(:not([data-draft-start])) {
-  display: none;
 }
 :global(.scene[data-scenario]) .doc-approve {
   display: inline-flex;

@@ -77,6 +77,20 @@ export const cancelDecisionSequence: Sequence = {
   frame: { label: '同じトランザクション', from: 1, to: 2 },
 };
 
+export const cancelAppendInUpdateSequence: Sequence = {
+  ...cancelDecisionSequence,
+  id: 'cancel-append-in-update',
+  steps: [
+    ...cancelDecisionSequence.steps.map((step): Step => {
+      if (step.type === 'divider') return step;
+      const { callout: _callout, ...rest } = step;
+      return rest;
+    }),
+    { type: 'note', lane: 'records', text: 'コミット' },
+  ],
+  frame: { label: 'トランザクション', from: 1, to: 3 },
+};
+
 export const externalCancelProblemSequence: Sequence = {
   id: 'external-cancel-problem',
   label: '予約サイトから届いたキャンセルを、予約システムが反映できなかった流れの図',
@@ -169,5 +183,102 @@ export const auditReasonSequence: Sequence = {
       style: 'return',
       callout: { tone: 'problem', label: '課題', text: '診察の完了は、まだ記録していない' },
     },
+  ],
+};
+
+export const cancelToLogSequence: Sequence = {
+  id: 'cancel-to-log',
+  label: '来院の更新をトランザクションの中でコミットし、キャンセルした人と理由をトランザクションの外でログに出力する図',
+  lanes: [
+    { id: 'caller', name: '呼び出し元', kind: 'system' },
+    { id: 'app', name: '`cancelVisit`', kind: 'system' },
+    { id: 'visits', name: '`visits` テーブル', kind: 'table' },
+    { id: 'log', name: 'ログ', kind: 'system' },
+  ],
+  steps: [
+    { type: 'message', from: 'caller', to: 'app', text: '理由と、キャンセルした人を渡す', style: 'call' },
+    { type: 'message', from: 'app', to: 'visits', text: '`status` を `cancelled` に更新', style: 'call' },
+    { type: 'note', lane: 'visits', text: 'コミット' },
+    { type: 'divider', text: 'トランザクションの外' },
+    { type: 'message', from: 'app', to: 'log', text: 'キャンセルした人と理由を出力', style: 'call' },
+  ],
+  frame: { label: 'トランザクション', from: 1, to: 2 },
+};
+
+export const cancelInVisitsSequence: Sequence = {
+  id: 'cancel-in-visits',
+  label: '来院の行の状態と、同じ行のキャンセルした人と理由の列を、1つのトランザクションで更新する図',
+  lanes: [
+    { id: 'caller', name: '呼び出し元', kind: 'system' },
+    { id: 'app', name: '`cancelVisit`', kind: 'system' },
+    { id: 'visits', name: '`visits` テーブル', kind: 'table' },
+  ],
+  steps: [
+    { type: 'message', from: 'caller', to: 'app', text: '理由と、キャンセルした人を渡す', style: 'call' },
+    {
+      type: 'message',
+      from: 'app',
+      to: 'visits',
+      text: '`status` を `cancelled` に更新し、同じ行のキャンセルした人と理由の列も更新',
+      style: 'call',
+    },
+    { type: 'note', lane: 'visits', text: 'コミット' },
+  ],
+  frame: { label: 'トランザクション', from: 1, to: 2 },
+};
+
+export const cancelByDbFeatureSequence: Sequence = {
+  id: 'cancel-by-db-feature',
+  label: 'アプリケーションは来院を更新するだけで、DB の機能が変更前後の値を自動で記録する図',
+  lanes: [
+    { id: 'caller', name: '呼び出し元', kind: 'system' },
+    { id: 'app', name: '`cancelVisit`', kind: 'system' },
+    { id: 'visits', name: '`visits` テーブル', kind: 'table' },
+    { id: 'dbfeature', name: 'DB の機能', kind: 'system' },
+  ],
+  steps: [
+    { type: 'message', from: 'caller', to: 'app', text: 'キャンセルを依頼', style: 'call' },
+    { type: 'message', from: 'app', to: 'visits', text: '`status` を `cancelled` に更新', style: 'call' },
+    { type: 'note', lane: 'app', text: '記録のコードは持たない' },
+    { type: 'message', from: 'visits', to: 'dbfeature', text: '変更前後の値を自動で記録', style: 'call' },
+  ],
+};
+
+export const cancelInSeparateTransactionSequence: Sequence = {
+  id: 'cancel-in-separate-transaction',
+  label: '来院の更新と、キャンセルの記録の追記を、別々のトランザクションで実行する図',
+  lanes: [
+    { id: 'caller', name: '呼び出し元', kind: 'system' },
+    { id: 'app', name: '`cancelVisit`', kind: 'system' },
+    { id: 'visits', name: '`visits` テーブル', kind: 'table' },
+    { id: 'records', name: '`visit_cancellations` テーブル', kind: 'table' },
+  ],
+  steps: [
+    { type: 'message', from: 'caller', to: 'app', text: '理由と、キャンセルした人を渡す', style: 'call' },
+    { type: 'divider', text: '1つ目のトランザクション' },
+    { type: 'message', from: 'app', to: 'visits', text: '`status` を `cancelled` に更新', style: 'call' },
+    { type: 'note', lane: 'visits', text: 'コミット' },
+    { type: 'divider', text: '2つ目のトランザクション' },
+    { type: 'message', from: 'app', to: 'records', text: '人、理由、日時を1行追記', style: 'call' },
+    { type: 'note', lane: 'records', text: 'コミット' },
+  ],
+};
+
+export const rebuildSystemSequence: Sequence = {
+  id: 'rebuild-system',
+  label: '予約、受付、診察の完了、キャンセルのすべての更新処理を、記録を残す新しい実装に一度に置き換える図',
+  lanes: [
+    { id: 'caller', name: '呼び出し元', kind: 'system' },
+    { id: 'current', name: '現在の実装', kind: 'system' },
+    { id: 'next', name: '記録を残す新しい実装', kind: 'system' },
+  ],
+  steps: [
+    { type: 'message', from: 'caller', to: 'current', text: '予約、受付、診察の完了、キャンセルの更新', style: 'call' },
+    { type: 'divider', text: 'すべての更新処理を、一度に置き換える' },
+    { type: 'message', from: 'caller', to: 'next', text: '予約の更新', style: 'call' },
+    { type: 'message', from: 'caller', to: 'next', text: '受付の更新', style: 'call' },
+    { type: 'message', from: 'caller', to: 'next', text: '診察の完了の更新', style: 'call' },
+    { type: 'message', from: 'caller', to: 'next', text: 'キャンセルの更新', style: 'call' },
+    { type: 'note', lane: 'next', text: '更新のたびに、記録を残す' },
   ],
 };

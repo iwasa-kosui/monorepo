@@ -1,5 +1,6 @@
 import { cloneFirst, must } from '../dom';
 import type { PanelMount } from '../panel';
+import { mountDialogue } from './agent-dialogue';
 
 export const mountAgent: PanelMount<'agent'> = (host) => {
   const { panel } = host;
@@ -55,6 +56,31 @@ export const mountAgent: PanelMount<'agent'> = (host) => {
     setRunning(false);
     host.emit('agent:concluded');
   };
+
+  const clearTimers = (): void => {
+    for (const timer of timers) window.clearTimeout(timer);
+    timers = [];
+  };
+
+  if (agent.decision !== undefined) {
+    mountDialogue({
+      host,
+      decision: agent.decision,
+      stepDelayMs: agent.stepDelayMs,
+      reduced,
+      panel,
+      log,
+      list,
+      statusLabel,
+      input,
+      send,
+      part,
+      append,
+      thinking,
+      later,
+    });
+    return { reset: clearTimers };
+  }
 
   const play = (): void => {
     setRunning(true);
@@ -117,10 +143,5 @@ export const mountAgent: PanelMount<'agent'> = (host) => {
 
   play();
 
-  return {
-    reset: () => {
-      for (const timer of timers) window.clearTimeout(timer);
-      timers = [];
-    },
-  };
+  return { reset: clearTimers };
 };

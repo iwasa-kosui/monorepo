@@ -1,5 +1,4 @@
 ---
-import { titleOf } from '../../workspace/choice';
 import type { PanelProps } from '../../workspace/panel-props';
 import {
   chatPanelIdOf,
@@ -13,11 +12,7 @@ type Props =
   | (Pick<PanelProps, 'scenario'> & { chat: true });
 
 const props = Astro.props;
-const shownTitle = 'chat' in props
-  ? ''
-  : props.tab.kind === 'doc'
-  ? titleOf(props.tab.title, props.tab.config.choice, false)
-  : props.tab.title;
+const shownTitle = 'chat' in props ? '' : props.tab.title;
 ---
 
 {

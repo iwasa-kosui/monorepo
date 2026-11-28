@@ -14,18 +14,34 @@ const { scenario, tab: definition, hidden } = Astro.props;
 const tab = expectTab(definition, 'pr');
 const config = tab.config;
 
-const sourceOf = (snapshot: string): string => {
-  const source = snapshotFiles(snapshot)[config.diff.file];
+const sourceOf = (
+  snapshot: string,
+  file: string,
+): string => {
+  const source = snapshotFiles(snapshot)[file];
   if (source === undefined) {
-    throw new Error(`${snapshot} に ${config.diff.file} がありません`);
+    throw new Error(`${snapshot} に ${file} がありません`);
   }
   return source;
 };
-const diff = diffFiles(
-  sourceOf(config.diff.before),
-  sourceOf(config.diff.after),
-  config.diff.context,
+const change = config.diff;
+const diff = change === undefined ? undefined : diffFiles(
+  sourceOf(change.before, change.file),
+  sourceOf(change.after, change.file),
+  change.context,
 );
+const review = config.review;
+const author = review === undefined
+  ? undefined
+  : scenario.actors[review.author];
+const reviewer = review === undefined
+  ? undefined
+  : scenario.actors[review.reviewer];
+if (review !== undefined && (author === undefined || reviewer === undefined)) {
+  throw new Error(
+    'プルリクエストの作成者かレビューした人が actors にありません',
+  );
+}
 const signOf = { add: '+', del: '−', same: ' ' } as const;
 const wordOf = { add: '追加', del: '削除', same: '変更なし' } as const;
 const sectionId = (name: string): string =>
@@ -39,6 +55,7 @@ const sectionId = (name: string): string =>
   aria-labelledby={tabIdOf(scenario, tab.key)}
   data-tool={tab.key}
   data-kind="pr"
+  data-choice={review === undefined ? undefined : 'pending'}
   hidden={hidden}
 >
   <div class="pr">
@@ -54,10 +71,27 @@ const sectionId = (name: string): string =>
       </p>
       <p class="pr-meta">
         <span class="pr-state">{config.status}</span>
-        <span class="pr-stat" data-pr-stat>
-          <span class="pr-add">+{diff.added}</span>
-          <span class="pr-del">−{diff.deleted}</span>
-        </span>
+        {
+          diff !== undefined && (
+            <span class="pr-stat" data-pr-stat>
+              <span class="pr-add">+{diff.added}</span>
+              <span class="pr-del">−{diff.deleted}</span>
+            </span>
+          )
+        }
+        {
+          author !== undefined && (
+            <span class="pr-author">
+              <span class="pr-author-label">作成者</span>
+              <span
+                class="pr-avatar"
+                data-tone={author.tone}
+                aria-hidden="true"
+              >{author.avatar}</span>
+              <strong>{author.name}</strong>
+            </span>
+          )
+        }
       </p>
     </div>
     <div class="pr-tabs" role="tablist" aria-label="プルリクエストの表示">
@@ -91,9 +125,60 @@ const sectionId = (name: string): string =>
         aria-labelledby={sectionId('conversation-tab')}
         data-pr-section="conversation"
       >
-        <div class="pr-comment">
-          <slot />
-        </div>
+        {
+          review === undefined ? (
+            <div class="pr-comment">
+              <slot />
+            </div>
+          ) : (
+            author !== undefined && reviewer !== undefined
+            && (
+            <div class="pr-conversation">
+              <aside class="pr-side" aria-label="Reviewers">
+                <p class="pr-side-title">Reviewers</p>
+                <p class="pr-reviewer">
+                  <span
+                    class="pr-avatar"
+                    data-tone={reviewer.tone}
+                    aria-hidden="true"
+                  >{reviewer.avatar}</span>
+                  <strong>{reviewer.name}</strong>
+                  <span
+                    class="pr-reviewer-state"
+                    role="status"
+                    data-pr-reviewer-state
+                    data-state="requested"
+                  >Review requested</span>
+                </p>
+              </aside>
+              <div class="pr-main">
+                <div class="pr-comment pr-first">
+                  <p class="pr-card-head">
+                    <span
+                      class="pr-avatar"
+                      data-tone={author.tone}
+                      aria-hidden="true"
+                    >{author.avatar}</span>
+                    <strong>{author.name}</strong>
+                  </p>
+                  <p class="pr-first-text" data-pr-description>
+                    {review.description}
+                  </p>
+                  <p class="pr-draft" data-pr-draft>{review.draftLabel}</p>
+                </div>
+                <ol
+                  class="pr-timeline"
+                  role="list"
+                  aria-label="タイムライン"
+                  aria-live="polite"
+                  data-pr-timeline
+                >
+                </ol>
+              </div>
+            </div>
+          )
+          )
+        }
       </section>
       <section
         class="pr-section"
@@ -103,49 +188,105 @@ const sectionId = (name: string): string =>
         data-pr-section="files"
         hidden
       >
-        <div class="pr-file">
-          <p class="pr-file-head">
-            <code>{config.diff.file}</code>
-            <span class="pr-stat">
-              <span class="pr-add">+{diff.added}</span>
-              <span class="pr-del">−{diff.deleted}</span>
-            </span>
-          </p>
-          <div
-            class="pr-diff-scroll"
-            tabindex="0"
-            role="region"
-            aria-label={`${config.diff.file} の差分`}
-          >
-            {
-              diff.hunks.map((hunk) => (
-                <table class="pr-diff">
-                  <caption class="pr-hunk">{hunk.header}</caption>
-                  <tbody>
-                    {
-                      hunk.lines.map((line) => (
-                        <tr class={`pr-line pr-${line.kind}`}>
-                          <td class="pr-num">{line.oldNumber}</td>
-                          <td class="pr-num">{line.newNumber}</td>
-                          <td class="pr-code">
-                            <span class="pr-sr">{wordOf[line.kind]}:</span>
-                            <span class="pr-sign" aria-hidden="true">
-                              {signOf[line.kind]}
-                            </span>{line.text}
-                          </td>
-                        </tr>
-                      ))
-                    }
-                  </tbody>
-                </table>
-              ))
-            }
-          </div>
-        </div>
+        {
+          review === undefined && change !== undefined
+              && diff !== undefined
+            ? (
+            <div class="pr-file">
+              <p class="pr-file-head">
+                <code>{change.file}</code>
+                <span class="pr-stat">
+                  <span class="pr-add">+{diff.added}</span>
+                  <span class="pr-del">−{diff.deleted}</span>
+                </span>
+              </p>
+              <div
+                class="pr-diff-scroll"
+                tabindex="0"
+                role="region"
+                aria-label={`${change.file} の差分`}
+              >
+                {
+                  diff.hunks.map((hunk) => (
+                    <table class="pr-diff">
+                      <caption class="pr-hunk">{hunk.header}</caption>
+                      <tbody>
+                        {
+                          hunk.lines.map((line) => (
+                            <tr class={`pr-line pr-${line.kind}`}>
+                              <td class="pr-num">{line.oldNumber}</td>
+                              <td class="pr-num">{line.newNumber}</td>
+                              <td class="pr-code">
+                                <span class="pr-sr">{wordOf[line.kind]}:</span>
+                                <span class="pr-sign" aria-hidden="true">
+                                  {signOf[line.kind]}
+                                </span>{line.text}
+                              </td>
+                            </tr>
+                          ))
+                        }
+                      </tbody>
+                    </table>
+                  ))
+                }
+              </div>
+            </div>
+          )
+            : (
+              review !== undefined && (
+            <div class="pr-file">
+              <p class="pr-file-head">
+                <code>{review.file}</code>
+              </p>
+              <article class="pr-doc doc-paper">
+                <p class="pr-doc-title" data-pr-doc-title>
+                  {review.pendingTitle}
+                </p>
+                <slot />
+              </article>
+            </div>
+          )
+            )
+        }
       </section>
     </div>
   </div>
   {tab.note !== undefined && <p class="panel-note">{tab.note}</p>}
+  {
+    review !== undefined && author !== undefined && reviewer !== undefined
+      && (
+      <template data-pr-parts>
+        <li class="pr-event" data-part="request">
+          <span class="pr-event-icon" aria-hidden="true"></span>
+          <span>
+            <strong>{author.name}</strong>が<strong>{
+              reviewer.name
+            }</strong>にレビューを依頼しました
+          </span>
+        </li>
+        <li class="pr-event" data-part="commit">
+          <span class="pr-event-icon" aria-hidden="true"></span>
+          <span>
+            <strong>{author.name}</strong>がコミットしました:
+            <code data-text></code>
+          </span>
+        </li>
+        <li class="pr-comment pr-review" data-part="review">
+          <p class="pr-card-head">
+            <span
+              class="pr-avatar"
+              data-tone={reviewer.tone}
+              aria-hidden="true"
+            >{reviewer.avatar}</span>
+            <strong>{reviewer.name}</strong>
+            <span class="pr-review-state" data-label></span>
+          </p>
+          <p class="pr-review-target" data-target></p>
+          <div data-body></div>
+        </li>
+      </template>
+    )
+  }
 </div>
 
 <style>
@@ -452,5 +593,199 @@ const sectionId = (name: string): string =>
 }
 :global(.scene[data-scenario]) .pr-line.pr-del .pr-code {
   color: var(--gh-del-text);
+}
+:global(.scene[data-scenario]) .panel[data-kind="pr"] {
+  --dc-paper: var(--gh-bg);
+  --dc-rule: var(--gh-rule);
+  --dc-muted: var(--gh-muted);
+  --dc-fg: var(--gh-fg);
+  --dc-code: #eff1f3;
+  --dc-quote: var(--gh-band);
+  --role-accent-soft: #ddf4ff;
+  --role-accent-strong: #0550ae;
+  --role-ground: var(--gh-bg);
+}
+:global(.scene[data-scenario]) .pr-author {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+}
+:global(.scene[data-scenario]) .pr-author-label {
+  color: var(--gh-muted);
+}
+:global(.scene[data-scenario]) .pr-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: #4a5568;
+  color: #ffffff;
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+:global(.scene[data-scenario]) .pr-avatar[data-tone="rose"] {
+  background: #c2344d;
+}
+:global(.scene[data-scenario]) .pr-avatar[data-tone="blue"] {
+  background: #1264a3;
+}
+:global(.scene[data-scenario]) .pr-avatar[data-tone="green"] {
+  background: #2e7d32;
+}
+:global(.scene[data-scenario]) .pr-avatar[data-tone="amber"] {
+  background: #8a5a00;
+}
+:global(.scene[data-scenario]) .pr-avatar[data-tone="violet"] {
+  background: #6b3fa0;
+}
+:global(.scene[data-scenario]) .pr-section[data-pr-section="conversation"] {
+  container-type: inline-size;
+}
+:global(.scene[data-scenario]) .pr-conversation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+:global(.scene[data-scenario]) .pr-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+@container (min-width: 40rem) {
+  :global(.scene[data-scenario]) .pr-conversation {
+    grid-template-columns: minmax(0, 1fr) 14rem;
+  }
+  :global(.scene[data-scenario]) .pr-main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  :global(.scene[data-scenario]) .pr-side {
+    position: sticky;
+    top: 0;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+  }
+}
+:global(.scene[data-scenario]) .pr-side {
+  border-radius: var(--radius-lg);
+  background: var(--gh-band);
+  padding: var(--space-3);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+}
+:global(.scene[data-scenario]) .pr-side-title {
+  color: var(--gh-muted);
+  font-weight: var(--weight-bold);
+}
+:global(.scene[data-scenario]) .pr-reviewer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-2);
+}
+:global(.scene[data-scenario]) .pr-reviewer-state {
+  flex-basis: 100%;
+  color: var(--gh-muted);
+}
+:global(.scene[data-scenario])
+  .pr-reviewer-state[data-state="changes-requested"] {
+  color: var(--gh-del-text);
+}
+:global(.scene[data-scenario]) .pr-reviewer-state[data-state="approved"] {
+  color: var(--gh-add-text);
+}
+:global(.scene[data-scenario]) .pr-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-code);
+}
+:global(.scene[data-scenario]) .pr-first-text,
+:global(.scene[data-scenario]) .pr-draft {
+  margin-top: var(--space-2);
+  font-size: var(--text-code);
+}
+:global(.scene[data-scenario]) .pr-draft {
+  color: var(--gh-muted);
+  font-size: var(--text-note);
+}
+:global(.scene[data-scenario]) .pr-draft[hidden] {
+  display: none;
+}
+:global(.scene[data-scenario]) .pr-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+:global(.scene[data-scenario]) .pr-event {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-3);
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
+}
+:global(.scene[data-scenario]) .pr-event-icon {
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-top: 0.5rem;
+  border-radius: 50%;
+  background: var(--gh-muted);
+}
+:global(.scene[data-scenario]) .pr-event code {
+  background: var(--gh-band);
+  padding: 0 var(--space-1);
+  font-size: var(--text-note);
+}
+:global(.scene[data-scenario]) .pr-review {
+  margin: 0;
+  list-style: none;
+  font-size: var(--text-code);
+}
+:global(.scene[data-scenario]) .pr-review-state {
+  border-radius: var(--radius-pill);
+  background: var(--gh-del-bg);
+  padding: 0 var(--space-3);
+  color: var(--gh-del-text);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+}
+:global(.scene[data-scenario]) .pr-review-state[data-state="approved"] {
+  background: var(--gh-open);
+  color: var(--gh-open-text);
+}
+:global(.scene[data-scenario]) .pr-review-target {
+  margin-top: var(--space-1);
+  color: var(--gh-muted);
+  font-size: var(--text-note);
+}
+:global(.scene[data-scenario]) .pr-review [data-body] p {
+  margin: var(--space-2) 0 0;
+}
+:global(.scene[data-scenario]) .pr-doc.doc-paper {
+  max-width: none;
+  margin: 0;
+  border-top: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+:global(.scene[data-scenario]) .pr-doc-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lead);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
 }
 </style>

@@ -1,4 +1,4 @@
-import type { DraftStage, ReviewState } from './choice';
+import type { Stage } from './choice';
 import { type FiredSignals, isMet, unmet } from './conditions';
 import { replyGate } from './rules';
 import type { Condition, GatesConfig, SignalName, SignalRef, TabDefinition } from './scenario';
@@ -22,9 +22,7 @@ export type LogView = {
 };
 
 export type ChoiceView = {
-  readonly stage: DraftStage;
-  readonly review: ReviewState;
-  readonly submittable: boolean;
+  readonly stage: Stage;
 };
 
 export type NudgeContext = {
@@ -55,11 +53,9 @@ export const liveInputSelector = '[data-live-input]';
 
 export const liveSendSelector = '[data-action="send"]';
 
-export const draftButtonSelector = '[data-draft-button]';
+export const agentSendSelector = '[data-agent-send]';
 
-export const chooseButtonSelector = '[data-choose]';
-
-export const optionListSelector = '[data-adr-options] .adr-list';
+export const optionListSelector = '[data-agent-options][data-active] [data-option-tabs]';
 
 export const fewLogRows = 3;
 
@@ -111,11 +107,9 @@ const logNudgeOf = (key: string, view: LogView): NudgeSpec => {
 };
 
 export const choiceNudgeOf = (view: ChoiceView): NudgeSpec | null => {
-  if (view.review === 'requested' || view.review === 'approved' || view.stage === 'making') return null;
-  if (view.stage === 'none') return { selector: draftButtonSelector };
-  return view.submittable
-    ? { selector: chooseButtonSelector }
-    : { selector: optionListSelector, text: '案を1つ選択します' };
+  if (view.stage === 'idle') return { selector: agentSendSelector };
+  if (view.stage === 'choosing') return { selector: optionListSelector, text: '案を1つ選択します' };
+  return null;
 };
 
 export const nudgeSpecOf = (signal: SignalRef, context: NudgeContext): NudgeSpec | null => {

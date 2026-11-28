@@ -10,16 +10,15 @@ import {
 } from '../playground/storage';
 import { channelOfPost, typingLeadMs, typingStartMs } from './channel';
 import { createChat, type LivePost } from './chat';
-import type { DraftStage, ReviewState } from './choice';
 import { clockOf, formatElapsed } from './clock';
 import { hasFired, isMet, keyOf, record } from './conditions';
+import { decisionStoreOf } from './decision-store';
 import { backdropOf, fullViewAttribute } from './full-view';
 import { liveUrlOf, nameOrRandom } from './live';
 import { connectLive, type LiveStatus, newLiveId } from './live-client';
 import { isLiveId, liveEndpoint, normalizeName } from './live-protocol';
 import {
   type ChoiceView,
-  chooseButtonSelector,
   type LogView,
   nextSignals,
   nudgeSpecOf,
@@ -163,16 +162,8 @@ export const mountWorkspace = (root: HTMLElement): void => {
     };
   };
 
-  const choiceViewOf = (): ChoiceView | undefined => {
-    const panel = root.querySelector<HTMLElement>('[role="tabpanel"][data-choice]');
-    if (panel === null) return undefined;
-    const choose = panel.querySelector<HTMLButtonElement>(chooseButtonSelector);
-    return {
-      stage: (panel.dataset.draft ?? 'none') as DraftStage,
-      review: (panel.querySelector<HTMLElement>('[data-review]')?.dataset.state ?? 'none') as ReviewState,
-      submittable: choose !== null && !choose.hidden && !choose.disabled,
-    };
-  };
+  const choiceViewOf = (): ChoiceView | undefined =>
+    scenario.agent?.decision === undefined ? undefined : { stage: decisionStoreOf(root).get().stage };
 
   const tabButtonOf = (key: string): HTMLElement | null =>
     root.querySelector<HTMLElement>(`[role="tab"][data-tool="${key}"]`);
@@ -392,7 +383,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     const definition = scenario.tabs.find((tab) => tab.key === key);
     if (definition === undefined) return;
     if (action === 'unseen') {
-      state.forcedUnseen.add(key);
+      if (state.selected !== key || (compact.matches && state.view === 'chat')) state.forcedUnseen.add(key);
       render();
       return;
     }

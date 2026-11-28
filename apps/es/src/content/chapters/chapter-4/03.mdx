@@ -7,7 +7,6 @@ import AdrOptions from '../../../components/adr/AdrOptions.astro';
 import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
 import AdrPanel from '../../../components/adr/AdrPanel.astro';
 import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
-import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import { chapter4MigrationAdr } from '../../../components/chapters/chapter-4';
 import MigrationCountFigure from '../../../components/figures/MigrationCountFigure.astro';
 import Workspace from '../../../components/workspace/Workspace.astro';
@@ -21,9 +20,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter4MigrationAdr}>
 <Fragment slot="memo">
 
-<AdrTabs id="adr-3" labels={['背景', '決定', '結果', '検討した案']}>
-
-<AdrPanel lead="キャンセル数の集計は3件、業務イベントから数え直すと2件です。業務イベントを導入する前のキャンセルが、業務イベントに無いためです。">
+<AdrPanel heading="背景" lead="キャンセル数の集計は3件、業務イベントから数え直すと2件です。業務イベントを導入する前のキャンセルが、業務イベントに無いためです。">
 
 <MigrationCountFigure view="problem" />
 
@@ -33,7 +30,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel lead="業務イベントを導入する前からある来院を、移行用のイベント `VisitMigrated` として取り込みます。">
+<AdrPanel heading="決定" lead="業務イベントを導入する前からある来院を、移行用のイベント `VisitMigrated` として取り込みます。">
 
 <MigrationCountFigure view="decision" />
 
@@ -41,7 +38,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="結果">
 
 <AdrOutcomes items={[
   { kind: 'value', label: '社内への価値', text: '経理から問い合わせられたときに、集計が数え直した値と一致することを示して回答できます。' },
@@ -52,10 +49,9 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="検討した案">
 
 <AdrOptions
-  id="adr-3"
   criteria={['キャンセル数が正しいまま一致する', '理由と操作者を作らない', '導入の前後を区別できる']}
   options={[
     { name: '`VisitMigrated` として取り込む', adopted: true, marks: ['○', '○', '○'], merit: '集計が数え直した値と一致し、導入の前後も区別できます。', demerit: '`business_events` テーブルの行が、導入する前からある来院の数だけ増えます。' },
@@ -66,7 +62,6 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 />
 
 </AdrPanel>
-</AdrTabs>
 
 </Fragment>
 </Workspace>

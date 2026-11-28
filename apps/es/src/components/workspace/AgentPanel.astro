@@ -1,5 +1,6 @@
 ---
 import { exportOf } from '../../lib/snapshots';
+import AdrOptionTabs from '../adr/AdrOptionTabs.astro';
 import { describeLog } from '../../workspace/log-format';
 import {
   expectTab,
@@ -17,6 +18,13 @@ const agent = scenario.agent;
 if (agent === undefined) {
   throw new Error('エージェントのタブには、筋書きの agent が必要です');
 }
+
+const decision = agent.decision;
+const steps = agent.decision === undefined ? agent.steps : [];
+const options = (decision?.options ?? []).map((option) => ({
+  ...option,
+  marks: [],
+}));
 
 const labelOf = (key: string): string =>
   scenario.tabs.find((item) => item.key === key)?.label ?? key;
@@ -38,6 +46,7 @@ const logView = (time: string) => {
   aria-labelledby={tabIdOf(scenario, tab.key)}
   data-tool={tab.key}
   data-kind="agent"
+  data-dialogue={decision === undefined ? undefined : ''}
   hidden={hidden}
 >
   <div class="agent-bar">
@@ -66,8 +75,13 @@ const logView = (time: string) => {
         rows="2"
         placeholder="依頼を入力"
         data-agent-input
-      ></textarea>
-      <button type="button" class="agent-send" data-agent-send disabled>
+      >{decision?.request}</textarea>
+      <button
+        type="button"
+        class="agent-send"
+        data-agent-send
+        disabled={decision === undefined}
+      >
         <span class="cfig-sr">送信</span>
         <svg
           viewBox="0 0 16 16"
@@ -93,6 +107,19 @@ const logView = (time: string) => {
     <li class="turn agent" data-part="reply">
       <p data-text></p>
     </li>
+    {
+      decision !== undefined && (
+        <li class="turn agent options" data-part="options" data-agent-options>
+          <p data-text></p>
+          <AdrOptionTabs
+            options={options}
+            mode="dialogue"
+            label="検討した案"
+            choose={decision.choose}
+          />
+        </li>
+      )
+    }
     <li class="thinking" data-part="thinking" data-thinking>
       <span class="thinking-mark" aria-hidden="true"></span>処理中…
     </li>
@@ -100,7 +127,7 @@ const logView = (time: string) => {
 
   <template data-agent-steps>
     {
-      agent.steps.map((step) =>
+      steps.map((step) =>
         step.kind === 'user'
           ? (
         <li class="turn user" data-kind="user">
@@ -220,6 +247,10 @@ const logView = (time: string) => {
   --ag-done: #2f7d4f;
   --ag-off: #e3e0d4;
   --ag-off-fg: #5e5d59;
+  --role-accent: var(--ag-accent-strong);
+  --role-accent-strong: var(--ag-accent-strong);
+  --role-accent-soft: var(--ag-bubble);
+  --role-sunken: var(--ag-bubble);
   --pn-bg: var(--ag-bubble);
   --pn-fg: var(--ag-fg);
   --pn-rule: var(--ag-line);
@@ -265,12 +296,24 @@ const logView = (time: string) => {
 :global(.scene[data-scenario]) .agent-status[data-state="done"]::before {
   background: var(--ag-done);
 }
+:global(.scene[data-scenario]) .agent-status[data-state="waiting"]::before {
+  background: var(--ag-edge);
+}
+:global(.scene[data-scenario]) .turn.options {
+  min-width: 0;
+}
+:global(.scene[data-scenario]) .turn.options > p:not(:empty) {
+  margin-bottom: var(--space-2);
+}
 :global(.scene[data-scenario]) .agent-log {
   flex: 1 1 0;
   min-height: 0;
   max-height: 22rem;
   overflow: auto;
   padding: var(--space-3) var(--space-4);
+}
+:global(.scene[data-scenario]) .panel[data-dialogue] .agent-log {
+  max-height: none;
 }
 :global(.scene[data-scenario]) .turns {
   max-width: 48rem;
