@@ -22,6 +22,29 @@ describe('runCode', () => {
     expect(outcome.logs).toEqual([{ stream: 'stdout', text: '42' }]);
   });
 
+  it('ルートのファイルが、サブディレクトリのファイルを相対 import で読む', async () => {
+    const outcome = await run({
+      'main.ts': 'import { answer } from \'./src/domain/answer.ts\';\nconsole.log(answer);',
+      'src/domain/answer.ts': 'export const answer = 42;',
+    }, 'main.ts');
+    expect(outcome.error).toBeNull();
+    expect(outcome.logs).toEqual([{ stream: 'stdout', text: '42' }]);
+  });
+
+  it('サブディレクトリのファイルが、親ディレクトリをたどる相対 import で、別のディレクトリのファイルを読む', async () => {
+    const outcome = await run({
+      'main.ts': 'import { run } from \'./src/useCase/run.ts\';\nconsole.log(run());',
+      'src/useCase/run.ts':
+        'import { Visit } from \'../domain/visit/visit.ts\';\nimport type { Shape } from \'../domain/shape.ts\';\nexport const run = (): string => Visit.name satisfies Shape;',
+      'src/domain/visit/visit.ts':
+        'import { base } from \'../../base.ts\';\nexport const Visit = { name: base + \'-visit\' } as const;',
+      'src/domain/shape.ts': 'export type Shape = string;',
+      'src/base.ts': 'export const base = \'root\';',
+    }, 'main.ts');
+    expect(outcome.error).toBeNull();
+    expect(outcome.logs).toEqual([{ stream: 'stdout', text: 'root-visit' }]);
+  });
+
   it('トップレベルの await を使える', async () => {
     const outcome = await run({ 'main.ts': 'await Promise.resolve();\nconsole.log(\'done\');' }, 'main.ts');
     expect(outcome.logs.map((line) => line.text)).toEqual(['done']);

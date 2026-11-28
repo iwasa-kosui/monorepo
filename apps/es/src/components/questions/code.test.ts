@@ -11,13 +11,15 @@ describe('記録をやめる前後のコード', () => {
     expect(diff.deleted).toBeGreaterThanOrEqual(1);
   });
 
-  it('イベント中心に書いた形は、保存する処理から業務イベントを書く1行を削除しただけで、追加する行がない', () => {
+  it('イベント中心に書いた形は、保存する処理から業務イベントを書く文を削除しただけで、追加する行がない', () => {
     const diff = diffFiles(storeRecording, storeWithdrawn, 1000);
     expect(diff.added).toBe(0);
-    expect(diff.deleted).toBe(1);
+    expect(diff.deleted).toBeGreaterThanOrEqual(1);
   });
 
   it('イベント中心に書いた形の演習のコードは、記録している保存する処理を含む', () => {
-    expect(snapshotFiles('chapter-2-event-centered')['visit-store.ts']).toContain(storeRecording);
+    expect(snapshotFiles('chapter-2-event-centered')['src/adaptor/sqlite/visit/visitCancelledStore.ts']).toContain(
+      storeRecording,
+    );
   });
 });

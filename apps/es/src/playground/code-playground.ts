@@ -4,6 +4,7 @@ import { revealText } from './editor.ts';
 import { maxLogLineChars, maxMessageChars } from './engine/limits.ts';
 import type { LogLine, LogTable, RunOutcome } from './engine/types.ts';
 import { clearEdits, loadEdits, saveEdits } from './storage.ts';
+import { type Tour, tourAnnouncement } from './tour.ts';
 import { createWorkbench } from './workbench.ts';
 
 const maxShownFailures = 50;
@@ -13,9 +14,11 @@ type CodeConfig = {
   files: Record<string, string>;
   editable: string[];
   readonly: string[];
+  opened?: string[];
   testFile: string | null;
   reveal: string | null;
   complete: { files: Record<string, string> } | null;
+  tour?: Tour | null;
 };
 
 const renderTable = ({ head, rows }: LogTable): HTMLElement =>
@@ -145,6 +148,91 @@ const renderOutcome = (outcome: RunOutcome, kind: 'tests' | 'script'): HTMLEleme
     : renderLogs(outcome);
 };
 
+const createTourPanel = (
+  root: HTMLElement,
+  tour: Tour,
+  onSelect: (index: number) => void,
+): { update: (index: number | null) => void } | null => {
+  const side = root.closest('[data-ide]')?.querySelector<HTMLElement>('.ide-side') ?? null;
+  if (side === null) {
+    return null;
+  }
+  const listId = `${side.querySelector('.ide-files')?.id ?? 'ide-files'}-tour`;
+  const head = element('button', {
+    className: 'ide-folder ide-tour-head',
+    attributes: { type: 'button', 'aria-expanded': 'true', 'aria-controls': listId },
+  }, [
+    element('span', { className: 'ide-chevron', attributes: { 'aria-hidden': 'true' } }),
+    element('span', { className: 'ide-folder-name', text: 'CODE TOUR' }),
+  ]);
+  const buttons = tour.steps.map((step, index) =>
+    element('button', {
+      className: 'ide-tour-step',
+      attributes: { type: 'button', 'data-ide-tour-step': String(index), title: step.title },
+    }, [
+      element('span', { className: 'ide-tour-index', text: String(index + 1), attributes: { 'aria-hidden': 'true' } }),
+      element('span', { className: 'ide-tour-name', text: step.title }),
+    ])
+  );
+  const list = element(
+    'ol',
+    { className: 'ide-tour-steps', attributes: { id: listId, 'aria-label': tour.title } },
+    buttons.map((button) => element('li', {}, [button])),
+  );
+  const section = element('section', { className: 'ide-tour', attributes: { 'aria-label': 'CODE TOUR' } }, [
+    head,
+    list,
+  ]);
+  const status = element('div', {
+    className: 'visually-hidden',
+    attributes: { 'aria-live': 'polite', 'data-role': 'tour-status' },
+  });
+  side.dataset['tour'] = '';
+  side.append(section);
+  root.append(status);
+
+  head.addEventListener('click', () => {
+    head.setAttribute('aria-expanded', String(head.getAttribute('aria-expanded') !== 'true'));
+  });
+  list.addEventListener('click', (event) => {
+    const picked = event.target instanceof Element
+      ? event.target.closest<HTMLElement>('[data-ide-tour-step]')
+      : null;
+    if (picked !== null) {
+      onSelect(Number(picked.dataset['ideTourStep']));
+    }
+  });
+
+  const keepVisible = (button: HTMLElement): void => {
+    if (list.clientHeight === 0) {
+      return;
+    }
+    const top = button.offsetTop;
+    const bottom = top + button.offsetHeight;
+    if (top < list.scrollTop) {
+      list.scrollTop = top;
+    } else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
+    }
+  };
+
+  return {
+    update: (index) => {
+      buttons.forEach((button, position) => {
+        if (position === index) {
+          button.setAttribute('aria-current', 'step');
+          keepVisible(button);
+        } else {
+          button.removeAttribute('aria-current');
+        }
+      });
+      if (index !== null) {
+        status.textContent = tourAnnouncement(tour, index);
+      }
+    },
+  };
+};
+
 const mount = (root: HTMLElement): void => {
   const config = JSON.parse(root.dataset.config ?? '{}') as CodeConfig;
   const output = query<HTMLElement>(root, '[data-role="output"]');
@@ -156,6 +244,7 @@ const mount = (root: HTMLElement): void => {
   const shown = [...config.editable, ...config.readonly];
   const inIde = root.closest('[data-ide]') !== null;
   const openable = inIde ? Object.keys(config.files) : shown;
+  const opened = inIde ? config.opened ?? shown : shown;
   root.setAttribute('data-mounted', '');
   let busy = false;
   let backup: Record<string, string> | null = null;
@@ -167,6 +256,8 @@ const mount = (root: HTMLElement): void => {
     }
   };
 
+  const tour = inIde ? config.tour ?? null : null;
+  const tourPanel = tour === null ? null : createTourPanel(root, tour, (index) => workbench.showTourStep(index));
   const saved = loadEdits(config.exerciseId);
   const workbench = createWorkbench({
     root,
@@ -178,13 +269,15 @@ const mount = (root: HTMLElement): void => {
     ),
     baseline: config.files,
     editable: config.editable,
-    opened: shown,
-    active: shown[0] ?? '',
+    opened,
+    ...(inIde && config.opened !== undefined ? { deferShowAll: true } : {}),
+    active: opened[0] ?? '',
     onChange: () => {
       persist();
       discardBackup();
     },
     onSelect: () => reveal(),
+    ...(tour !== null && tourPanel !== null ? { tour, onTourStep: tourPanel.update } : {}),
   });
   const view = workbench.view;
 
@@ -292,6 +385,9 @@ const mount = (root: HTMLElement): void => {
   });
   retryButton.addEventListener('click', () => runtime.reload());
   reveal();
+  if (tourPanel !== null) {
+    workbench.showTourStep(0);
+  }
   updateControls();
 };
 

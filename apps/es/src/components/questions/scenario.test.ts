@@ -8,12 +8,12 @@ describe('質問のページのエディタのシナリオ', () => {
     expect(scenarioProblems(eventCenteredEditor)).toEqual([]);
   });
 
-  it('タブはエディタの 1 つだけで、最初に visit.ts を開く', () => {
+  it('タブはエディタの 1 つだけで、最初に visits.ts を開く', () => {
     expect(eventCenteredEditor.tabs).toHaveLength(1);
     const [tab] = eventCenteredEditor.tabs;
     expect(tab?.kind).toBe('editor');
     if (tab?.kind === 'editor') {
-      expect(tab.config.active).toBe('visit.ts');
+      expect(tab.config.active).toBe('visits.ts');
       expect(tab.config.branch).toBe('event-centered');
     }
   });

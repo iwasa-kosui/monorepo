@@ -1,3 +1,4 @@
+import { baseName } from '../../lib/file-tree';
 import { openingSchedule } from '../../workspace/channel';
 import type {
   Actor,
@@ -219,7 +220,7 @@ export const editorTab = (
 ): TabDefinition => ({
   key,
   kind: 'editor',
-  title: name?.title ?? `${active} — clinic-api`,
+  title: name?.title ?? `${baseName(active)} — clinic-api`,
   label: 'エディタ',
   url: `https://ide.internal.example/${name?.directory ?? 'clinic-api'}/${active}`,
   favicon: { tone: 'azure', shape: 'rounded' },

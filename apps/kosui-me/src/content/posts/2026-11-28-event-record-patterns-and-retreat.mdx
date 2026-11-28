@@ -75,155 +75,50 @@ export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: 
 
 二つ目は、先に述べた形を実践するパターンです。ビジネスロジックが業務イベントを返し、状態テーブルにはその業務イベントから取った値を書きます。[以前の記事](https://kosui.me/posts/2025/05/06/142842)で紹介した設計がこれに当たります。以前の記事では、業務イベントに当たるものをドメインイベントと呼んでいました。
 
-ハンズオンの来院のキャンセルをこのパターンで書き直すと、次のようになります。まず、集約と業務イベントを型で抽象化したユーティリティを用意します。
+ハンズオンの来院のキャンセルをこのパターンで書き直すと、ビジネスロジックは次のようになります。
 
 ```typescript
-import type { DatabaseSync } from 'node:sqlite';
-
-export type Aggregate<TType extends string, TId extends string, TState> = Readonly<{
-  type: TType;
-  id: TId;
-  state: TState;
-}>;
-
-export type AnyAggregate = Aggregate<string, string, unknown>;
-
-export type BusinessEvent<TAggregate extends AnyAggregate, TEventName extends string, TPayload> = Readonly<{
-  eventAt: Date;
-  eventName: TEventName;
-  payload: TPayload;
-  targetId: TAggregate['id'];
-  targetType: TAggregate['type'];
-  targetState: TAggregate['state'];
-}>;
-
-export type AnyBusinessEvent = BusinessEvent<AnyAggregate, string, unknown>;
-
-export const businessEventFactory = <TAggregate extends AnyAggregate>(targetType: TAggregate['type']) => ({
-  create: <TEventName extends string, TPayload>(
-    eventName: TEventName,
-    payload: TPayload,
-    target: Pick<TAggregate, 'id' | 'state'>,
-    now: Date,
-  ): BusinessEvent<TAggregate, TEventName, TPayload> => ({
-    eventAt: now,
-    eventName,
-    payload,
-    targetId: target.id,
-    targetType,
-    targetState: target.state,
-  }),
-});
-
-export type Resolver<TCondition, TResolved> = Readonly<{
-  resolve: (condition: TCondition) => TResolved;
-}>;
-
-export type Store<TEvent extends AnyBusinessEvent> = Readonly<{
-  store: (event: TEvent) => void;
-}>;
-
-export const recordBusinessEvent = (db: DatabaseSync, event: AnyBusinessEvent): void => {
-  db.prepare(`
-    INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(
-    event.eventAt.toISOString(),
-    event.eventName,
-    JSON.stringify(event.payload),
-    event.targetId,
-    event.targetType,
-    JSON.stringify(event.targetState),
+const cancel = (
+  visit: Visit,
+  input: Readonly<{ reason: string; operatedBy: string }>,
+  now: Date,
+): VisitCancelled => {
+  if (visit.status === 'completed') {
+    throw new Error('診察が終わった来院はキャンセルできません');
+  }
+  return VisitEvent.create(
+    visit.id,
+    { ...visit, status: 'cancelled' },
+    'VisitCancelled',
+    { reason: input.reason, operatedBy: input.operatedBy },
+    now,
   );
 };
-```
 
-集約は、来院のように、ID と状態を持つ対象です。業務イベントは、どの集約に何が起きたかを、ペイロードと変更後の状態とともに持ちます。このユーティリティは、来院のキャンセル以外の更新処理でも使えます。
-
-次に、このユーティリティを使って、来院のビジネスロジックを書きます。
-
-```typescript
-import type { Aggregate, BusinessEvent } from './business-event.ts';
-import { businessEventFactory } from './business-event.ts';
-
-export type VisitState = Readonly<{
-  id: string;
-  pet_name: string;
-  status: 'reserved' | 'checked_in' | 'completed' | 'cancelled';
-}>;
-
-export type Visit = Aggregate<'Visit', VisitState['id'], VisitState>;
-
-export type VisitCancelled = BusinessEvent<
-  Visit,
-  'VisitCancelled',
-  Readonly<{ reason: string; operatedBy: string }>
->;
-
-const VisitEvent = businessEventFactory<Visit>('Visit');
-
-export const Visit = {
-  cancel: (
-    visit: VisitState,
-    input: Readonly<{ reason: string; operatedBy: string }>,
-    now: Date,
-  ): VisitCancelled => {
-    if (visit.status === 'completed') {
-      throw new Error('診察が終わった来院はキャンセルできません');
-    }
-    return VisitEvent.create(
-      'VisitCancelled',
-      { reason: input.reason, operatedBy: input.operatedBy },
-      { id: visit.id, state: { ...visit, status: 'cancelled' } },
-      now,
-    );
-  },
-} as const;
+export const Visit = { cancel } as const;
 ```
 
 `Visit.cancel` は DB に触れず、何が起きたかを表す業務イベントを返します。業務イベントは、ペイロードに加えて、変更後の状態を持ちます。
 
-最後に、業務イベントを保存する処理と、それを呼ぶ更新処理を書きます。
+業務イベントを保存するストアは、次のようになります。
 
 ```typescript
-import type { DatabaseSync } from 'node:sqlite';
-import type { Resolver, Store } from './business-event.ts';
-import { recordBusinessEvent } from './business-event.ts';
-import type { VisitCancelled, VisitState } from './visit.ts';
-
-export const visitResolver = (db: DatabaseSync): Resolver<VisitState['id'], VisitState> => ({
-  resolve: (visitId) => {
-    const visit = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(visitId);
-    if (visit === undefined) {
-      throw new Error('来院が見つかりません');
-    }
-    return visit as VisitState;
-  },
-});
-
-export const visitCancelledStore = (db: DatabaseSync): Store<VisitCancelled> => ({
+export const createSqliteVisitCancelledStore = (db: DatabaseSync): VisitCancelledStore => ({
   store: (event) => {
     db.prepare(`UPDATE visits SET status = ? WHERE id = ?`).run(event.targetState.status, event.targetId);
-    recordBusinessEvent(db, event);
+    db.prepare(`
+      INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(...toBusinessEventRow(event));
   },
 });
 ```
 
-```typescript
-export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: string; operatedBy: string }): void => {
-  withTransaction(db, () => {
-    const visit = visitResolver(db).resolve(input.visitId);
-    const event = Visit.cancel(visit, input, new Date());
-    visitCancelledStore(db).store(event);
-  });
-};
-```
-
-`visitCancelledStore` は、業務イベントが持つ変更後の状態を `visits` に書き、同じ業務イベントを `business_events` に書きます。`visits` に書く値と `target_state` に残す値は同じ業務イベントから取るので、この2つは一致します。
+ストアは、業務イベントが持つ変更後の状態を `visits` に書き、同じ業務イベントを `business_events` に書きます。`visits` に書く値と `target_state` に残す値は同じ業務イベントから取るので、この2つは一致します。
 
 <Figure name="event-record-event-centered" />
 
-このコードは、次のエディタで、テストと一緒に動かせます。
+集約と業務イベントの型、ユースケース、テストを含む全体は、次のエディタで読めます。ディレクトリの分け方は、実際のアプリに合わせています。ツアーの「次へ」を押すと、来院のキャンセルが処理される順に、コードをたどれます。
 
 <CodeEditor name="event-centered" title="来院のキャンセルを、業務イベントを返す関数と保存する処理で書いたコード" />
 
@@ -263,7 +158,7 @@ iori でも同じ考え方で、7日より古いイベントを毎日 Cloudflare
 
 パターン1は、最も簡単にやめられます。更新処理から `INSERT` 文を消せば、記録は止まります。`visits` の更新は何も変わりません。残った `business_events` の行は、S3 などへ書き出してから削除します。
 
-パターン2とパターン3では、ストアから `recordBusinessEvent` の呼び出しを消します。`visits` への書き込みは残るので、現在の状態は失われません。ビジネスロジックが業務イベントを返す形は、そのまま残せます。業務イベントは関数の戻り値として残るだけで、どこにも記録されなくなります。パターン3であれば、書き直した領域が限られている分、元の形に戻す場合の手間も小さくなります。
+パターン2とパターン3では、ストアから `business_events` への `INSERT` 文を消します。`visits` への書き込みは残るので、現在の状態は失われません。ビジネスロジックが業務イベントを返す形は、そのまま残せます。業務イベントは関数の戻り値として残るだけで、どこにも記録されなくなります。パターン3であれば、書き直した領域が限られている分、元の形に戻す場合の手間も小さくなります。
 
 どのパターンでも撤退を難しくするのは、業務イベントを読む機能です。画面や別の処理が業務イベントを読んでいると、記録をやめる前に、その機能の代わりを用意しなければなりません。いざという時にやめられる状態を保ちたいなら、業務イベントを読む箇所を把握しておくべきです。
 

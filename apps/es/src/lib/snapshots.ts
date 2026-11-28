@@ -1,6 +1,6 @@
 import { extractExport, extractFrom, extractLines, insertTemplates, toInsertTemplate } from './extract';
 
-const sources = import.meta.glob<string>('/exercises/chapter-*/*.ts', {
+const sources = import.meta.glob<string>(['/exercises/chapter-*/**/*.ts', '!/exercises/**/node_modules/**'], {
   query: '?raw',
   import: 'default',
   eager: true,

@@ -1,0 +1,61 @@
+---
+import { baseName, type FileTree } from '../../lib/file-tree';
+
+type Props = {
+  tree: FileTree;
+  active: string;
+  idPrefix: string;
+  depth?: number;
+};
+
+const { tree, active, idPrefix, depth = 1 } = Astro.props;
+const depthStyle = depth > 1 ? `--depth: ${depth}` : undefined;
+const dirIdOf = (path: string): string =>
+  `${idPrefix}-${path.replaceAll('/', '-')}`;
+---
+{
+  [
+    ...tree.dirs.map((dir) => (
+    <li>
+      <button
+        type="button"
+        class="ide-folder ide-dir"
+        data-ide-dir={dir.path}
+        aria-expanded="true"
+        aria-controls={dirIdOf(dir.path)}
+        style={`--depth: ${depth}`}
+      >
+        <span class="ide-chevron" aria-hidden="true"></span>
+        <span class="ide-folder-name">{dir.name}</span>
+      </button>
+      <ul class="ide-files" id={dirIdOf(dir.path)}>
+        <Astro.self
+          tree={dir}
+          active={active}
+          idPrefix={idPrefix}
+          depth={depth + 1}
+        />
+      </ul>
+    </li>
+  )),
+    ...tree.files.map((file) => (
+    <li>
+      <button
+        type="button"
+        class="ide-file"
+        data-ide-file={file}
+        aria-current={file === active ? 'true' : undefined}
+        title={depth > 1 ? file : undefined}
+        style={depthStyle}
+      >
+        <span class="ide-icon" aria-hidden="true">TS</span>
+        <span class="ide-name">{baseName(file)}</span>
+        <span class="ide-mark" data-ide-mark hidden>
+          <span aria-hidden="true">M</span>
+          <span class="cfig-sr">（編集済み）</span>
+        </span>
+      </button>
+    </li>
+  )),
+  ]
+}

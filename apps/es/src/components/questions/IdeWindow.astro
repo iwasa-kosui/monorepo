@@ -28,12 +28,18 @@ const { scenario, fill = false } = Astro.props;
 }
 .q-ide :global(.scene .pages) {
   flex: none;
-  height: 32rem;
+  height: 40rem;
+}
+
+@media (max-width: 639px) {
+  .q-ide:not(.q-ide--fill) :global(.scene .pages) {
+    height: 55rem;
+  }
 }
 
 @media (min-width: 64rem) {
   .q-ide :global(.scene .pages) {
-    height: 38rem;
+    height: 44rem;
   }
 }
 

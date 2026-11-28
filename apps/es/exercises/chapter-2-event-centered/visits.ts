@@ -1,7 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { withTransaction } from './db.ts';
-import { visitCancelledStore, visitResolver } from './visit-store.ts';
-import { Visit } from './visit.ts';
+import { createSqliteVisitCancelledStore } from './src/adaptor/sqlite/visit/visitCancelledStore.ts';
+import { createSqliteVisitResolver } from './src/adaptor/sqlite/visit/visitResolver.ts';
+import { CancelVisitUseCase } from './src/useCase/cancelVisit.ts';
 
 export const reserveVisit = (db: DatabaseSync, input: { visitId: string; petName: string }): void => {
   db.prepare(`INSERT INTO visits (id, pet_name, status) VALUES (?, ?, 'reserved')`).run(input.visitId, input.petName);
@@ -16,9 +17,10 @@ export const completeVisit = (db: DatabaseSync, input: { visitId: string }): voi
 };
 
 export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: string; operatedBy: string }): void => {
-  withTransaction(db, () => {
-    const visit = visitResolver(db).resolve(input.visitId);
-    const event = Visit.cancel(visit, input, new Date());
-    visitCancelledStore(db).store(event);
-  });
+  CancelVisitUseCase.create({
+    visitResolver: createSqliteVisitResolver(db),
+    visitCancelledStore: createSqliteVisitCancelledStore(db),
+    transaction: (run) => withTransaction(db, run),
+    now: () => new Date(),
+  }).run(input);
 };
