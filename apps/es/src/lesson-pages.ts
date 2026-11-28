@@ -70,9 +70,10 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     role: 'エディタでテストを実行し、第2章で書くコードがまだ無いために4件が失敗することを確かめる',
   },
   'chapter-2/01': {
-    flow: 'explain',
-    mode: 'listen',
-    role: 'ADR（設計上の決定を残す文書）に同僚が並べた案から、自分ならどの案を選ぶかを決め、その後で同僚の決定と比べる',
+    flow: 'try',
+    mode: 'do',
+    role:
+      'コーディングエージェントに ADR（設計上の決定を残す文書）の叩き台を作成させ、自分で案を決めてプルリクエストを提出し、同僚のレビューを受ける',
   },
   'chapter-2/02': {
     flow: 'exercise',

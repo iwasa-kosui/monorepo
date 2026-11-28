@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import { record } from './conditions';
 import {
+  choiceNudgeOf,
+  type ChoiceView,
+  chooseButtonSelector,
+  draftButtonSelector,
   fewLogRows,
   type LogView,
   nextSignals,
   type NudgeContext,
   nudgeSpecOf,
+  optionListSelector,
   restoredKey,
   restoreSelector,
   resultTableSelector,
@@ -322,5 +327,69 @@ describe('nudgeSpecOf', () => {
     ) {
       expect(nudgeSpecOf(name, context)).toBeNull();
     }
+  });
+});
+
+describe('choiceNudgeOf', () => {
+  const viewOf = (overrides: Partial<ChoiceView>): ChoiceView => ({
+    stage: 'made',
+    review: 'none',
+    submittable: false,
+    ...overrides,
+  });
+
+  it('叩き台を作成する前は、叩き台を作成させるボタンを、既定の文言で指す', () => {
+    expect(choiceNudgeOf(viewOf({ stage: 'none' }))).toEqual({ selector: draftButtonSelector });
+  });
+
+  it('叩き台の作成中は、何も指さない', () => {
+    expect(choiceNudgeOf(viewOf({ stage: 'making' }))).toBeNull();
+  });
+
+  it('叩き台を作成した後で、提出できる案を選択していなければ、案の一覧の全体を指し、特定の案の行は指さない', () => {
+    const spec = choiceNudgeOf(viewOf({}));
+    expect(spec).toEqual({ selector: optionListSelector, text: '案を1つ選択します' });
+    expect(spec !== null && 'selector' in spec ? spec.selector : '').not.toContain('data-option-row');
+  });
+
+  it('提出できる案を選択していれば、レビューを依頼するボタンを指す', () => {
+    expect(choiceNudgeOf(viewOf({ submittable: true }))).toEqual({ selector: chooseButtonSelector });
+  });
+
+  it('Changes requested の後で、まだ別の案を選択していなければ、案の一覧の全体を指す', () => {
+    expect(choiceNudgeOf(viewOf({ review: 'changes-requested' }))).toEqual({
+      selector: optionListSelector,
+      text: '案を1つ選択します',
+    });
+    expect(choiceNudgeOf(viewOf({ review: 'changes-requested', submittable: true }))).toEqual({
+      selector: chooseButtonSelector,
+    });
+  });
+
+  it('レビューの待ちの間と、Approved の後は、何も指さない', () => {
+    for (const submittable of [false, true]) {
+      expect(choiceNudgeOf(viewOf({ review: 'requested', submittable }))).toBeNull();
+      expect(choiceNudgeOf(viewOf({ review: 'approved', submittable }))).toBeNull();
+    }
+  });
+
+  it('option:reviewed が未達のとき、nudgeSpecOf は採用案の識別子によらず choice の状態で対象を決める', () => {
+    const withChoice = { ...context, choice: viewOf({ stage: 'none' }) };
+    expect(nudgeSpecOf({ name: 'option:reviewed', key: 'append-in-update' }, withChoice)).toEqual({
+      selector: draftButtonSelector,
+    });
+    expect(nudgeSpecOf({ name: 'option:reviewed', key: 'other' }, withChoice)).toEqual({
+      selector: draftButtonSelector,
+    });
+    expect(nudgeSpecOf({ name: 'option:reviewed', key: 'append-in-update' }, context)).toBeNull();
+  });
+
+  it('完了条件が採用案のレビューなら、未達の間だけ、choice の状態から対象を決める', () => {
+    const done: Condition = { name: 'option:reviewed', key: 'append-in-update' };
+    const withChoice = { ...context, choice: viewOf({ submittable: true }) };
+    const specs = nextSignals(firedOf(), undefined, done).map((signal) => nudgeSpecOf(signal, withChoice));
+    expect(specs).toEqual([{ selector: chooseButtonSelector }]);
+    expect(nextSignals(firedOf(['option:reviewed', 'write-to-log']), undefined, done)).toEqual([done]);
+    expect(nextSignals(firedOf(['option:reviewed', 'append-in-update']), undefined, done)).toEqual([]);
   });
 });

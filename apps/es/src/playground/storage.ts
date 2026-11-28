@@ -88,29 +88,6 @@ export const saveQuestion = (id: string, question: string): boolean => {
   }
 };
 
-const choicePrefix = 'es:choice:';
-
-export const loadChoice = (id: string): string | null => {
-  try {
-    return storage()?.getItem(`${choicePrefix}${id}`) ?? null;
-  } catch {
-    return null;
-  }
-};
-
-export const saveChoice = (id: string, option: string): boolean => {
-  try {
-    const target = storage();
-    if (target === null) {
-      return false;
-    }
-    target.setItem(`${choicePrefix}${id}`, option);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 const liveNameKey = 'es:live:name';
 const liveSenderKey = 'es:live:sender';
 

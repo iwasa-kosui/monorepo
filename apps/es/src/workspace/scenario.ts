@@ -16,6 +16,7 @@ export const signalNames = [
   'code:run',
   'question:written',
   'option:chosen',
+  'option:reviewed',
   'figure:step',
 ] as const;
 
@@ -162,8 +163,8 @@ export type EditorConfig = {
 };
 
 export type DocChoice = {
-  readonly id: string;
   readonly pendingTitle: string;
+  readonly draftLabel: string;
 };
 
 export type DocConfig = {

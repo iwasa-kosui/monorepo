@@ -82,11 +82,11 @@ export const posts = {
   wantRecord: colleague('再発防止で、キャンセルしたときに記録を残すようにしたいです'),
   runTests: colleague('先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです'),
   failedFour: colleague('落ちた4件が、これから足すところです👍'),
-  optionsListed: colleague(
-    'キャンセルの記録の残し方を、案として ADR に並べました。どの案がいいと思うか、先に意見をもらえますか',
+  prRequested: colleague(
+    'キャンセルの記録をどう残すか、ADR にまとめてプルリクエストを出してもらえますか。叩き台は、コーディングエージェントに作らせて大丈夫です',
   ),
-  sameOpinion: colleague('同じ意見です。この案で進めます'),
-  otherOption: colleague('その案も検討しました。評価を「検討した案」に書いたので、自分の選んだ案と比べてみてください'),
+  reviewCommented: colleague('プルリクエストにコメントしました。見てもらえますか'),
+  reviewApproved: colleague('プルリクエストを Approve しました。この案で進めます'),
   tableRecord: colleague('記録を1つのテーブルにまとめる案も ADR にしました'),
   prSeen: colleague('PR 見ました！差分、思ったより小さいですね'),
   prRemaining: colleague('足したあとに残る作業も書いておきます'),
@@ -145,6 +145,40 @@ export const posts = {
   ),
   skipIfNone: presenter('答えたい質問が特に無ければ、足さなくて大丈夫です'),
 } as const satisfies Record<string, Post>;
+
+const askAgain = 'ほかの案も見て、もう一度選んでもらえますか';
+
+export const adrReviews: Readonly<Record<string, readonly string[]>> = {
+  'append-in-update': [
+    '同じ意見です。この案で進めます',
+    'この案にも欠点があって、記録の保存に不具合があると、来院のキャンセルも失敗します。それでも、問い合わせに答えられることと、記録を取りこぼさないことを優先しました',
+  ],
+  'write-to-log': [
+    'ログに出力する案ですね。DB の変更が不要なのは、この案の利点だと思います',
+    'ただ、ログの出力は、来院の更新と同じトランザクションに入れられません。更新だけが成功して、記録が残らないことがあります',
+    askAgain,
+  ],
+  'add-visits-column': [
+    'visits テーブルに列を追加する案ですね。テーブルが増えませんし、来院ごとのキャンセルが1回だけなら、これで足ります',
+    'ただ、同じ来院をもう一度キャンセルすると、前回の人と理由が上書きされます。visits テーブルの変更も必要になります',
+    askAgain,
+  ],
+  'db-feature': [
+    'DB の機能で自動的に記録する案ですね。更新処理ごとにコードを足さなくて済みますし、SQL で直接 UPDATE した変更も記録できます',
+    'ただ、自動で記録できるのは、変更の前後の値だけです。今回の問い合わせで聞かれた、キャンセルした人と理由は記録できません',
+    askAgain,
+  ],
+  'separate-transaction': [
+    '別のトランザクションで記録する案ですね。記録の不具合が来院のキャンセルを止めないのは、この案の利点だと思います',
+    'ただ、記録に失敗すると、更新だけが成功します。そのキャンセルの記録は残りません',
+    askAgain,
+  ],
+  'rebuild-system': [
+    'システム全体を作り直す案ですね。記録の実装が漏れる更新処理が無くなるのは、この案の利点だと思います',
+    'ただ、全機能を一度に移行するので、停止と不具合のリスクが大きくなります',
+    askAgain,
+  ],
+};
 
 export const replyButton = (label: string): readonly ChatButton[] => [{ name: 'reply', label, primary: true }];
 

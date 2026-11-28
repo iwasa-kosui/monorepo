@@ -1,6 +1,16 @@
 import { sceneSteps } from '../../playground/scene-steps';
-import type { Post, TabDefinition, WorkspaceScenario } from '../../workspace/scenario';
-import { docTab, editorTab, inquiry, lessonScenario, opening, posts, thanks, whyNotRecorded } from './common';
+import type { Post, TabDefinition, TimelineEvent, WorkspaceScenario } from '../../workspace/scenario';
+import {
+  adrReviews,
+  docTab,
+  editorTab,
+  inquiry,
+  lessonScenario,
+  opening,
+  posts,
+  thanks,
+  whyNotRecorded,
+} from './common';
 
 const earlier: readonly Post[] = [
   inquiry,
@@ -13,14 +23,23 @@ const earlier: readonly Post[] = [
   posts.failedFour,
 ];
 
+export const adoptedOption = 'append-in-update';
+
+const reviewPosts: readonly TimelineEvent[] = Object.keys(adrReviews).map((key): TimelineEvent => ({
+  when: 'option:reviewed',
+  key,
+  kind: 'post',
+  post: key === adoptedOption ? posts.reviewApproved : posts.reviewCommented,
+}));
+
 export const chapter2Explain: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-explain',
   label: '更新処理の中で記録する方針',
   history: earlier,
+  done: { name: 'option:reviewed', key: adoptedOption },
   timeline: [
-    ...opening(posts.optionsListed),
-    { when: 'option:chosen', key: 'adopted', kind: 'post', post: posts.sameOpinion },
-    { when: 'option:chosen', key: 'other', kind: 'post', post: posts.otherOption },
+    ...opening(posts.prRequested),
+    ...reviewPosts,
   ],
   tabs: [
     docTab(
@@ -28,7 +47,10 @@ export const chapter2Explain: WorkspaceScenario = lessonScenario({
       'ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する',
       'adr/1-cancel-record',
       true,
-      { id: 'adr-1', pendingTitle: 'キャンセルの記録を、どこに、どう残すか' },
+      {
+        pendingTitle: 'キャンセルの記録を、どこに、どう残すか',
+        draftLabel: 'コーディングエージェントが作成した叩き台',
+      },
     ),
   ],
 });
@@ -48,7 +70,7 @@ export const chapter2Step1: WorkspaceScenario = lessonScenario({
 export const chapter2Table: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-table',
   label: '記録を1つのテーブルにまとめる',
-  history: [...earlier, posts.optionsListed],
+  history: [...earlier, posts.prRequested],
   timeline: opening(posts.tableRecord),
   tabs: [
     docTab('memo', 'ADR 2: 出来事ごとの記録を、1つのテーブルにまとめる', 'adr/2-record-table', true),

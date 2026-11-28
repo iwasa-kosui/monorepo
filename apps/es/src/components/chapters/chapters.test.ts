@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 
 import { projectFilesOf } from '../../lib/snapshots';
 import { channelOfPost, openingChannel, typingStartMs } from '../../workspace/channel';
-import { type Post, signalNames, type WorkspaceScenario } from '../../workspace/scenario';
+import { isMet, record } from '../../workspace/conditions';
+import { type Post, type SignalName, signalNames, type WorkspaceScenario } from '../../workspace/scenario';
 import { createScheduler } from '../../workspace/scheduler';
 import { scenarioProblems } from '../../workspace/validate';
 import { evidenceScenario } from '../intro/evidence-scenario';
 import { incidentScenario } from '../intro/incident-scenario';
-import { devChannel, handsOnChannel, inquiryChannel } from './common';
+import { adoptedOption } from './chapter-2';
+import { adrReviews, devChannel, handsOnChannel, inquiryChannel } from './common';
 import { lessonScenarios } from './index';
 
 const entries = Object.entries(lessonScenarios);
@@ -137,10 +139,42 @@ const afterOwnQuestion =
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
-const optionsListed =
-  'キャンセルの記録の残し方を、案として ADR に並べました。どの案がいいと思うか、先に意見をもらえますか';
-const sameOpinion = '同じ意見です。この案で進めます';
-const otherOption = 'その案も検討しました。評価を「検討した案」に書いたので、自分の選んだ案と比べてみてください';
+const prRequested =
+  'キャンセルの記録をどう残すか、ADR にまとめてプルリクエストを出してもらえますか。叩き台は、コーディングエージェントに作らせて大丈夫です';
+const reviewCommented = 'プルリクエストにコメントしました。見てもらえますか';
+const reviewApproved = 'プルリクエストを Approve しました。この案で進めます';
+const askAgain = 'ほかの案も見て、もう一度選んでもらえますか';
+const approvedComment = [
+  '同じ意見です。この案で進めます',
+  'この案にも欠点があって、記録の保存に不具合があると、来院のキャンセルも失敗します。それでも、問い合わせに答えられることと、記録を取りこぼさないことを優先しました',
+];
+const changesComments: Readonly<Record<string, readonly string[]>> = {
+  'write-to-log': [
+    'ログに出力する案ですね。DB の変更が不要なのは、この案の利点だと思います',
+    'ただ、ログの出力は、来院の更新と同じトランザクションに入れられません。更新だけが成功して、記録が残らないことがあります',
+    askAgain,
+  ],
+  'add-visits-column': [
+    'visits テーブルに列を追加する案ですね。テーブルが増えませんし、来院ごとのキャンセルが1回だけなら、これで足ります',
+    'ただ、同じ来院をもう一度キャンセルすると、前回の人と理由が上書きされます。visits テーブルの変更も必要になります',
+    askAgain,
+  ],
+  'db-feature': [
+    'DB の機能で自動的に記録する案ですね。更新処理ごとにコードを足さなくて済みますし、SQL で直接 UPDATE した変更も記録できます',
+    'ただ、自動で記録できるのは、変更の前後の値だけです。今回の問い合わせで聞かれた、キャンセルした人と理由は記録できません',
+    askAgain,
+  ],
+  'separate-transaction': [
+    '別のトランザクションで記録する案ですね。記録の不具合が来院のキャンセルを止めないのは、この案の利点だと思います',
+    'ただ、記録に失敗すると、更新だけが成功します。そのキャンセルの記録は残りません',
+    askAgain,
+  ],
+  'rebuild-system': [
+    'システム全体を作り直す案ですね。記録の実装が漏れる更新処理が無くなるのは、この案の利点だと思います',
+    'ただ、全機能を一度に移行するので、停止と不具合のリスクが大きくなります',
+    askAgain,
+  ],
+};
 const tableRecord = '記録を1つのテーブルにまとめる案も ADR にしました';
 const prSeen = 'PR 見ました！差分、思ったより小さいですね';
 const prRemaining = '足したあとに残る作業も書いておきます';
@@ -505,9 +539,9 @@ describe('第1章から第4章とまとめの筋書き', () => {
       wantRecord,
       runTests,
       failedFour,
-      optionsListed,
-      sameOpinion,
-      otherOption,
+      prRequested,
+      reviewCommented,
+      reviewApproved,
       tableRecord,
       prSeen,
       prRemaining,
@@ -651,8 +685,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
   describe('第2章', () => {
     it('ADR の 2 ページは、それまでの投稿を履歴に持ち、同僚が1件投稿する', () => {
       const expected: [string, readonly (readonly [string, string])[], string][] = [
-        ['chapter-2/01', earlier, optionsListed],
-        ['chapter-2/03', [...earlier, ['colleague', optionsListed]], tableRecord],
+        ['chapter-2/01', earlier, prRequested],
+        ['chapter-2/03', [...earlier, ['colleague', prRequested]], tableRecord],
       ];
       for (const [id, history, post] of expected) {
         const scenario = lessonScenarios[id];
@@ -662,7 +696,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       }
     });
 
-    describe('ADR 1 は、参加者が先に案を選び、その後で同僚の決定を見る', () => {
+    describe('ADR 1 は、参加者が叩き台から案を決めてレビューを依頼し、同僚のレビューを受ける', () => {
       const scenario = lessonScenarios['chapter-2/01'];
       if (scenario === undefined) throw new Error('筋書きがありません');
       const source = mdxOf('chapter-2/01');
@@ -675,10 +709,22 @@ describe('第1章から第4章とまとめの筋書き', () => {
         'rebuild-system',
       ];
 
+      it('完了条件は、採用案のレビューが Approved になったことで、別の案のレビューでは満たさない', () => {
+        expect(scenario.done).toEqual({ name: 'option:reviewed', key: adoptedOption });
+        const fired = new Map<SignalName, Set<string>>();
+        record(fired, 'option:reviewed', 'write-to-log');
+        expect(isMet(fired, scenario.done ?? 'workspace:started')).toBe(false);
+        record(fired, 'option:reviewed', adoptedOption);
+        expect(isMet(fired, scenario.done ?? 'workspace:started')).toBe(true);
+      });
+
       it('文書のタブは、案を選ぶ前の表題を持ち、本来の表題はタブの名前に残す', () => {
         const tab = scenario.tabs[0];
         if (tab?.kind !== 'doc') throw new Error('文書のタブがありません');
-        expect(tab.config.choice).toEqual({ id: 'adr-1', pendingTitle: 'キャンセルの記録を、どこに、どう残すか' });
+        expect(tab.config.choice).toEqual({
+          pendingTitle: 'キャンセルの記録を、どこに、どう残すか',
+          draftLabel: 'コーディングエージェントが作成した叩き台',
+        });
         expect(tab.config.approvable).toBe(true);
         expect(tab.title).toBe('ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する');
         for (const word of ['トランザクション', '追記', 'ADR', 'record-in']) {
@@ -686,19 +732,20 @@ describe('第1章から第4章とまとめの筋書き', () => {
         }
       });
 
-      it('案を選んだ後に、採用案と同じ案なら賛同し、別の案なら評価を読むよう促す発言を「# dev」に出す', () => {
+      it('レビューが表示されたとき、同僚が「# dev」に、採用案には承認の発言を、別の案にはコメントした発言を、案ごとの合図で 1 件ずつ出す', () => {
         const waiting = scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]));
-        expect(waiting).toMatchObject([
-          { when: 'option:chosen', key: 'adopted', kind: 'post', post: { actor: 'colleague', text: sameOpinion } },
-          { when: 'option:chosen', key: 'other', kind: 'post', post: { actor: 'colleague', text: otherOption } },
-        ]);
-        expect(waiting.flatMap((event) => (event.kind === 'post' ? [event.post.channel] : []))).toEqual([
-          devChannel,
-          devChannel,
-        ]);
+        expect(waiting).toHaveLength(optionIds.length);
+        expect(waiting.map((event) => event.key)).toEqual(optionIds);
+        for (const event of waiting) {
+          expect(event.when).toBe('option:reviewed');
+          if (event.kind !== 'post') throw new Error('投稿ではありません');
+          expect(event.post.actor).toBe('colleague');
+          expect(event.post.channel).toBe(devChannel);
+          expect(event.post.text).toBe(event.key === adoptedOption ? reviewApproved : reviewCommented);
+        }
       });
 
-      it.each([['adopted', sameOpinion], ['other', otherOption]] as const)(
+      it.each([['append-in-update', reviewApproved], ['db-feature', reviewCommented]] as const)(
         '合図のキーが %s のときだけ、対応する発言を出す',
         (key, text) => {
           const posted: string[] = [];
@@ -711,10 +758,35 @@ describe('第1章から第4章とまとめの筋書き', () => {
                 : [{ when: event.when, key: event.key, run: () => posted.push(event.post.text) }]
             ),
           );
+          scheduler.signal('option:reviewed', key);
+          expect(posted).toEqual([text]);
           scheduler.signal('option:chosen', key);
           expect(posted).toEqual([text]);
         },
       );
+
+      it('採用案は 2 つ、別の 5 つの案はそれぞれ 3 つ（案ごとの 2 つと共通の 1 つ）のコメントを持つ', () => {
+        expect(adoptedOption).toBe('append-in-update');
+        expect(Object.keys(adrReviews)).toEqual(optionIds);
+        expect(adrReviews[adoptedOption]).toEqual(approvedComment);
+        for (const id of optionIds.filter((option) => option !== adoptedOption)) {
+          expect(adrReviews[id], id).toEqual(changesComments[id]);
+          expect(adrReviews[id]?.at(-1), id).toBe(askAgain);
+        }
+        expect(Object.keys(changesComments)).toEqual(optionIds.filter((option) => option !== adoptedOption));
+      });
+
+      it('レビューのコメントが対象にする案の識別子は、MDX の案の識別子と一致する', () => {
+        const mdxIds = [...source.matchAll(/\{ id: '([a-z-]+)', name:/g)].map((match) => match[1]);
+        expect(Object.keys(adrReviews)).toEqual(mdxIds);
+      });
+
+      it('レビューのコメントは、MDX の本文の文をそのまま含めない', () => {
+        const sentences = source.split(/[。\n]/).map((line) => line.trim()).filter((line) => line.length >= 12);
+        for (const paragraph of Object.values(adrReviews).flat()) {
+          for (const sentence of sentences) expect(paragraph, sentence).not.toContain(sentence);
+        }
+      });
 
       it('MDX は、6 つの案に識別子を付け、採用する案を 1 つだけ決め、案を選べる形で部品を使う', () => {
         expect([...source.matchAll(/\{ id: '([a-z-]+)', name:/g)].map((match) => match[1])).toEqual(optionIds);

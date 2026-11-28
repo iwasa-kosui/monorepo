@@ -1,4 +1,5 @@
 ---
+import { reviewLabels } from '../../workspace/choice';
 import { richHtml } from '../figures/rich';
 
 type Mark = '○' | '△' | '×';
@@ -10,16 +11,33 @@ type Option = {
   readonly merit: string;
   readonly demerit: string;
 };
+type Reviewer = {
+  readonly name: string;
+  readonly avatar: string;
+  readonly tone: string;
+};
 type Props = {
   readonly id: string;
   readonly criteria: readonly string[];
   readonly options: readonly Option[];
   readonly choosable?: boolean;
+  readonly reviews?: Readonly<Record<string, readonly string[]>>;
+  readonly reviewer?: Reviewer;
 };
 
-const { id, criteria, options, choosable = false } = Astro.props;
+const { id, criteria, options, choosable = false, reviews, reviewer } =
+  Astro.props;
 if (choosable && options.some((option) => option.id === undefined)) {
   throw new Error('選べる案の一覧では、すべての案に id が必要です');
+}
+if (
+  choosable
+  && (reviewer === undefined
+    || options.some((option) => reviews?.[option.id ?? ''] === undefined))
+) {
+  throw new Error(
+    '選べる案の一覧では、すべての案にレビューと、レビューした人が必要です',
+  );
 }
 
 const headRem = 1;
@@ -75,6 +93,13 @@ const meaning: Record<Mark, string> = {
             <span class="adr-name">
               <span set:html={richHtml(option.name)} />
               {option.adopted === true && <span class="adr-badge">採用</span>}
+              {
+                choosable && (
+                  <span class="adr-requested">{
+                    reviewLabels['changes-requested']
+                  }</span>
+                )
+              }
               {choosable && <span class="adr-badge adr-own">あなたの選択</span>}
             </span>
             {
@@ -108,8 +133,61 @@ const meaning: Record<Mark, string> = {
     {
       choosable && (
         <button type="button" class="adr-choose" data-choose disabled>
-          この案を選ぶ
+          この案でレビューを依頼する
         </button>
+      )
+    }
+    {
+      choosable && reviewer !== undefined && (
+        <div class="adr-reviews-live" aria-live="polite">
+          <ol class="adr-reviews" role="list" data-reviews>
+            {
+              options.map((option) => (
+                <li
+                  class="adr-review"
+                  data-review-option={option.id}
+                  hidden
+                >
+                  <div class="adr-review-head">
+                    <span
+                      class="adr-review-avatar"
+                      data-tone={reviewer.tone}
+                      aria-hidden="true"
+                    >
+                      {reviewer.avatar}
+                    </span>
+                    <span class="adr-review-who">{reviewer.name}</span>
+                    <span
+                      class="adr-review-state"
+                      data-state={option.adopted === true
+                      ? 'approved'
+                      : 'changes-requested'}
+                    >
+                      {
+                        reviewLabels[
+                  option.adopted === true
+                    ? 'approved'
+                    : 'changes-requested'
+                ]
+                      }
+                    </span>
+                    <span
+                      class="adr-review-target"
+                      set:html={richHtml(option.name)}
+                    />
+                  </div>
+                  {
+                    (reviews?.[option.id ?? ''] ?? []).map((
+              paragraph,
+            ) => (
+                      <p class="adr-review-text">{paragraph}</p>
+                    ))
+                  }
+                </li>
+              ))
+            }
+          </ol>
+        </div>
       )
     }
   </div>
@@ -194,6 +272,96 @@ const meaning: Record<Mark, string> = {
 }
 .adr-row[data-chosen] .adr-own {
   display: inline;
+}
+.adr-requested {
+  display: none;
+  border-radius: var(--radius-sm);
+  background: var(--role-warning-soft);
+  padding: 0 var(--space-1);
+  color: var(--role-warning);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.adr-row[data-requested] .adr-requested {
+  display: inline;
+}
+.adr-reviews {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.adr-review {
+  border-radius: var(--radius-lg);
+  background: var(--role-sunken);
+  padding: var(--space-3) var(--space-4);
+}
+.adr-review[hidden] {
+  display: none;
+}
+.adr-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+.adr-review-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: #4a5568;
+  color: #ffffff;
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+}
+.adr-review-avatar[data-tone="rose"] {
+  background: #c2344d;
+}
+.adr-review-avatar[data-tone="blue"] {
+  background: #1264a3;
+}
+.adr-review-avatar[data-tone="green"] {
+  background: #2e7d32;
+}
+.adr-review-avatar[data-tone="amber"] {
+  background: #8a5a00;
+}
+.adr-review-avatar[data-tone="violet"] {
+  background: #6b3fa0;
+}
+.adr-review-who {
+  font-weight: var(--weight-bold);
+}
+.adr-review-state {
+  border-radius: var(--radius-pill);
+  background: var(--role-warning-soft);
+  padding: 0 var(--space-3);
+  color: var(--role-warning);
+  font-size: var(--text-note);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.adr-review-state[data-state="approved"] {
+  background: var(--role-success);
+  color: var(--role-on-accent);
+}
+.adr-review-target {
+  flex-basis: 100%;
+  color: var(--role-muted);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+  word-break: auto-phrase;
+}
+.adr-review-text {
+  margin: var(--space-2) 0 0;
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
 }
 :global(.panel[data-choice="pending"]) .adr-head,
 :global(.panel[data-choice="pending"]) .adr-badge,

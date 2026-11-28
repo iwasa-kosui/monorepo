@@ -1,3 +1,4 @@
+import type { DraftStage, ReviewState } from './choice';
 import { type FiredSignals, isMet, unmet } from './conditions';
 import { replyGate } from './rules';
 import type { Condition, GatesConfig, SignalName, SignalRef, TabDefinition } from './scenario';
@@ -20,6 +21,12 @@ export type LogView = {
   readonly initialQuery: string;
 };
 
+export type ChoiceView = {
+  readonly stage: DraftStage;
+  readonly review: ReviewState;
+  readonly submittable: boolean;
+};
+
 export type NudgeContext = {
   readonly tabs: readonly Pick<TabDefinition, 'key' | 'kind'>[];
   readonly selected: string;
@@ -29,6 +36,7 @@ export type NudgeContext = {
   readonly resetSqlShown?: boolean;
   readonly rowsShown?: boolean;
   readonly live?: { readonly channel: string; readonly shown: boolean; readonly written: boolean };
+  readonly choice?: ChoiceView;
 };
 
 export const restoredKey = 'restored';
@@ -46,6 +54,12 @@ export const resultTableSelector = '[data-playground="sql"] .playground-result t
 export const liveInputSelector = '[data-live-input]';
 
 export const liveSendSelector = '[data-action="send"]';
+
+export const draftButtonSelector = '[data-draft-button]';
+
+export const chooseButtonSelector = '[data-choose]';
+
+export const optionListSelector = '[data-adr-options] .adr-list';
 
 export const fewLogRows = 3;
 
@@ -96,6 +110,14 @@ const logNudgeOf = (key: string, view: LogView): NudgeSpec => {
   return { selector: `${panel} input[data-query]`, text: `検索欄を「${view.initialQuery}」に戻します` };
 };
 
+export const choiceNudgeOf = (view: ChoiceView): NudgeSpec | null => {
+  if (view.review === 'requested' || view.review === 'approved' || view.stage === 'making') return null;
+  if (view.stage === 'none') return { selector: draftButtonSelector };
+  return view.submittable
+    ? { selector: chooseButtonSelector }
+    : { selector: optionListSelector, text: '案を1つ選択します' };
+};
+
 export const nudgeSpecOf = (signal: SignalRef, context: NudgeContext): NudgeSpec | null => {
   const name = typeof signal === 'string' ? signal : signal.name;
   const key = typeof signal === 'string' ? undefined : signal.key;
@@ -119,6 +141,7 @@ export const nudgeSpecOf = (signal: SignalRef, context: NudgeContext): NudgeSpec
     if (!context.live.shown) return { selector: `button[data-channel="${quoted(context.live.channel)}"]` };
     return { selector: context.live.written ? liveSendSelector : liveInputSelector };
   }
+  if (name === 'option:reviewed') return context.choice === undefined ? null : choiceNudgeOf(context.choice);
   const selector = signalSelectors[name];
   return selector === undefined ? null : { selector };
 };

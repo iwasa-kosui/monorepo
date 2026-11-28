@@ -10,13 +10,22 @@ import {
 } from '../playground/storage';
 import { channelOfPost, typingLeadMs, typingStartMs } from './channel';
 import { createChat, type LivePost } from './chat';
+import type { DraftStage, ReviewState } from './choice';
 import { clockOf, formatElapsed } from './clock';
 import { hasFired, isMet, keyOf, record } from './conditions';
 import { backdropOf, fullViewAttribute } from './full-view';
 import { liveUrlOf, nameOrRandom } from './live';
 import { connectLive, type LiveStatus, newLiveId } from './live-client';
 import { isLiveId, liveEndpoint, normalizeName } from './live-protocol';
-import { type LogView, nextSignals, nudgeSpecOf, resetSqlSelector, restorePlaygroundSelector } from './nudge-target';
+import {
+  type ChoiceView,
+  chooseButtonSelector,
+  type LogView,
+  nextSignals,
+  nudgeSpecOf,
+  resetSqlSelector,
+  restorePlaygroundSelector,
+} from './nudge-target';
 import { emitSignal, type PanelController } from './panel';
 import { mountPanel } from './panels';
 import { fillTemplate, interimText, judgeReply, type MemoOverride, memoViews, replyGate } from './rules';
@@ -154,6 +163,17 @@ export const mountWorkspace = (root: HTMLElement): void => {
     };
   };
 
+  const choiceViewOf = (): ChoiceView | undefined => {
+    const panel = root.querySelector<HTMLElement>('[role="tabpanel"][data-choice]');
+    if (panel === null) return undefined;
+    const choose = panel.querySelector<HTMLButtonElement>(chooseButtonSelector);
+    return {
+      stage: (panel.dataset.draft ?? 'none') as DraftStage,
+      review: (panel.querySelector<HTMLElement>('[data-review]')?.dataset.state ?? 'none') as ReviewState,
+      submittable: choose !== null && !choose.hidden && !choose.disabled,
+    };
+  };
+
   const tabButtonOf = (key: string): HTMLElement | null =>
     root.querySelector<HTMLElement>(`[role="tab"][data-tool="${key}"]`);
 
@@ -200,6 +220,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
       sqlMissed: state.sqlMissed,
       rowsShown: root.querySelector('[data-playground="sql"] .playground-result tbody tr') !== null,
       resetSqlShown: resetSql !== null && getComputedStyle(resetSql).display !== 'none',
+      choice: choiceViewOf(),
       ...(liveConfig === undefined ? {} : {
         live: {
           channel: liveConfig.channel,
@@ -523,7 +544,6 @@ export const mountWorkspace = (root: HTMLElement): void => {
     if (timed) chat.focusFeed();
     if (timed && compact.matches) root.scrollIntoView({ block: 'start' });
     emit('workspace:started');
-    for (const controller of controllers.values()) controller.start?.();
     if (liveConfig?.saveAs !== undefined && (loadQuestion(liveConfig.saveAs) ?? '').trim() !== '') {
       emit('question:written');
     }

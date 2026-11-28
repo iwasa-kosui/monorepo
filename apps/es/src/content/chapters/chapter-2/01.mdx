@@ -12,6 +12,7 @@ import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
 import { cancelDecisionSequence, cancelInquirySequence } from '../../../components/figures/sequences';
 import { chapter2Explain } from '../../../components/chapters/chapter-2';
+import { actors, adrReviews } from '../../../components/chapters/common';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
@@ -59,6 +60,8 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <AdrOptions
   id="adr-1"
   choosable
+  reviews={adrReviews}
+  reviewer={actors.colleague}
   criteria={['人と理由を回答できる', '記録が欠落しない', '既存のデータモデルに影響を与えない']}
   options={[
     { id: 'append-in-update', name: '更新処理の中で追記する', adopted: true, marks: ['○', '○', '○'], merit: '問い合わせに回答でき、記録が欠落しません。', demerit: '記録の保存に不具合があると、来院のキャンセルも失敗します。' },
