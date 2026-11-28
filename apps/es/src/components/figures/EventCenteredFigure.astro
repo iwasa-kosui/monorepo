@@ -1,0 +1,334 @@
+---
+import './figure.css';
+---
+
+<section
+  class="cfig ec"
+  data-event-centered-figure
+  aria-label="更新処理の関数が業務イベントを返し、保存する処理が同じ業務イベントから visits と business_events の両方に書く図"
+>
+  <p class="ec-head">状態に書く値と記録に書く値を、同じ業務イベントから取る</p>
+
+  <div class="face face-fn" data-lit="fn">
+    <span class="face-label">更新処理の関数</span>
+    <span class="mono face-name">cancelVisit</span>
+    <span class="face-note">DB に書き込まない</span>
+  </div>
+
+  <div class="link">
+    <span class="arrow" data-arrow="emit">
+      <svg viewBox="0 0 24 40" aria-hidden="true" focusable="false">
+        <path class="shaft" d="M12 4V34"></path>
+        <path class="head" d="M5 24L12 36L19 24"></path>
+        <circle class="dot" cx="12" cy="9" r="5"></circle>
+      </svg>
+    </span>
+    <span>業務イベントを返す</span>
+  </div>
+
+  <div class="face face-event">
+    <div class="face-top">
+      <span class="face-label">業務イベント</span>
+      <span class="mono face-name">VisitCancelled</span>
+    </div>
+    <div class="parts">
+      <div class="part" data-lit="payload">
+        <span class="mono part-name">payload</span>
+        <span class="part-value">理由、操作した人</span>
+      </div>
+      <div class="part" data-lit="state">
+        <span class="mono part-name">targetState</span>
+        <span class="part-value"
+        >変更後の来院（<span class="mono">status: 'cancelled'</span>）</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="link">
+    <span class="arrow" data-arrow="store">
+      <svg viewBox="0 0 24 40" aria-hidden="true" focusable="false">
+        <path class="shaft" d="M12 4V34"></path>
+        <path class="head" d="M5 24L12 36L19 24"></path>
+        <circle class="dot" cx="12" cy="9" r="5"></circle>
+      </svg>
+    </span>
+    <span>保存する処理に渡す</span>
+  </div>
+
+  <div class="face">
+    <div class="face-top">
+      <span class="face-label">保存する処理</span>
+      <span class="mono face-name">storeVisitCancelled</span>
+      <span class="face-note">1つのトランザクション</span>
+    </div>
+    <div class="targets">
+      <div class="target" data-lit="visits">
+        <span class="target-name"><span class="mono"
+          >visits</span>（現在の状態）</span>
+        <span class="target-value"><span class="mono">targetState</span> の
+          <span class="mono">status</span> を書く</span>
+      </div>
+      <div class="target" data-lit="events">
+        <span class="target-name"><span class="mono"
+          >business_events</span>（記録）</span>
+        <span class="target-value"><span class="mono">payload</span> と <span
+            class="mono"
+          >targetState</span> を書く</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.cfig.ec {
+  gap: var(--space-2);
+}
+.cfig.ec .mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+  overflow-wrap: anywhere;
+}
+.ec-head {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+
+.face {
+  --base: var(--role-ground);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--base);
+  padding: var(--space-3) var(--space-4);
+}
+.face-fn {
+  --base: var(--role-accent-strong);
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  color: var(--role-on-strong);
+}
+.face-event {
+  --base: var(--role-accent-soft);
+}
+.face-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+}
+.face-label {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.face-name {
+  font-weight: var(--weight-bold);
+}
+.face-note {
+  font-size: var(--fig-label);
+  line-height: var(--leading-normal);
+}
+
+.parts,
+.targets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.part,
+.target {
+  --base: var(--role-ground);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--base);
+  padding: var(--space-2) var(--space-3);
+}
+.target {
+  --base: var(--role-surface);
+}
+.part-name {
+  font-weight: var(--weight-bold);
+}
+.target-name {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.part-value,
+.target-value {
+  font-size: var(--fig-label);
+  line-height: var(--leading-normal);
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: var(--space-2);
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+.arrow {
+  display: block;
+  flex: none;
+  width: 1.5rem;
+  line-height: 0;
+}
+.arrow svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.shaft,
+.head {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dot {
+  fill: var(--role-accent);
+  opacity: 0;
+}
+
+@media (max-width: 40rem) {
+  .parts,
+  .targets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cfig.ec {
+    --cycle: 12s;
+    --lit: var(--role-marker);
+  }
+
+  [data-lit="fn"] {
+    animation: ec-lit-fn var(--cycle) linear infinite;
+  }
+  [data-arrow="emit"] .dot {
+    animation: ec-travel-emit var(--cycle) linear infinite;
+  }
+  [data-lit="payload"] {
+    animation: ec-lit-payload var(--cycle) linear infinite;
+  }
+  [data-lit="state"] {
+    animation: ec-lit-state var(--cycle) linear infinite;
+  }
+  [data-arrow="store"] .dot {
+    animation: ec-travel-store var(--cycle) linear infinite;
+  }
+  [data-lit="visits"],
+  [data-lit="events"] {
+    animation: ec-lit-targets var(--cycle) linear infinite;
+  }
+
+  @keyframes ec-lit-fn {
+    0%,
+    2%,
+    16%,
+    100% {
+      background-color: var(--base);
+      color: var(--role-on-strong);
+    }
+    5%,
+    13% {
+      background-color: var(--lit);
+      color: var(--role-ink);
+    }
+  }
+  @keyframes ec-travel-emit {
+    0%,
+    15% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    16% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    21% {
+      opacity: 1;
+      transform: translate(0, 18px);
+    }
+    22%,
+    100% {
+      opacity: 0;
+      transform: translate(0, 18px);
+    }
+  }
+  @keyframes ec-lit-payload {
+    0%,
+    22%,
+    36%,
+    100% {
+      background-color: var(--base);
+    }
+    25%,
+    33% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes ec-lit-state {
+    0%,
+    22%,
+    36%,
+    46%,
+    94%,
+    100% {
+      background-color: var(--base);
+    }
+    25%,
+    33%,
+    50%,
+    90% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes ec-travel-store {
+    0%,
+    37% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    38% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    43% {
+      opacity: 1;
+      transform: translate(0, 18px);
+    }
+    44%,
+    100% {
+      opacity: 0;
+      transform: translate(0, 18px);
+    }
+  }
+  @keyframes ec-lit-targets {
+    0%,
+    46%,
+    94%,
+    100% {
+      background-color: var(--base);
+    }
+    50%,
+    90% {
+      background-color: var(--lit);
+    }
+  }
+}
+</style>

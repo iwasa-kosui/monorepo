@@ -1,0 +1,56 @@
+---
+import { diffFiles } from '../../workspace/diff';
+
+interface Props {
+  before: string;
+  after: string;
+  label: string;
+}
+
+const { before, after, label } = Astro.props;
+const lines = diffFiles(before, after, 1000).hunks.flatMap((hunk) =>
+  hunk.lines
+);
+const mark = { same: ' ', add: '+', del: '−' } as const;
+const spoken = { same: '', add: '追加: ', del: '削除: ' } as const;
+---
+
+<div class="cdiff" role="group" aria-label={label}>
+  <pre class="cdiff-pre"><code class="cdiff-code">{lines.map((line) => (<span class={`cdiff-line cdiff-${line.kind}`}><span class="cdiff-mark" aria-hidden="true">{mark[line.kind]}</span><span class="cdiff-sr">{spoken[line.kind]}</span><span class="cdiff-text">{line.text}</span></span>))}</code></pre>
+</div>
+
+<style>
+.cdiff-code {
+  display: block;
+  background: transparent;
+  padding: 0;
+}
+.cdiff-line {
+  display: block;
+  padding-inline-start: 2ch;
+  text-indent: -2ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cdiff-add {
+  background-color: var(--role-success-soft);
+}
+.cdiff-del {
+  background-color: var(--role-danger-soft);
+}
+.cdiff-mark {
+  display: inline-block;
+  width: 2ch;
+  text-indent: 0;
+  color: var(--role-muted);
+  user-select: none;
+}
+.cdiff-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+</style>
