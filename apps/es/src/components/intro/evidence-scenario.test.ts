@@ -15,7 +15,7 @@ describe('証拠の調査の筋書き', () => {
     expect(() => assertScenario(evidenceScenario)).not.toThrow();
   });
 
-  it('テックリードの発言はすべて「# dev」に属して、ログの確認で2件、バックアップの復元で2件が届く', () => {
+  it('同僚の発言はすべて「# dev」に属して、ログの確認で2件、バックアップの復元で2件が届く', () => {
     expect(devChannel).toBe('# dev');
     expect(evidenceScenario.timeline).toEqual([
       { when: 'log:target-opened', kind: 'post', post: accessLogLimit },
@@ -26,12 +26,12 @@ describe('証拠の調査の筋書き', () => {
       { when: 'sql:executed', key: 'restored', kind: 'tab', tab: 'explain', action: 'add' },
     ]);
     for (const post of [accessLogLimit, accessLogArchive, backupLimit, backupRestoreLimit]) {
-      expect(post.actor).toBe('techlead');
+      expect(post.actor).toBe('colleague');
       expect(post.channel).toBe(devChannel);
     }
   });
 
-  it('テックリードの発言の時刻は、問い合わせの最後の発言より後である', () => {
+  it('同僚の発言の時刻は、問い合わせの最後の発言より後である', () => {
     const lastInquiry = evidenceScenario.history.map((post) => post.time ?? '').sort().at(-1) ?? '';
     expect(lastInquiry).toBe('18:24');
     for (const post of [accessLogLimit, accessLogArchive, backupLimit, backupRestoreLimit]) {

@@ -130,7 +130,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-4/03': {
     flow: 'explain',
     mode: 'listen',
-    role: 'テックリードが書いた ADR 3 を読み、業務イベントを導入する前のデータの扱いを確認する',
+    role: '同僚が書いた ADR 3 を読み、業務イベントを導入する前のデータの扱いを確認する',
   },
   'chapter-4/04': {
     flow: 'demo',
@@ -141,7 +141,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-4/05': {
     flow: 'explain',
     mode: 'listen',
-    role: 'テックリードが書いた ADR 4 を読み、予約サイトから届いたキャンセルの記録の方法を確認する',
+    role: '同僚が書いた ADR 4 を読み、予約サイトから届いたキャンセルの記録の方法を確認する',
   },
   'chapter-4/06': {
     flow: 'demo',
@@ -152,7 +152,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-4/07': {
     flow: 'explain',
     mode: 'listen',
-    role: 'テックリードが書いた ADR 5 を読み、監査ログと業務イベントの役割の分け方を確認する',
+    role: '同僚が書いた ADR 5 を読み、監査ログと業務イベントの役割の分け方を確認する',
   },
   'chapter-4/08': {
     flow: 'try',
