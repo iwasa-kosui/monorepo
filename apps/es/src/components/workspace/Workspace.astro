@@ -216,6 +216,24 @@ const hasComposer = Astro.slots.has('composer');
       )
     }
   </div>
+
+  <button
+    type="button"
+    class="full-toggle"
+    data-action="full"
+    aria-label="全画面で表示する"
+    hidden
+  >
+    <svg class="full-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path class="full-icon-open" d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4">
+      </path>
+      <path
+        class="full-icon-close"
+        d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"
+      >
+      </path>
+    </svg>
+  </button>
 </section>
 
 <style>
@@ -409,6 +427,9 @@ const hasComposer = Astro.slots.has('composer');
   gap: 0 var(--space-1);
   min-width: 0;
 }
+.scene .full-toggle {
+  display: none;
+}
 .scene .address {
   display: flex;
   align-items: center;
@@ -558,6 +579,83 @@ const hasComposer = Astro.slots.has('composer');
   }
   .scene[data-view="tools"] :global(.win.chat) {
     display: none;
+  }
+
+  /* タブの列を狭めず、パネル下端のボタンにも重ならないよう、画面の右下の隅に小さく浮かせる */
+  .scene .full-toggle {
+    position: fixed;
+    right: var(--space-2);
+    bottom: var(--space-2);
+    z-index: 35;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--role-ink) 80%, transparent);
+    box-shadow: var(--shadow-raised);
+    padding: 0;
+    color: var(--role-ground);
+    cursor: pointer;
+  }
+  /* 見た目は小さいまま、押せる領域を画面の端まで広げる */
+  .scene .full-toggle::after {
+    content: "";
+    position: absolute;
+    inset: -0.25rem calc(-1 * var(--space-2)) calc(-1 * var(--space-2))
+      -0.25rem;
+  }
+  .scene .full-icon {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
+  }
+  .scene .full-icon-close,
+  .scene[data-full] .full-icon-open {
+    display: none;
+  }
+  .scene[data-full] .full-icon-close {
+    display: inline;
+  }
+  /* 全画面のあいだは、本文の枠（.lesson-main）いっぱいに重ねる */
+  :global(.content) :global(.cfig).scene[data-full] {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    gap: 0;
+    background: var(--role-surface);
+  }
+  .scene[data-full] .status-bar {
+    position: static;
+    margin-inline: 0;
+    padding-inline: var(--space-3);
+  }
+  .scene[data-full] .workspace {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 0;
+  }
+  .scene[data-full] :global(.win[data-window]) {
+    border-radius: 0;
+  }
+  .scene[data-full][data-view="tools"] .browser {
+    flex: 1 1 0;
+  }
+  .scene[data-full] .pages {
+    flex: 1 1 0;
+    height: auto;
+  }
+  .scene[data-full][data-view="chat"] :global(.win.chat) {
+    flex: 1 1 0;
+    min-height: 0;
   }
 }
 

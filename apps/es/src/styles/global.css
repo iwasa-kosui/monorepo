@@ -22,6 +22,19 @@ html {
     --sidebar-open-rem-scale: 0.9167;
   }
 }
+/* スマホの幅では1行に入る字数が少なく、文字が大きく見えるため下げる */
+@media (max-width: 639px) {
+  html {
+    --root-text-size: 80%;
+  }
+  /* 表紙と見出しは1行に数文字しか入らず何行にも折り返すため、本文より大きく下げる */
+  :root {
+    --text-cover: 2.75rem;
+    --text-heading: 2rem;
+    /* 押せる領域は、文字を下げる前と同じ大きさを保つ */
+    --tap-min: 3.1rem;
+  }
+}
 html[data-text-size="small"] {
   font-size: calc(var(--root-text-size) - 10%);
 }

@@ -4,6 +4,7 @@ import { typingLeadMs, typingStartMs } from './channel';
 import { createChat } from './chat';
 import { clockOf, formatElapsed } from './clock';
 import { hasFired, isMet, keyOf, record } from './conditions';
+import { backdropOf, fullViewAttribute } from './full-view';
 import { type LogView, nextSignals, nudgeSpecOf, resetSqlSelector, restorePlaygroundSelector } from './nudge-target';
 import { emitSignal, type PanelController } from './panel';
 import { mountPanel } from './panels';
@@ -53,6 +54,8 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const clockText = root.querySelector<HTMLElement>('[data-clock]');
   const affectedText = root.querySelector<HTMLElement>('[data-affected]');
   const windows = [...root.querySelectorAll<HTMLElement>('[data-window]')];
+  const main = document.querySelector<HTMLElement>('main.lesson-main');
+  const fullButton = main === null ? null : root.querySelector<HTMLButtonElement>('[data-action="full"]');
 
   const fired = new Map<SignalName, Set<string>>();
   const latest = new Map<SignalName, Readonly<Record<string, unknown>>>();
@@ -69,6 +72,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     unlocked: new Set<ButtonName>(),
     memoOverrides: new Map<string, MemoOverride>(),
     sqlMissed: false,
+    full: false,
   };
   let intervalId: number | undefined;
 
@@ -206,6 +210,29 @@ export const mountWorkspace = (root: HTMLElement): void => {
     notifyNudge();
   };
 
+  let fullShown = false;
+  let backdrop: HTMLElement[] = [];
+  let scrollBefore = 0;
+
+  const renderFull = (): void => {
+    if (main === null || state.full === fullShown) return;
+    fullShown = state.full;
+    root.toggleAttribute('data-full', fullShown);
+    document.documentElement.toggleAttribute(fullViewAttribute, fullShown);
+    fullButton?.setAttribute('aria-label', fullShown ? '全画面から戻す' : '全画面で表示する');
+    if (fullShown) {
+      scrollBefore = main.scrollTop;
+      backdrop = backdropOf<Element>(root, main).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement && !element.inert,
+      );
+      for (const element of backdrop) element.inert = true;
+      return;
+    }
+    for (const element of backdrop) element.inert = false;
+    backdrop = [];
+    main.scrollTop = scrollBefore;
+  };
+
   function render(): void {
     const status = scheduler.status();
     const gate = replyGate(scenario.gates, fired);
@@ -213,6 +240,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     root.dataset.opened = state.opened.join(' ');
     root.dataset.selected = state.selected;
     root.dataset.view = state.view;
+    renderFull();
     const chatFront = compact.matches && state.view === 'chat';
     root.dataset.ready = String(gate.ready);
     root.dataset.phase = status === 'idle'
@@ -514,8 +542,17 @@ export const mountWorkspace = (root: HTMLElement): void => {
     () => (scheduler.status() === 'paused' ? scheduler.resume() : scheduler.pause()),
   );
   resetButton?.addEventListener('click', reset);
-  compact.addEventListener('change', render);
-  const main = document.querySelector<HTMLElement>('main.lesson-main');
+  if (fullButton !== null) {
+    fullButton.hidden = false;
+    fullButton.addEventListener('click', () => {
+      state.full = !state.full;
+      render();
+    });
+  }
+  compact.addEventListener('change', () => {
+    if (!compact.matches) state.full = false;
+    render();
+  });
   const statusBar = root.querySelector<HTMLElement>('.status-bar');
   const tabStrip = root.querySelector<HTMLElement>('.tab-strip');
   const measureBars = (): void => {
