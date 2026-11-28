@@ -14,6 +14,13 @@ const { consultation } = Astro.props;
 const intro: ConsultationIntro = consultationIntros[consultation];
 const excerpt = intro.excerpt;
 const at = (index: number): string => `--i:${index}`;
+const systems = excerpt.kind === 'architecture'
+  ? [
+    { node: excerpt.source, side: 'source', order: 3 },
+    { node: excerpt.target, side: 'target', order: 2 },
+  ]
+  : [];
+const link = excerpt.kind === 'architecture' ? excerpt.link : '';
 const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
 ---
 
@@ -57,20 +64,71 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
         ))
       }
       {
-        excerpt.kind === 'states'
-          && excerpt.boxes.map((box, index) => (
-          <div class="tbl reveal" style={at(2 + index)}>
-            <div class="tbl-head">{box.system}</div>
-            <div class="tbl-body state">
-              <span class="state-value">{box.state}</span>
-              {
-                box.detail !== undefined && (
-                  <span class="state-detail" set:html={richHtml(box.detail)} />
-                )
-              }
-            </div>
+        excerpt.kind === 'architecture' && (
+          <div class="arch">
+            {
+              systems.map((system, index) => (
+                <>
+                  <div
+                    class="sys reveal"
+                    style={at(system.order)}
+                    data-side={system.side}
+                  >
+                    <span class="person">{system.node.person}</span>
+                    <div class="act">
+                      <span class="down-arrow" aria-hidden="true"></span>
+                      <span class="act-label">{system.node.action}</span>
+                    </div>
+                    <div class="tbl">
+                      <div class="tbl-head">
+                        <span>{system.node.name}</span>
+                        {
+                          system.node.note !== undefined
+                    && (
+                            <span class="tbl-head-note">{
+                              system.node.note
+                            }</span>
+                          )
+                        }
+                      </div>
+                      <div class="tbl-body state">
+                        <span class="state-value">{system.node.state}</span>
+                        {
+                          system.node.detail !== undefined
+                    && (
+                            <span
+                              class="state-detail"
+                              set:html={richHtml(system.node.detail)}
+                            />
+                          )
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  {
+                    index === 0 && (
+                      <div class="bridge">
+                        <span class="bridge-label reveal" style={at(4)}>{
+                          link
+                        }</span>
+                        <span
+                          class="bridge-arrow reveal"
+                          style={at(4)}
+                          aria-hidden="true"
+                        ></span>
+                        <span
+                          class="down-arrow bridge-down reveal"
+                          style={at(4)}
+                          aria-hidden="true"
+                        ></span>
+                      </div>
+                    )
+                  }
+                </>
+              ))
+            }
           </div>
-        ))
+        )
       }
       {
         excerpt.kind === 'columns' && (
@@ -261,6 +319,120 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
   font-size: var(--text-code);
 }
 
+.arch {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) 9.5rem minmax(0, 1.2fr);
+  grid-template-rows: auto auto auto;
+  row-gap: var(--space-1);
+  min-width: 0;
+}
+.sys {
+  display: grid;
+  grid-row: 1 / 4;
+  grid-template-rows: subgrid;
+  min-width: 0;
+}
+.sys[data-side="source"] {
+  grid-column: 1;
+}
+.sys[data-side="target"] {
+  grid-column: 3;
+}
+.person {
+  align-self: center;
+  justify-self: center;
+  border: 1px solid var(--role-rail);
+  border-radius: var(--radius-pill);
+  background: var(--role-ground);
+  padding: 0 var(--space-3);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.act {
+  display: grid;
+  grid-template-columns: 1fr 0.75rem 1fr;
+  column-gap: var(--space-2);
+  min-height: 1.5rem;
+}
+.act .down-arrow {
+  grid-column: 2;
+}
+.act-label {
+  grid-column: 3;
+  align-self: center;
+  white-space: nowrap;
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.down-arrow {
+  position: relative;
+  width: 0.75rem;
+}
+.down-arrow::before {
+  position: absolute;
+  top: 0;
+  bottom: 0.375rem;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--role-accent-strong);
+  content: "";
+}
+.down-arrow::after {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  border: 0.375rem solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--role-accent-strong);
+  content: "";
+  transform: translateX(-50%);
+}
+.tbl-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.tbl-head-note {
+  opacity: 0.8;
+}
+.bridge {
+  display: grid;
+  grid-column: 2;
+  grid-row: 3;
+  grid-template-rows: 1fr auto 1fr;
+  min-width: 0;
+}
+.bridge-label {
+  grid-row: 1;
+  align-self: end;
+  padding-inline: var(--space-1);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+  text-align: center;
+  text-wrap: balance;
+}
+.bridge-arrow {
+  position: relative;
+  grid-row: 2;
+  height: 2px;
+  margin-inline: var(--space-1) 0.375rem;
+  background: var(--role-accent-strong);
+}
+.bridge-arrow::after {
+  position: absolute;
+  top: 50%;
+  right: -0.3125rem;
+  border: 0.3125rem solid transparent;
+  border-right: 0;
+  border-left-color: var(--role-accent-strong);
+  content: "";
+  transform: translateY(-50%);
+}
+.bridge-down {
+  display: none;
+}
+
 .tbl.wide {
   flex: 1 1 100%;
 }
@@ -302,6 +474,10 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
     transform-origin: center top;
     animation-name: callout-in;
   }
+  .bridge-arrow.reveal {
+    transform-origin: left center;
+    animation-name: bridge-grow;
+  }
 }
 @keyframes reveal-in {
   from {
@@ -311,6 +487,14 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+@keyframes bridge-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
   }
 }
 @keyframes callout-in {
@@ -348,6 +532,36 @@ const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
   }
   .tbl {
     flex: none;
+  }
+  .arch {
+    display: flex;
+    flex-direction: column;
+  }
+  .sys {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .bridge {
+    grid-template-rows: none;
+    grid-template-columns: 1fr 0.75rem 1fr;
+    column-gap: var(--space-2);
+    min-height: 1.5rem;
+  }
+  .bridge-arrow {
+    display: none;
+  }
+  .bridge-down {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .bridge-label {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    padding-inline: 0;
+    text-align: left;
   }
 }
 </style>

@@ -7,11 +7,23 @@ export type CountBox = {
   readonly count: string;
   readonly unit: string;
 };
-export type StateBox = { readonly system: string; readonly state: string; readonly detail?: string };
+export type SystemNode = {
+  readonly name: string;
+  readonly note?: string;
+  readonly person: string;
+  readonly action: string;
+  readonly state: string;
+  readonly detail?: string;
+};
 export type ColumnValue = { readonly column: string; readonly value: string; readonly mono: boolean };
 export type Excerpt =
   | { readonly kind: 'counts'; readonly boxes: readonly CountBox[] }
-  | { readonly kind: 'states'; readonly boxes: readonly StateBox[] }
+  | {
+    readonly kind: 'architecture';
+    readonly source: SystemNode;
+    readonly target: SystemNode;
+    readonly link: string;
+  }
   | {
     readonly kind: 'columns';
     readonly table: string;
@@ -47,18 +59,29 @@ export const consultationIntros = {
     problem: 'どちらが正しいかを、記録から示せない',
   },
   'external-sync': {
-    lead: '外部システムと同期するシステムでは、相手の画面と自分の画面で、同じ予約の状態が食い違うことがあります。',
+    lead: '予約システムは、外部の予約サイトからキャンセルを受け取ります。',
     label:
-      'カスタマーサポートから、コタロウの予約が予約サイトではキャンセル済み、予約システムでは診察済みであることについて聞かれ、キャンセルが届いたかどうかを区別できないことを表す図',
+      '飼い主が外部の予約サイトでキャンセルし、予約サイトがキャンセルを予約システムへ送る構成で、予約サイトではキャンセル済み、動物病院が診察を完了した予約システムでは診察済みになり、キャンセルが届いたかどうかを区別できないことを表す図',
     speaker: { name: 'カスタマーサポート', avatar: 'カ', role: '飼い主からの連絡' },
     question: 'コタロウの予約は、キャンセル済みと診察済みのどちらが正しいか',
-    heading: 'いまのデータ',
+    heading: 'システムの構成といまのデータ',
     excerpt: {
-      kind: 'states',
-      boxes: [
-        { system: '予約サイト', state: 'キャンセル済み' },
-        { system: '予約システム', state: '診察済み', detail: '`visits.status` は `completed`' },
-      ],
+      kind: 'architecture',
+      source: {
+        name: '予約サイト',
+        note: '外部システム',
+        person: '飼い主',
+        action: 'キャンセルする',
+        state: 'キャンセル済み',
+      },
+      target: {
+        name: '予約システム',
+        person: '動物病院',
+        action: '診察を完了する',
+        state: '診察済み',
+        detail: '`visits.status` は `completed`',
+      },
+      link: 'キャンセルを送る',
     },
     problem: 'キャンセルが届かなかったのか、届いたが反映しなかったのかを区別できない',
   },
