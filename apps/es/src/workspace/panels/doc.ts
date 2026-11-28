@@ -1,4 +1,5 @@
 import { setAction } from '../../lesson/action-bar';
+import { mountOptionTabs } from '../option-tabs';
 import type { PanelMount } from '../panel';
 import { approvalDetail, approvalLabel, parseActionState, toggleApproval } from './approval';
 import { watchSlotSignals } from './watch';
@@ -17,5 +18,6 @@ export const mountDoc: PanelMount<'doc'> = (host) => {
       setAction(approvalDetail(approved, origin));
     });
   }
+  for (const element of host.panel.querySelectorAll<HTMLElement>('[data-option-tabs]')) mountOptionTabs(element);
   return {};
 };

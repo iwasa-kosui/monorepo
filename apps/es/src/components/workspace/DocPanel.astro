@@ -13,6 +13,7 @@ const tab = expectTab(definition, 'doc');
 const config = tab.config;
 const approvable = config.approvable === true;
 const { updatedAt, updatedBy } = config;
+const title = config.title;
 ---
 
 <div
@@ -41,7 +42,7 @@ const { updatedAt, updatedBy } = config;
           </svg>
           <span>社内ドキュメント</span>
         </p>
-        <p class="doc-title">{config.title}</p>
+        <p class="doc-title" data-doc-title>{title}</p>
         {
           !approvable && updatedAt !== undefined
             && updatedBy !== undefined
@@ -85,9 +86,12 @@ const { updatedAt, updatedBy } = config;
       class="doc-scroll"
       tabindex="0"
       role="region"
-      aria-label={config.title}
+      aria-label={title}
+      data-doc-region
     >
-      <article class="doc-paper"><slot /></article>
+      <article class="doc-paper">
+        <slot />
+      </article>
     </div>
   </div>
   {tab.note !== undefined && <p class="panel-note">{tab.note}</p>}
@@ -205,6 +209,49 @@ const { updatedAt, updatedBy } = config;
   font-size: var(--text-note);
   line-height: var(--leading-normal);
 }
+:global(.scene[data-scenario]) .doc-draft {
+  color: var(--dc-muted);
+  font-size: var(--text-note);
+  line-height: var(--leading-normal);
+}
+:global(.scene[data-scenario]) .doc-review-slot {
+  flex: none;
+  margin-left: auto;
+}
+:global(.scene[data-scenario]) .doc-review {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--role-warning-soft);
+  color: var(--role-warning);
+  padding: 0 1.25rem;
+  min-height: var(--tap-min);
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+:global(.scene[data-scenario]) .doc-review[hidden] {
+  display: none;
+}
+:global(.scene[data-scenario]) .doc-review svg {
+  display: none;
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+:global(.scene[data-scenario]) .doc-review[data-state="requested"] {
+  background: var(--role-sunken);
+  color: var(--role-muted);
+}
+:global(.scene[data-scenario]) .doc-review[data-state="approved"] {
+  background: var(--role-success);
+  color: var(--role-on-accent);
+}
+:global(.scene[data-scenario]) .doc-review[data-state="approved"] svg {
+  display: block;
+}
 :global(.scene[data-scenario]) .doc-approve {
   display: inline-flex;
   flex: none;
@@ -223,6 +270,9 @@ const { updatedAt, updatedBy } = config;
   font-weight: var(--weight-bold);
   line-height: 1;
   cursor: pointer;
+}
+:global(.scene[data-scenario]) .doc-approve[hidden] {
+  display: none;
 }
 :global(.scene[data-scenario]) .doc-approve svg {
   flex: none;

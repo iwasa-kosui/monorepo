@@ -1,5 +1,5 @@
 import { type FiredSignals, isMet, unmet } from './conditions';
-import type { FieldFormat, GatesConfig, MemoConfig, MemoRead, MemoState, SignalName } from './scenario';
+import type { FieldFormat, GatesConfig, GroundedReply, MemoConfig, MemoRead, MemoState, SignalName } from './scenario';
 
 export type LatestData = ReadonlyMap<SignalName, Readonly<Record<string, unknown>>>;
 
@@ -35,6 +35,29 @@ export const fillTemplate = (
     return typeof value === 'string' ? formatField(value, formats[field]) : whole;
   });
 
+export type ReplyVerdict =
+  | { readonly kind: 'grounded' }
+  | { readonly kind: 'ungrounded'; readonly text: string; readonly challenge?: string };
+
+export const judgeReply = (
+  data: Readonly<Record<string, unknown>> | undefined,
+  grounded: GroundedReply,
+): ReplyVerdict => {
+  const row = rowOf(data);
+  const complete = grounded.needs.every((field) => {
+    const value = row[field];
+    return typeof value === 'string' && value !== '';
+  });
+  if (row[grounded.column] === grounded.target) {
+    if (grounded.incomplete === undefined || complete) return { kind: 'grounded' };
+    return { kind: 'ungrounded', text: grounded.missing, challenge: grounded.incomplete.challenge };
+  }
+  return {
+    kind: 'ungrounded',
+    text: complete ? fillTemplate(grounded.line, data, grounded.formats) : grounded.missing,
+  };
+};
+
 export type MemoOverride = { readonly state: MemoState; readonly text?: string | undefined };
 
 export type MemoView = {
@@ -61,6 +84,11 @@ export const memoViews = (
       };
     }
     const read = item.read === undefined ? undefined : readField(latest, item.read);
+    if (item.read?.absent !== undefined && isMet(fired, item.fill)) {
+      return read === undefined
+        ? { key: item.key, label: item.label, state: 'missing', text: item.read.absent }
+        : { key: item.key, label: item.label, state: item.result, text: read };
+    }
     const known = isMet(fired, item.fill) && (item.read === undefined || read !== undefined);
     return {
       key: item.key,

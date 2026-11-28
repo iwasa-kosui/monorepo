@@ -387,6 +387,38 @@
 .playground[data-playground="sql"] .playground-result tbody tr:hover::before {
   background: var(--pg-head);
 }
+.playground[data-playground="sql"] .playground-result tbody tr[aria-selected] {
+  cursor: pointer;
+}
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected]:not([aria-selected="true"]):hover
+  > td,
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected]:not([aria-selected="true"]):hover::before {
+  background: var(--pg-hover);
+}
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected="true"]
+  > td,
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected="true"]::before {
+  background: var(--pg-accent-soft);
+}
+.playground[data-playground="sql"]
+  .playground-result
+  tbody
+  tr[aria-selected]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
 
 @media (min-width: 768px) {
   .content .chapter-body > .playground {

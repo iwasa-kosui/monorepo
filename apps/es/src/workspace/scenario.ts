@@ -1,8 +1,12 @@
+import type { Sequence } from '../components/figures/sequences';
+
 export const signalNames = [
   'workspace:started',
   'tab:selected',
   'sql:executed',
   'sql:target-shown',
+  'sql:row-selected',
+  'sql:row-cleared',
   'log:detail-opened',
   'log:target-opened',
   'chat:interim-sent',
@@ -13,6 +17,8 @@ export const signalNames = [
   'tests:passed',
   'code:run',
   'question:written',
+  'option:chosen',
+  'option:reviewed',
   'figure:step',
 ] as const;
 
@@ -115,6 +121,7 @@ export type DbConsoleConfig = {
   };
   readonly open?: { readonly sql: string };
   readonly controls?: true;
+  readonly selectRows?: true;
 };
 
 export type LogRule = {
@@ -171,14 +178,30 @@ export type PrDiffConfig = {
   readonly context: number;
 };
 
-export type PrConfig = {
+export type PrReviewConfig = {
+  readonly file: string;
+  readonly author: string;
+  readonly reviewer: string;
+  readonly documentTitle: string;
+  readonly pendingTitle: string;
+  readonly draftLabel: string;
+  readonly description: string;
+  readonly changeCommit: string;
+  readonly appendCommit: string;
+  readonly comments: Readonly<Record<string, readonly string[]>>;
+};
+
+type PrBase = {
   readonly owner: string;
   readonly name: string;
   readonly number: number;
   readonly title: string;
   readonly status: 'Open';
-  readonly diff: PrDiffConfig;
 };
+
+export type PrConfig =
+  | (PrBase & { readonly diff: PrDiffConfig; readonly review?: undefined })
+  | (PrBase & { readonly review: PrReviewConfig; readonly diff?: undefined });
 
 export type FaviconTone = 'teal' | 'violet' | 'ink' | 'coral' | 'blue' | 'azure';
 export type FaviconShape = 'circle' | 'square' | 'rounded';
@@ -249,6 +272,7 @@ export type MemoRead = {
   readonly field: string;
   readonly labels?: Readonly<Record<string, string>>;
   readonly format?: FieldFormat;
+  readonly absent?: string;
 };
 
 export type MemoItem = {
@@ -283,8 +307,21 @@ export type InterimConfig = {
 
 export type ReplyLine = { readonly text: string; readonly after?: number };
 
+export type GroundedReply = {
+  readonly signal: SignalName;
+  readonly column: string;
+  readonly target: string;
+  readonly needs: readonly string[];
+  readonly line: string;
+  readonly formats?: Readonly<Record<string, FieldFormat>>;
+  readonly missing: string;
+  readonly challenge: { readonly actor: string; readonly delay: number; readonly text: string };
+  readonly incomplete?: { readonly challenge: string };
+};
+
 export type ReplyConfig = {
   readonly lines: readonly ReplyLine[];
+  readonly grounded?: GroundedReply;
   readonly from?: { readonly signal: SignalName; readonly formats?: Readonly<Record<string, FieldFormat>> };
   readonly followUps: readonly {
     readonly actor: string;
@@ -316,14 +353,51 @@ export type AgentStep =
     readonly text: string;
   };
 
-export type AgentConfig = {
+export type AgentOption = {
+  readonly id: string;
+  readonly name: string;
+  readonly merit: string;
+  readonly demerit: string;
+  readonly sequence: Sequence;
+};
+
+export type AgentChosenLines = { readonly you: string; readonly agent: string };
+
+export type AgentDecision = {
+  readonly request: string;
+  readonly drafting: string;
+  readonly listing: string;
+  readonly asking: string;
+  readonly choose: string;
+  readonly options: readonly AgentOption[];
+  readonly adopted: string;
+  readonly first: AgentChosenLines;
+  readonly again: AgentChosenLines;
+  readonly changesRequested: string;
+  readonly approved: string;
+};
+
+type AgentBase = {
   readonly brand: string;
   readonly session: string;
+  readonly stepDelayMs: number;
+};
+
+export type AgentScript = AgentBase & {
   readonly steps: readonly AgentStep[];
   readonly followUp: string;
-  readonly stepDelayMs: number;
   readonly toolDelayMs: number;
+  readonly decision?: undefined;
 };
+
+export type AgentDialogue = AgentBase & {
+  readonly decision: AgentDecision;
+  readonly steps?: undefined;
+  readonly followUp?: undefined;
+  readonly toolDelayMs?: undefined;
+};
+
+export type AgentConfig = AgentScript | AgentDialogue;
 
 export type WorkspaceScenario = {
   readonly id: string;

@@ -21,6 +21,7 @@ export type PanelController = {
   readonly rule?: (ruleIndex: number, count: number) => void;
   readonly update?: (state: PanelUpdate) => void;
   readonly open?: () => void;
+  readonly deselect?: () => void;
   readonly reset?: () => void;
 };
 

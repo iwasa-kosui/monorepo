@@ -86,9 +86,13 @@ export const scenarioProblems = (scenario: WorkspaceScenario): string[] => {
     }
   });
 
-  scenario.agent?.steps.forEach((step, index) => {
+  scenario.agent?.steps?.forEach((step, index) => {
     if (step.kind === 'tool') checkTab(step.open, `agent.steps[${index}]`);
   });
+  const decision = scenario.agent?.decision;
+  if (decision !== undefined && !decision.options.some((option) => option.id === decision.adopted)) {
+    problems.push(`agent.decision の adopted ${decision.adopted} が options にありません`);
+  }
 
   return problems;
 };

@@ -1,4 +1,6 @@
+import { cloneFirst } from '../dom';
 import type { PanelMount } from '../panel';
+import { mountPrReview } from './pr-review';
 import { watchSlotSignals } from './watch';
 
 export const mountPr: PanelMount<'pr'> = (host) => {
@@ -29,5 +31,11 @@ export const mountPr: PanelMount<'pr'> = (host) => {
   }
 
   watchSlotSignals(host);
+  const review = host.tab.config.review;
+  if (review !== undefined) {
+    const parts = panel.querySelector<HTMLTemplateElement>('template[data-pr-parts]');
+    if (parts === null) throw new Error('プルリクエストのレビューの部品が見つかりません');
+    mountPrReview(host, review, { show, part: (name) => cloneFirst(parts, `[data-part="${name}"]`) });
+  }
   return {};
 };

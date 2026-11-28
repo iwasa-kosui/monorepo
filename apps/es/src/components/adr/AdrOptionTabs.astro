@@ -1,0 +1,316 @@
+---
+import { reviewLabels } from '../../workspace/choice';
+import SequenceFigure from '../figures/SequenceFigure.astro';
+import { richHtml } from '../figures/rich';
+import type { AdrOption, Mark } from './adr-options';
+
+type Props = {
+  readonly options: readonly AdrOption[];
+  readonly label: string;
+  readonly mode: 'document' | 'dialogue';
+  readonly criteria?: readonly string[];
+  readonly choosable?: boolean;
+  readonly choose?: string;
+  readonly initial?: number;
+};
+
+const {
+  options,
+  label,
+  mode,
+  criteria = [],
+  choosable = false,
+  choose,
+  initial = 0,
+} = Astro.props;
+
+const isDocument = mode === 'document';
+const requestable = choosable || !isDocument;
+const keyOf = (option: AdrOption, index: number): string =>
+  option.id ?? String(index);
+const plain = (text: string): string => text.replaceAll('`', '');
+const meaning: Record<Mark, string> = {
+  '○': '満たす',
+  '△': '一部だけ満たす',
+  '×': '満たさない',
+};
+---
+
+<div class="option-tabs" data-option-tabs data-mode={mode}>
+  <div class="option-tablist" role="tablist" aria-label={label}>
+    {
+      options.map((option, index) => (
+        <button
+          type="button"
+          role="tab"
+          class="option-tab"
+          data-option-tab={keyOf(option, index)}
+          aria-selected={index === initial ? 'true' : 'false'}
+          tabindex={index === initial ? 0 : -1}
+        >
+          <span class="option-name" set:html={richHtml(option.name)} />
+          {
+            isDocument && option.adopted === true && (
+              <span class="option-badge" data-badge="adopted">採用</span>
+            )
+          }
+          {
+            requestable && (
+              <span class="option-badge" data-badge="requested">{
+                reviewLabels['changes-requested']
+              }</span>
+            )
+          }
+          {
+            choosable && (
+              <span class="option-badge" data-badge="own">あなたの選択</span>
+            )
+          }
+        </button>
+      ))
+    }
+  </div>
+  {
+    options.map((option, index) => (
+      <div
+        class="option-panel"
+        role="tabpanel"
+        data-option-panel={keyOf(option, index)}
+        hidden={index !== initial}
+      >
+        {
+          option.sequence !== undefined && (
+            <SequenceFigure sequence={option.sequence} />
+          )
+        }
+        <div class="option-detail">
+          <div class="option-detail-row">
+            <span class="option-tag" data-kind="merit">利点</span>
+            <span set:html={richHtml(option.merit)} />
+          </div>
+          <div class="option-detail-row">
+            <span class="option-tag" data-kind="demerit">欠点</span>
+            <span set:html={richHtml(option.demerit)} />
+          </div>
+        </div>
+        {
+          isDocument && criteria.length > 0 && (
+            <dl class="option-ratings" data-ratings>
+              {
+                criteria.map((criterion, position) => {
+          const mark = option.marks[position];
+          return (
+                  <div class="option-rating">
+                    <dt set:html={richHtml(criterion)} />
+                    {
+                      mark !== undefined && (
+                        <dd class="option-mark" data-mark={mark}>
+                          <span aria-hidden="true">{mark}</span>
+                          <span class="cfig-sr">{meaning[mark]}</span>
+                        </dd>
+                      )
+                    }
+                  </div>
+                );
+        })
+              }
+            </dl>
+          )
+        }
+        {
+          !isDocument && choose !== undefined && (
+            <button
+              type="button"
+              class="option-choose"
+              data-option-choose={keyOf(option, index)}
+            >
+              {choose}<span class="cfig-sr">（{plain(option.name)}）</span>
+            </button>
+          )
+        }
+      </div>
+    ))
+  }
+</div>
+
+<style>
+.option-tabs {
+  min-width: 0;
+  font-size: var(--text-code);
+  line-height: var(--leading-normal);
+  word-break: auto-phrase;
+}
+.option-tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border-radius: var(--radius-lg);
+  background: var(--role-sunken);
+  padding: var(--space-1);
+}
+.option-tab {
+  display: inline-flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--tap-min);
+  min-width: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  padding: var(--space-1) var(--space-3);
+  color: var(--role-fg);
+  font: inherit;
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+  text-align: center;
+  cursor: pointer;
+}
+.option-tab:hover {
+  background: color-mix(in srgb, var(--role-ground) 60%, transparent);
+}
+.option-tab[aria-selected="true"] {
+  background: var(--role-ground);
+  box-shadow: inset 0 0 0 2px var(--role-accent-strong);
+  color: var(--role-accent-strong);
+  font-weight: var(--weight-bold);
+}
+.option-tab:focus-visible {
+  outline: 2px solid var(--role-accent);
+  outline-offset: 2px;
+}
+.option-name :global(code) {
+  font-size: 0.9em;
+}
+.option-badge {
+  border-radius: var(--radius-sm);
+  background: var(--role-ink-sub);
+  padding: 0 var(--space-1);
+  color: var(--role-on-strong);
+  font-size: var(--text-note);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-tight);
+}
+.option-badge[data-badge="requested"] {
+  display: none;
+  background: var(--role-warning-soft);
+  color: var(--role-warning);
+}
+.option-badge[data-badge="own"] {
+  display: none;
+  background: var(--role-accent-soft);
+  color: var(--role-accent-strong);
+}
+.option-tab[data-requested] .option-badge[data-badge="requested"],
+.option-tab[data-chosen] .option-badge[data-badge="own"] {
+  display: inline;
+}
+:global(.panel[data-choice="pending"]) .option-badge[data-badge="adopted"],
+:global(.panel[data-choice="pending"]) .option-ratings {
+  display: none;
+}
+.option-panel {
+  min-width: 0;
+  padding-top: var(--space-2);
+}
+.option-panel[hidden] {
+  display: none;
+}
+.option-panel > :global(.cfig) {
+  margin-block: 0 var(--space-2);
+}
+.option-detail-row {
+  margin-top: var(--space-1);
+  line-height: var(--leading-normal);
+}
+.option-detail-row :global(code) {
+  font-size: 0.9em;
+}
+.option-tag {
+  margin-right: var(--space-1);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  font-size: var(--text-note);
+}
+.option-tag[data-kind="merit"] {
+  background: var(--role-success-soft);
+  color: var(--role-success);
+}
+.option-tag[data-kind="demerit"] {
+  background: var(--role-danger-soft);
+  color: var(--role-danger);
+}
+.option-ratings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0;
+  border-radius: var(--radius-md);
+  background: var(--role-sunken);
+  padding: var(--space-2) var(--space-3);
+}
+.option-rating {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.option-rating dt {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.option-rating dt :global(code) {
+  font-size: 0.9em;
+}
+.option-mark {
+  flex: none;
+  margin: 0;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: 1.1;
+}
+.option-mark[data-mark="○"] {
+  color: var(--role-success);
+}
+.option-mark[data-mark="△"] {
+  color: var(--role-ink-sub);
+}
+.option-mark[data-mark="×"] {
+  color: var(--role-danger);
+}
+.option-choose {
+  min-height: var(--tap-min);
+  margin-top: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--role-accent-strong);
+  color: var(--role-on-accent);
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  cursor: pointer;
+}
+.option-choose:disabled {
+  background: var(--role-sunken);
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+.option-choose[hidden] {
+  display: none;
+}
+.option-choose:focus-visible {
+  outline: 2px solid var(--role-accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .option-tab {
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+}
+</style>

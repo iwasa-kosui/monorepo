@@ -1,3 +1,4 @@
+import type { Stage } from './choice';
 import { type FiredSignals, isMet, unmet } from './conditions';
 import { replyGate } from './rules';
 import type { Condition, GatesConfig, SignalName, SignalRef, TabDefinition } from './scenario';
@@ -20,6 +21,10 @@ export type LogView = {
   readonly initialQuery: string;
 };
 
+export type ChoiceView = {
+  readonly stage: Stage;
+};
+
 export type NudgeContext = {
   readonly tabs: readonly Pick<TabDefinition, 'key' | 'kind'>[];
   readonly selected: string;
@@ -27,7 +32,9 @@ export type NudgeContext = {
   readonly restoreRunShown?: boolean;
   readonly sqlMissed?: boolean;
   readonly resetSqlShown?: boolean;
+  readonly rowsShown?: boolean;
   readonly live?: { readonly channel: string; readonly shown: boolean; readonly written: boolean };
+  readonly choice?: ChoiceView;
 };
 
 export const restoredKey = 'restored';
@@ -40,15 +47,22 @@ export const restoreRunSelector = `${restorePlaygroundSelector} [data-role="run"
 
 export const resetSqlSelector = '[data-playground="sql"] [data-role="reset-sql"]';
 
+export const resultTableSelector = '[data-playground="sql"] .playground-result table';
+
 export const liveInputSelector = '[data-live-input]';
 
 export const liveSendSelector = '[data-action="send"]';
+
+export const agentSendSelector = '[data-agent-send]';
+
+export const optionListSelector = '[data-agent-options][data-active] [data-option-tabs]';
 
 export const fewLogRows = 3;
 
 export const signalSelectors: Readonly<Partial<Record<SignalName, string>>> = {
   'sql:executed': '[data-playground="sql"] [data-role="run"]',
   'sql:target-shown': '[data-playground="sql"] [data-role="run"]',
+  'sql:row-selected': '[data-playground="sql"] [data-role="run"]',
   'tests:ran': '[data-role="run-tests"]',
   'tests:passed': '[data-role="run-tests"]',
   'code:run': '[data-run-file]:not([data-role="run-tests"]), [data-play] [data-role="run"]',
@@ -92,6 +106,12 @@ const logNudgeOf = (key: string, view: LogView): NudgeSpec => {
   return { selector: `${panel} input[data-query]`, text: `検索欄を「${view.initialQuery}」に戻します` };
 };
 
+export const choiceNudgeOf = (view: ChoiceView): NudgeSpec | null => {
+  if (view.stage === 'idle') return { selector: agentSendSelector };
+  if (view.stage === 'choosing') return { selector: optionListSelector, text: '案を1つ選択します' };
+  return null;
+};
+
 export const nudgeSpecOf = (signal: SignalRef, context: NudgeContext): NudgeSpec | null => {
   const name = typeof signal === 'string' ? signal : signal.name;
   const key = typeof signal === 'string' ? undefined : signal.key;
@@ -101,6 +121,9 @@ export const nudgeSpecOf = (signal: SignalRef, context: NudgeContext): NudgeSpec
   }
   if (name === 'sql:target-shown' && context.sqlMissed === true && context.resetSqlShown === true) {
     return { selector: resetSqlSelector };
+  }
+  if (name === 'sql:row-selected' && context.rowsShown === true) {
+    return { selector: resultTableSelector, text: '根拠にする行を選択します' };
   }
   if (name === 'log:detail-opened' || name === 'log:target-opened') {
     const logs = context.tabs.find((tab) => tab.kind === 'logs');
@@ -112,6 +135,7 @@ export const nudgeSpecOf = (signal: SignalRef, context: NudgeContext): NudgeSpec
     if (!context.live.shown) return { selector: `button[data-channel="${quoted(context.live.channel)}"]` };
     return { selector: context.live.written ? liveSendSelector : liveInputSelector };
   }
+  if (name === 'option:reviewed') return context.choice === undefined ? null : choiceNudgeOf(context.choice);
   const selector = signalSelectors[name];
   return selector === undefined ? null : { selector };
 };

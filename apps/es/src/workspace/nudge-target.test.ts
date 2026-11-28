@@ -2,13 +2,18 @@ import { describe, expect, it } from 'vitest';
 
 import { record } from './conditions';
 import {
+  agentSendSelector,
+  choiceNudgeOf,
+  type ChoiceView,
   fewLogRows,
   type LogView,
   nextSignals,
   type NudgeContext,
   nudgeSpecOf,
+  optionListSelector,
   restoredKey,
   restoreSelector,
+  resultTableSelector,
   signalSelectors,
   unmetSignals,
 } from './nudge-target';
@@ -130,6 +135,36 @@ describe('nudgeSpecOf', () => {
   it('sql:executed と sql:target-shown は、SQL の実行ボタンを指す', () => {
     expect(nudgeSpecOf('sql:executed', context)).toEqual({ selector: signalSelectors['sql:executed'] });
     expect(nudgeSpecOf('sql:target-shown', context)).toEqual({ selector: '[data-playground="sql"] [data-role="run"]' });
+  });
+
+  describe('sql:row-selected', () => {
+    const rowGates: GatesConfig = {
+      reply: {
+        requires: [{ signal: 'sql:row-selected', reason: '行を選択します。' }],
+        reasons: { all: '行を選択します。', several: '行を選択します。' },
+      },
+    };
+    const done: Condition = { name: 'chat:replied', key: 'grounded' };
+
+    it('結果の表が表示されていなければ、SQL の実行ボタンを指す', () => {
+      expect(nudgeSpecOf('sql:row-selected', context)).toEqual({ selector: signalSelectors['sql:row-selected'] });
+      expect(nudgeSpecOf('sql:row-selected', { ...context, rowsShown: false })).toEqual({
+        selector: '[data-playground="sql"] [data-role="run"]',
+      });
+    });
+
+    it('結果の表が表示され、行が未選択なら、特定の行ではなく結果の表の全体を指し、行を選択する文言を出す', () => {
+      const spec = nudgeSpecOf('sql:row-selected', { ...context, rowsShown: true });
+      expect(spec).toEqual({ selector: resultTableSelector, text: '根拠にする行を選択します' });
+      expect(resultTableSelector).not.toMatch(/tr|visit-|nth/);
+    });
+
+    it('行が未選択の間は、返信ではなく行の選択を指し、選択した後は返信の条件が残るだけになる', () => {
+      expect(nextSignals(firedOf(), rowGates, done)).toEqual(['sql:row-selected']);
+      expect(nextSignals(firedOf('sql:row-selected'), rowGates, done)).toEqual([done]);
+      expect(nextSignals(firedOf(['chat:replied', 'ungrounded'], 'sql:row-selected'), rowGates, done)).toEqual([done]);
+      expect(nudgeSpecOf(done, context)).toBeNull();
+    });
   });
 
   it('バックアップの復元を待つ sql:executed は、復元ボタンを指す', () => {
@@ -291,5 +326,45 @@ describe('nudgeSpecOf', () => {
     ) {
       expect(nudgeSpecOf(name, context)).toBeNull();
     }
+  });
+});
+
+describe('choiceNudgeOf', () => {
+  const viewOf = (stage: ChoiceView['stage']): ChoiceView => ({ stage });
+
+  it('対話の開始前は、エージェントの入力欄の送信ボタンを指す', () => {
+    expect(choiceNudgeOf(viewOf('idle'))).toEqual({ selector: agentSendSelector });
+  });
+
+  it('案の選択を待っている間は、案のタブの部品の全体を指し、特定の案を指さない', () => {
+    const spec = choiceNudgeOf(viewOf('choosing'));
+    expect(spec).toEqual({ selector: optionListSelector, text: '案を1つ選択します' });
+    expect(spec !== null && 'selector' in spec ? spec.selector : '').not.toContain('data-option-choose');
+  });
+
+  it('エージェントの発言の表示中と、レビューの待ちの間と、Approved の後は、何も指さない', () => {
+    for (const stage of ['speaking', 'reviewing', 'approved'] as const) {
+      expect(choiceNudgeOf(viewOf(stage)), stage).toBeNull();
+    }
+  });
+
+  it('option:reviewed が未達のとき、nudgeSpecOf は採用案の識別子によらず choice の状態で対象を決める', () => {
+    const withChoice = { ...context, choice: viewOf('idle') };
+    expect(nudgeSpecOf({ name: 'option:reviewed', key: 'append-in-update' }, withChoice)).toEqual({
+      selector: agentSendSelector,
+    });
+    expect(nudgeSpecOf({ name: 'option:reviewed', key: 'other' }, withChoice)).toEqual({
+      selector: agentSendSelector,
+    });
+    expect(nudgeSpecOf({ name: 'option:reviewed', key: 'append-in-update' }, context)).toBeNull();
+  });
+
+  it('完了条件が採用案のレビューなら、未達の間だけ、choice の状態から対象を決める', () => {
+    const done: Condition = { name: 'option:reviewed', key: 'append-in-update' };
+    const withChoice = { ...context, choice: viewOf('choosing') };
+    const specs = nextSignals(firedOf(), undefined, done).map((signal) => nudgeSpecOf(signal, withChoice));
+    expect(specs).toEqual([{ selector: optionListSelector, text: '案を1つ選択します' }]);
+    expect(nextSignals(firedOf(['option:reviewed', 'write-to-log']), undefined, done)).toEqual([done]);
+    expect(nextSignals(firedOf(['option:reviewed', 'append-in-update']), undefined, done)).toEqual([]);
   });
 });

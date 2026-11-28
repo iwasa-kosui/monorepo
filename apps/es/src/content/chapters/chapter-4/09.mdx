@@ -7,7 +7,6 @@ import AdrOptions from '../../../components/adr/AdrOptions.astro';
 import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
 import AdrPanel from '../../../components/adr/AdrPanel.astro';
 import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
-import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import { chapter4AuditLogAdr } from '../../../components/chapters/chapter-4';
 import AuditLogRoleFigure from '../../../components/figures/AuditLogRoleFigure.astro';
 import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
@@ -23,9 +22,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter4AuditLogAdr}>
 <Fragment slot="memo">
 
-<AdrTabs id="adr-5" labels={['背景', '決定', '結果', '検討した案']}>
-
-<AdrPanel lead="監査ログに残っている変更の理由を、情シスから確認されました。回答できるのは、来院のキャンセルだけです。">
+<AdrPanel heading="背景" lead="監査ログに残っている変更の理由を、情シスから確認されました。回答できるのは、来院のキャンセルだけです。">
 
 <SequenceFigure sequence={auditReasonSequence} />
 
@@ -35,7 +32,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel lead="過渡期は、値と操作者を監査ログに、理由を業務イベントに残します。その後は、監査ログを業務イベントから生成します。">
+<AdrPanel heading="決定" lead="過渡期は、値と操作者を監査ログに、理由を業務イベントに残します。その後は、監査ログを業務イベントから生成します。">
 
 <AuditLogRoleFigure />
 
@@ -43,7 +40,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="結果">
 
 <AdrOutcomes items={[
   { kind: 'value', label: '社内への価値', text: '業務イベントを記録している変更は、業務上の理由を回答できます。' },
@@ -54,10 +51,9 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 </AdrPanel>
 
-<AdrPanel>
+<AdrPanel heading="検討した案">
 
 <AdrOptions
-  id="adr-5"
   criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
   options={[
     { name: '過渡期は領域を分け、その後は監査ログを業務イベントから生成する', adopted: true, marks: ['○', '○', '○'], merit: '理由を回答でき、業務イベントを記録していない変更も監査ログに残ります。', demerit: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
@@ -67,7 +63,6 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 />
 
 </AdrPanel>
-</AdrTabs>
 
 </Fragment>
 </Workspace>

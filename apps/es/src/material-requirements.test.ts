@@ -113,14 +113,21 @@ describe('PRD の受入条件', () => {
     expect(text.indexOf('business_events')).toBeGreaterThan(lineEnd);
   });
 
-  it('chapter-2 の ADR 1 は、背景、決定、結果、検討した案のタブで書く', () => {
-    const text = read('src/content/chapters/chapter-2/01.mdx');
-    expect(text).toContain(`labels={['背景', '決定', '結果', '検討した案']}`);
+  const headingsOf = (path: string): string[] =>
+    [...read(path).matchAll(/<AdrPanel heading="([^"]+)"/g)].map((match) => match[1] ?? '');
+
+  it('chapter-2 の ADR 1 は、背景、決定、結果、検討した案を、この順に縦に並べる節で書く', () => {
+    expect(headingsOf('src/content/chapters/chapter-2/01.mdx')).toEqual(['背景', '決定', '結果', '検討した案']);
   });
 
-  it('chapter-2 の ADR 2 は、背景、決定、結果、検討した案を、この順のタブで書く', () => {
-    const text = read('src/content/chapters/chapter-2/03.mdx');
-    expect(text).toContain(`labels={['背景', '決定', '列の対応', '結果', '検討した案']}`);
+  it('chapter-2 の ADR 2 は、背景、決定、列の対応、結果、検討した案を、この順に縦に並べる節で書く', () => {
+    expect(headingsOf('src/content/chapters/chapter-2/03.mdx')).toEqual([
+      '背景',
+      '決定',
+      '列の対応',
+      '結果',
+      '検討した案',
+    ]);
   });
 
   it('schedule の title に業務イベントが出ない', () => {

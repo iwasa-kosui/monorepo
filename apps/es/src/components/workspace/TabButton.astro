@@ -12,6 +12,7 @@ type Props =
   | (Pick<PanelProps, 'scenario'> & { chat: true });
 
 const props = Astro.props;
+const shownTitle = 'chat' in props ? '' : props.tab.title;
 ---
 
 {
@@ -50,7 +51,7 @@ const props = Astro.props;
       aria-selected={props.selected ? 'true' : 'false'}
       aria-controls={panelIdOf(props.scenario, props.tab.key)}
       tabindex={props.selected ? 0 : -1}
-      style={`--title-chars: ${props.tab.title.length}`}
+      style={`--title-chars: ${shownTitle.length}`}
     >
       <span
         class="fav"
@@ -58,7 +59,7 @@ const props = Astro.props;
         data-tone={props.tab.favicon.tone}
         data-shape={props.tab.favicon.shape}
       ></span>
-      <span class="tab-title">{props.tab.title}</span>
+      <span class="tab-title">{shownTitle}</span>
       <span class="cfig-sr">（{props.tab.label}）</span>
       <span class="unseen" data-unseen hidden={props.tab.seen === undefined}
       >未確認</span>
