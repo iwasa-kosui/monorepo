@@ -144,3 +144,9 @@
   border-width: 6px 0 6px 7px;
   border-left-color: var(--cfig-callout-bg);
 }
+
+.content .cfig {
+  --role-accent: var(--role-ink-sub);
+  --role-accent-strong: var(--role-ink-sub);
+  --role-accent-soft: var(--role-ground);
+}

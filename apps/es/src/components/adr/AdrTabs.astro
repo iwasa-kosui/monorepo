@@ -42,18 +42,31 @@ const { id, labels } = Astro.props;
   white-space: nowrap;
 }
 .adr-tablist {
+  position: relative;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-1);
+  isolation: isolate;
   min-height: 2.5rem;
   background: var(--role-bg);
+  padding: var(--space-1);
+}
+.adr-tablist::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-lg);
+  background: var(--role-sunken);
+  content: "";
 }
 .adr-tablist label {
   display: inline-flex;
+  flex: 1;
   align-items: center;
+  justify-content: center;
   border-radius: var(--radius-md);
   padding: var(--space-1) var(--space-3);
-  color: var(--role-muted);
+  color: var(--role-fg);
   font-size: var(--text-note);
   font-weight: var(--weight-regular);
   line-height: var(--leading-tight);
@@ -61,7 +74,7 @@ const { id, labels } = Astro.props;
   cursor: pointer;
 }
 .adr-tablist label:hover {
-  background: var(--role-sunken);
+  background: color-mix(in srgb, var(--role-ground) 60%, transparent);
 }
 .adr-panels > :global(*) {
   display: none;
@@ -83,7 +96,8 @@ const { id, labels } = Astro.props;
 .adr-tabs > input:nth-of-type(4):checked ~ .adr-tablist > label:nth-child(4),
 .adr-tabs > input:nth-of-type(5):checked ~ .adr-tablist > label:nth-child(5),
 .adr-tabs > input:nth-of-type(6):checked ~ .adr-tablist > label:nth-child(6) {
-  background: var(--role-accent-soft);
+  background: var(--role-ground);
+  box-shadow: inset 0 0 0 2px var(--role-accent-strong);
   color: var(--role-accent-strong);
   font-weight: var(--weight-bold);
 }
