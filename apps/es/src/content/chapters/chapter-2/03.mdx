@@ -11,7 +11,6 @@ import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import EventAsFunctionFigure from '../../../components/figures/EventAsFunctionFigure.astro';
 import RecordMappingFigure from '../../../components/figures/RecordMappingFigure.astro';
 import TableGrowthFigure from '../../../components/figures/TableGrowthFigure.astro';
-import Quote from '../../../components/Quote.astro';
 import { chapter2Table } from '../../../components/chapters/chapter-2';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
@@ -24,7 +23,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter2Table}>
 <Fragment slot="memo">
 
-<AdrTabs id="adr-2" labels={['背景', '決定', '列の対応', '結果', '検討した案', '参考']}>
+<AdrTabs id="adr-2" labels={['背景', '決定', '列の対応', '結果', '検討した案']}>
 
 <AdrPanel lead="出来事ごとにテーブルを作ると、記録する出来事を追加するたびに、テーブルが増えます。">
 
@@ -44,6 +43,8 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <TableGrowthFigure view="merged" />
 
 外部キー制約は優先しませんでした。来院のデータを削除した後も、業務イベントを残すためです。
+
+テーブルの分割は、1つのテーブルで運用の負荷が高くなった時点で検討します。
 
 </AdrPanel>
 
@@ -77,18 +78,6 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 />
 
 `target_state` を持つかどうかは、上の比較とは別の決定です。持たない場合は1行が小さくなりますが、`visits` の行はその後も変わるため、ある時点の状態を後から確認できません。
-
-</AdrPanel>
-
-<AdrPanel lead="出来事ごとにテーブルを分割した場合の運用負荷は、次の発表が報告しています。">
-
-<Quote source="SRE Kaigi 2026 の発表より">
-
-また、最初は集約やイベントごとにテーブルを分割していましたが、運用負荷が高かったため、必要になるまでは単一テーブルに寄せるようにしました。過剰な設計を避けるという判断です。
-
-</Quote>
-
-`business_events` テーブルの設計は、[kosui.me の記事](https://kosui.me/posts/2025/05/06/142842)の設計を基にしています。記事は `event_id` に UUID v7 を使いますが、予約システムは連番にします。
 
 </AdrPanel>
 </AdrTabs>
