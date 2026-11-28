@@ -1,9 +1,11 @@
 import { must } from '../dom';
 import type { PanelMount } from '../panel';
+import { revealOffset } from '../reveal';
 
 export const mountDbConsole: PanelMount<'console'> = (host) => {
   const { panel } = host;
   const config = host.tab.config;
+  const body = must<HTMLElement>(panel, '.db-body');
   const playground = must<HTMLElement>(panel, '[data-playground="sql"]');
   const results = must<HTMLElement>(panel, '[data-role="results"]');
   const resetSql = must<HTMLButtonElement>(panel, '[data-role="reset-sql"]');
@@ -15,11 +17,21 @@ export const mountDbConsole: PanelMount<'console'> = (host) => {
     );
   };
 
+  // 狭い画面では、結果の欄がテーブルの一覧と入力欄の下に隠れる。ページ全体は動かさず、
+  // パネルの中でスクロールする領域だけを動かして、結果を見えるところへ出す
+  const scrollers = [playground, body];
+  const revealResults = (): void => {
+    for (const scroller of scrollers) {
+      scroller.scrollTop += revealOffset(scroller.getBoundingClientRect(), results.getBoundingClientRect());
+    }
+  };
+
+  const hint = document.createElement('p');
+  hint.className = 'playground-note';
+  hint.textContent = 'クエリを実行すると、結果がここに出ます。';
   const placeholder = (): void => {
-    const note = document.createElement('p');
-    note.className = 'playground-note';
-    note.textContent = 'クエリを実行すると、結果がここに出ます。';
-    results.replaceChildren(note);
+    results.replaceChildren(hint);
+    for (const scroller of scrollers) scroller.scrollTop = 0;
   };
 
   const quietEditor = (): boolean => {
@@ -64,6 +76,7 @@ export const mountDbConsole: PanelMount<'console'> = (host) => {
   results.setAttribute('role', 'status');
   placeholder();
   new MutationObserver(() => {
+    if (!results.contains(hint)) revealResults();
     if (results.querySelector('.playground-result, .playground-error') === null) return;
     host.emit('sql:executed');
     const row = targetRow();
