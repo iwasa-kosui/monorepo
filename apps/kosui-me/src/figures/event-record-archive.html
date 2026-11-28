@@ -1,0 +1,293 @@
+<style>
+.fig-ar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  border-radius: 12px;
+  background: var(--fig-soft);
+  padding: 1rem;
+  overflow-x: auto;
+  color: var(--fig-ink);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.fig-ar .fig-ar-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.fig-ar .fig-ar-head {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-ar-lane {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+.fig-ar-face {
+  --base: var(--fig-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  border-radius: 10px;
+  background-color: var(--base);
+  padding: 0.75rem 1rem;
+}
+.fig-ar-face-out {
+  --base: var(--fig-agent-soft);
+}
+.fig-ar-face-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-ar-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.fig-ar-table-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-ar-table-note {
+  color: var(--fig-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.fig-ar-row {
+  --base: var(--fig-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  border-radius: 4px;
+  background-color: var(--base);
+  padding: 0.25rem 0.5rem;
+}
+.fig-ar-row-state {
+  --base: var(--fig-agent-soft);
+}
+.fig-ar-row-old {
+  opacity: 0.4;
+}
+.fig-ar-tag {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.fig-ar-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--fig-muted);
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+.fig-ar-arrow {
+  display: block;
+  width: 100%;
+  line-height: 0;
+}
+.fig-ar-arrow svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.fig-ar-shaft,
+.fig-ar-head-mark {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fig-ar-dot {
+  fill: var(--fig-agent);
+  opacity: 0;
+}
+.fig-ar-file {
+  --base: var(--fig-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  border-radius: 8px;
+  background-color: var(--base);
+  padding: 0.5rem 0.75rem;
+}
+.fig-ar-file-name {
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+@media (max-width: 40rem) {
+  .fig-ar-lane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fig-ar-link {
+    flex-direction: row;
+    justify-content: center;
+  }
+  .fig-ar-arrow {
+    display: grid;
+    place-items: center;
+    width: 4rem;
+    height: 4rem;
+  }
+  .fig-ar-arrow svg {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fig-ar {
+    --cycle: 12s;
+    --lit: color-mix(in srgb, var(--fig-agent) 30%, var(--fig-surface));
+  }
+
+  .fig-ar-row-old {
+    animation: fig-ar-row-old var(--cycle) linear infinite;
+  }
+  .fig-ar-arrow-export .fig-ar-dot {
+    animation: fig-ar-travel var(--cycle) linear infinite;
+  }
+  .fig-ar-file {
+    animation: fig-ar-file var(--cycle) linear infinite;
+  }
+
+  @keyframes fig-ar-row-old {
+    0%,
+    4% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+    8%,
+    20% {
+      opacity: 1;
+      background-color: var(--lit);
+    }
+    24%,
+    50% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+    58%,
+    96% {
+      opacity: 0.4;
+      background-color: var(--base);
+    }
+    100% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+  }
+  @keyframes fig-ar-travel {
+    0%,
+    21% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    22% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    33% {
+      opacity: 1;
+      transform: translate(58px, 0);
+    }
+    34%,
+    100% {
+      opacity: 0;
+      transform: translate(58px, 0);
+    }
+  }
+  @keyframes fig-ar-file {
+    0%,
+    33% {
+      opacity: 0;
+      background-color: var(--base);
+    }
+    36%,
+    46% {
+      opacity: 1;
+      background-color: var(--lit);
+    }
+    50%,
+    96% {
+      opacity: 1;
+      background-color: var(--base);
+    }
+    100% {
+      opacity: 0;
+      background-color: var(--base);
+    }
+  }
+}
+</style>
+<figure class="fig fig-ar" aria-label="古い業務イベントを DB の外のストレージへ書き出してから、DB から削除する図">
+<p class="fig-ar-head">古い業務イベントを DB の外へ書き出してから、DB から削除する</p>
+<div class="fig-ar-lane">
+<div class="fig-ar-face">
+<span class="fig-ar-face-label">DB</span>
+<div class="fig-ar-table">
+<span class="fig-ar-table-name"><span class="fig-ar-mono">visits</span>（現在の状態）</span>
+<span class="fig-ar-row fig-ar-row-state">
+<span class="fig-ar-mono">visit-pochi</span>
+<span class="fig-ar-mono">cancelled</span>
+</span>
+<span class="fig-ar-table-note">状態を変える処理は、この行だけを読む</span>
+</div>
+<div class="fig-ar-table">
+<span class="fig-ar-table-name"><span class="fig-ar-mono">business_events</span>（記録）</span>
+<span class="fig-ar-row fig-ar-row-old">
+<span class="fig-ar-mono">event_id 1</span>
+<span class="fig-ar-tag">書き出してから削除</span>
+</span>
+<span class="fig-ar-row fig-ar-row-old">
+<span class="fig-ar-mono">event_id 2</span>
+<span class="fig-ar-tag">書き出してから削除</span>
+</span>
+<span class="fig-ar-row fig-ar-row-old">
+<span class="fig-ar-mono">event_id 3</span>
+<span class="fig-ar-tag">書き出してから削除</span>
+</span>
+<span class="fig-ar-row fig-ar-row-kept">
+<span class="fig-ar-mono">event_id 4</span>
+<span class="fig-ar-tag">DB に残す</span>
+</span>
+<span class="fig-ar-row fig-ar-row-kept">
+<span class="fig-ar-mono">event_id 5</span>
+<span class="fig-ar-tag">DB に残す</span>
+</span>
+</div>
+</div>
+<div class="fig-ar-link">
+<span class="fig-ar-arrow fig-ar-arrow-export">
+<svg viewBox="0 0 80 24" aria-hidden="true" focusable="false">
+<path class="fig-ar-shaft" d="M4 12H72"></path>
+<path class="fig-ar-head-mark" d="M62 5L76 12L62 19"></path>
+<circle class="fig-ar-dot" cx="9" cy="12" r="5"></circle>
+</svg>
+</span>
+<span>書き出す</span>
+</div>
+<div class="fig-ar-face fig-ar-face-out">
+<span class="fig-ar-face-label">DB の外のストレージ</span>
+<div class="fig-ar-file">
+<span class="fig-ar-file-name">Parquet ファイル</span>
+<span class="fig-ar-mono">event_id 1〜3</span>
+</div>
+</div>
+</div>
+</figure>

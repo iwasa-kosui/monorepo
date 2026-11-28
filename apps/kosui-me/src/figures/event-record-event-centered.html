@@ -1,0 +1,321 @@
+<style>
+.fig-ec {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  border-radius: 12px;
+  background: var(--fig-soft);
+  padding: 1rem;
+  overflow-x: auto;
+  color: var(--fig-ink);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.fig-ec .fig-ec-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.fig-ec .fig-ec-head {
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-ec-face {
+  --base: var(--fig-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  border-radius: 10px;
+  background-color: var(--base);
+  padding: 0.75rem 1rem;
+}
+.fig-ec-face-fn {
+  --base: var(--fig-agent);
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  color: var(--fig-on-agent);
+}
+.fig-ec-face-event {
+  --base: var(--fig-agent-soft);
+}
+.fig-ec-face-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+}
+.fig-ec-face-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-ec-face-name {
+  font-weight: 700;
+}
+.fig-ec-face-note {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.fig-ec-parts,
+.fig-ec-targets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.fig-ec-part,
+.fig-ec-target {
+  --base: var(--fig-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  border-radius: 8px;
+  background-color: var(--base);
+  padding: 0.5rem 0.75rem;
+}
+.fig-ec-target {
+  --base: var(--fig-soft);
+}
+.fig-ec-part-name {
+  font-weight: 700;
+}
+.fig-ec-target-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.fig-ec-part-value,
+.fig-ec-target-value {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.fig-ec-link {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 0.5rem;
+  color: var(--fig-muted);
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+.fig-ec-arrow {
+  display: block;
+  flex: none;
+  width: 1.5rem;
+  line-height: 0;
+}
+.fig-ec-arrow svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+}
+.fig-ec-shaft,
+.fig-ec-head-mark {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fig-ec-dot {
+  fill: var(--fig-agent);
+  opacity: 0;
+}
+
+@media (max-width: 40rem) {
+  .fig-ec-parts,
+  .fig-ec-targets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fig-ec {
+    --cycle: 12s;
+    --lit: color-mix(in srgb, var(--fig-agent) 30%, var(--fig-surface));
+  }
+
+  .fig-ec-face-fn {
+    animation: fig-ec-lit-fn var(--cycle) linear infinite;
+  }
+  .fig-ec-arrow-emit .fig-ec-dot {
+    animation: fig-ec-travel-emit var(--cycle) linear infinite;
+  }
+  .fig-ec-part-payload {
+    animation: fig-ec-lit-payload var(--cycle) linear infinite;
+  }
+  .fig-ec-part-state {
+    animation: fig-ec-lit-state var(--cycle) linear infinite;
+  }
+  .fig-ec-arrow-store .fig-ec-dot {
+    animation: fig-ec-travel-store var(--cycle) linear infinite;
+  }
+  .fig-ec-target-visits,
+  .fig-ec-target-events {
+    animation: fig-ec-lit-targets var(--cycle) linear infinite;
+  }
+
+  @keyframes fig-ec-lit-fn {
+    0%,
+    2%,
+    16%,
+    100% {
+      background-color: var(--base);
+      color: var(--fig-on-agent);
+    }
+    5%,
+    13% {
+      background-color: var(--lit);
+      color: var(--fig-ink);
+    }
+  }
+  @keyframes fig-ec-travel-emit {
+    0%,
+    15% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    16% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    21% {
+      opacity: 1;
+      transform: translate(0, 18px);
+    }
+    22%,
+    100% {
+      opacity: 0;
+      transform: translate(0, 18px);
+    }
+  }
+  @keyframes fig-ec-lit-payload {
+    0%,
+    22%,
+    36%,
+    100% {
+      background-color: var(--base);
+    }
+    25%,
+    33% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes fig-ec-lit-state {
+    0%,
+    22%,
+    36%,
+    46%,
+    94%,
+    100% {
+      background-color: var(--base);
+    }
+    25%,
+    33%,
+    50%,
+    90% {
+      background-color: var(--lit);
+    }
+  }
+  @keyframes fig-ec-travel-store {
+    0%,
+    37% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    38% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    43% {
+      opacity: 1;
+      transform: translate(0, 18px);
+    }
+    44%,
+    100% {
+      opacity: 0;
+      transform: translate(0, 18px);
+    }
+  }
+  @keyframes fig-ec-lit-targets {
+    0%,
+    46%,
+    94%,
+    100% {
+      background-color: var(--base);
+    }
+    50%,
+    90% {
+      background-color: var(--lit);
+    }
+  }
+}
+</style>
+<figure class="fig fig-ec" aria-label="更新処理の関数が業務イベントを返し、保存する処理が同じ業務イベントから visits と business_events の両方に書く図">
+<p class="fig-ec-head">状態に書く値と記録に書く値を、同じ業務イベントから取る</p>
+<div class="fig-ec-face fig-ec-face-fn">
+<span class="fig-ec-face-label">更新処理の関数</span>
+<span class="fig-ec-mono fig-ec-face-name">cancelVisit</span>
+<span class="fig-ec-face-note">DB に書き込まない</span>
+</div>
+<div class="fig-ec-link">
+<span class="fig-ec-arrow fig-ec-arrow-emit">
+<svg viewBox="0 0 24 40" aria-hidden="true" focusable="false">
+<path class="fig-ec-shaft" d="M12 4V34"></path>
+<path class="fig-ec-head-mark" d="M5 24L12 36L19 24"></path>
+<circle class="fig-ec-dot" cx="12" cy="9" r="5"></circle>
+</svg>
+</span>
+<span>業務イベントを返す</span>
+</div>
+<div class="fig-ec-face fig-ec-face-event">
+<div class="fig-ec-face-top">
+<span class="fig-ec-face-label">業務イベント</span>
+<span class="fig-ec-mono fig-ec-face-name">VisitCancelled</span>
+</div>
+<div class="fig-ec-parts">
+<div class="fig-ec-part fig-ec-part-payload">
+<span class="fig-ec-mono fig-ec-part-name">payload</span>
+<span class="fig-ec-part-value">理由、操作した人</span>
+</div>
+<div class="fig-ec-part fig-ec-part-state">
+<span class="fig-ec-mono fig-ec-part-name">targetState</span>
+<span class="fig-ec-part-value">変更後の来院（<span class="fig-ec-mono">status: 'cancelled'</span>）</span>
+</div>
+</div>
+</div>
+<div class="fig-ec-link">
+<span class="fig-ec-arrow fig-ec-arrow-store">
+<svg viewBox="0 0 24 40" aria-hidden="true" focusable="false">
+<path class="fig-ec-shaft" d="M12 4V34"></path>
+<path class="fig-ec-head-mark" d="M5 24L12 36L19 24"></path>
+<circle class="fig-ec-dot" cx="12" cy="9" r="5"></circle>
+</svg>
+</span>
+<span>保存する処理に渡す</span>
+</div>
+<div class="fig-ec-face">
+<div class="fig-ec-face-top">
+<span class="fig-ec-face-label">保存する処理</span>
+<span class="fig-ec-mono fig-ec-face-name">storeVisitCancelled</span>
+<span class="fig-ec-face-note">1つのトランザクション</span>
+</div>
+<div class="fig-ec-targets">
+<div class="fig-ec-target fig-ec-target-visits">
+<span class="fig-ec-target-name"><span class="fig-ec-mono">visits</span>（現在の状態）</span>
+<span class="fig-ec-target-value"><span class="fig-ec-mono">targetState</span> の <span class="fig-ec-mono">status</span> を書く</span>
+</div>
+<div class="fig-ec-target fig-ec-target-events">
+<span class="fig-ec-target-name"><span class="fig-ec-mono">business_events</span>（記録）</span>
+<span class="fig-ec-target-value"><span class="fig-ec-mono">payload</span> と <span class="fig-ec-mono">targetState</span> を書く</span>
+</div>
+</div>
+</div>
+</figure>
