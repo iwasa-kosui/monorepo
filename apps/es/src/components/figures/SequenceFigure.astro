@@ -154,6 +154,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
 .cfig.sequence {
   container-type: inline-size;
   gap: 0;
+  padding-block: var(--space-2);
 }
 .canvas {
   display: flex;
@@ -174,11 +175,11 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 var(--space-1);
+  margin: 0 0.125rem;
   border: 1px solid var(--role-border);
   background: var(--role-ground);
-  padding: var(--space-1);
-  font-size: var(--fig-label);
+  padding: var(--space-1) 0.125rem;
+  font-size: 0.875rem;
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
   text-align: center;
@@ -194,13 +195,12 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   border-top: 0.375rem solid var(--role-accent-strong);
   border-radius: var(--radius-sm);
 }
-.head :global(code) {
+:global(.content) .cfig.sequence .head :global(code) {
   font-size: 0.875em;
 }
 
 .body {
   position: relative;
-  padding-bottom: var(--space-2);
 }
 .lives {
   position: absolute;
@@ -223,13 +223,18 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
 .cfig .step {
   position: relative;
   margin: 0;
-  padding: 0.125rem 0;
+  padding: 0;
 }
 
 .label {
   position: relative;
-  left: calc((var(--min) + 0.02) * 100% / var(--lanes));
-  width: calc((var(--max) - var(--min) + 0.96) * 100% / var(--lanes));
+  left: calc(max(0.02, var(--min) - 1) * 100% / var(--lanes));
+  width: calc(
+    (
+        min(var(--lanes) - 0.02, var(--max) + 2) -
+          max(0.02, var(--min) - 1)
+      ) * 100% / var(--lanes)
+  );
   font-size: var(--fig-label);
   line-height: var(--leading-tight);
   text-align: center;
@@ -249,7 +254,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   left: calc((var(--min) + 0.5) * 100% / var(--lanes));
   display: block;
   width: calc((var(--max) - var(--min)) * 100% / var(--lanes));
-  height: 0.625rem;
+  height: 0.5rem;
   color: var(--role-fg);
 }
 .arrow::before {
@@ -324,7 +329,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
 .callout-row {
   --cw: min(2.5, var(--lanes));
   --bx: clamp(0, var(--lane) + 0.5 - var(--cw) / 2, var(--lanes) - var(--cw));
-  padding: 0.5rem 0 0.125rem;
+  padding: 0.5rem 0 0.0625rem;
 }
 .callout-row .cfig-callout {
   --cfig-tail-at: calc((var(--lane) + 0.5 - var(--bx)) / var(--cw) * 100%);
@@ -338,7 +343,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
 .step[data-step="divider"] {
   display: flex;
   align-items: center;
-  min-height: 1.5rem;
+  min-height: 1rem;
 }
 .divider-line {
   position: absolute;
@@ -365,7 +370,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   border-left: 1px solid var(--role-accent-strong);
   pointer-events: none;
 }
-.step[data-frame-start] {
+.cfig .step[data-frame-start] {
   padding-top: 1.5rem;
 }
 .step[data-frame-start]::before {
@@ -373,7 +378,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   border-top-left-radius: var(--radius-md);
   border-top-right-radius: var(--radius-md);
 }
-.step[data-frame-end] {
+.cfig .step[data-frame-end] {
   padding-bottom: var(--space-1);
 }
 .step[data-frame-end]::before {

@@ -64,7 +64,7 @@ const tables: readonly Table[] = [
               {
                 table.ghost === true
                   ? <span>{table.name}</span>
-                  : <span class="mono">{table.name}</span>
+                  : <span class="mono" set:html={table.name.replace(/_/g, '_<wbr />')} />
               }
             </div>
             <div class="tbl-body note">{table.note}</div>
@@ -100,6 +100,8 @@ const tables: readonly Table[] = [
 
 <style>
 .cfig.growth {
+  --fig-small: var(--text-note);
+  --fig-code: var(--text-note);
   container-type: inline-size;
 }
 .mono {
@@ -108,11 +110,11 @@ const tables: readonly Table[] = [
 }
 
 .grid {
-  --link: 2.5rem;
+  --link: 2rem;
   display: grid;
   grid-template-columns:
-    minmax(0, 1fr) var(--link) minmax(0, 1.15fr) var(--link)
-    minmax(0, 1fr);
+    minmax(0, 1.05fr) var(--link) minmax(0, 1.3fr) var(--link)
+    minmax(0, 0.95fr);
   grid-template-rows: auto auto auto auto auto;
   min-width: 34rem;
 }
@@ -133,10 +135,10 @@ const tables: readonly Table[] = [
   grid-column: 5;
 }
 .col-head {
-  padding-bottom: var(--space-1);
+  padding-bottom: 0.125rem;
   font-size: var(--fig-small);
   font-weight: var(--weight-bold);
-  line-height: var(--leading-normal);
+  line-height: var(--leading-tight);
 }
 
 .fn {
@@ -145,7 +147,7 @@ const tables: readonly Table[] = [
   justify-content: center;
   gap: 0;
   min-width: 0;
-  margin-block: var(--space-1);
+  margin-block: 0.125rem;
   border: 2px solid transparent;
   border-radius: var(--radius-md);
   background: var(--role-ground);
@@ -175,7 +177,7 @@ const tables: readonly Table[] = [
   display: flex;
   flex-direction: column;
   min-width: 0;
-  margin-block: var(--space-1);
+  margin-block: 0.125rem;
   border: 2px solid var(--role-accent-strong);
   border-radius: var(--radius-md);
   background: var(--role-ground);
@@ -187,8 +189,7 @@ const tables: readonly Table[] = [
   color: var(--role-on-strong);
   font-size: var(--fig-small);
   font-weight: var(--weight-bold);
-  line-height: var(--leading-normal);
-  overflow-wrap: anywhere;
+  line-height: var(--leading-tight);
 }
 .tbl-head .mono {
   font-size: var(--fig-code);
@@ -303,20 +304,17 @@ const tables: readonly Table[] = [
   grid-row: 5;
   justify-self: end;
   width: min(100%, 21rem);
-  margin-top: var(--space-3);
+  margin-top: var(--space-1);
 }
 .callout-read {
   grid-column: 4 / 6;
   grid-row: 5;
   justify-self: end;
   width: 100%;
-  margin-top: var(--space-3);
+  margin-top: var(--space-1);
 }
 
 @container (max-width: 40rem) {
-  .grid {
-    --link: 1.5rem;
-  }
   .callout-tables {
     width: min(100%, 18rem);
   }

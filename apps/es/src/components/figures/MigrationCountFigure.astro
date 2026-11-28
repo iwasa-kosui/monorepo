@@ -73,7 +73,7 @@ const recounted = view === 'problem' ? '2' : '3';
     </div>
 
     <div class="tbl daily" data-table="daily_cancellation_counts">
-      <div class="tbl-head mono">daily_cancellation_counts</div>
+      <div class="tbl-head mono">daily_<wbr />cancellation_<wbr />counts</div>
       <div class="tbl-body count">
         <span class="count-label">4月1日のキャンセル数</span>
         <span class="count-value">3</span>
@@ -130,8 +130,9 @@ const recounted = view === 'problem' ? '2' : '3';
 .grid {
   --link: 3.5rem;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--link) minmax(0, 1.5fr);
-  grid-template-rows: auto auto auto auto;
+  grid-template-columns: minmax(0, 1.1fr) var(--link) minmax(0, 1.3fr);
+  grid-template-rows: auto auto auto 1fr auto;
+  align-items: start;
   min-width: 34rem;
 }
 .cfig.migration[data-view="decision"] .grid {
@@ -154,8 +155,7 @@ const recounted = view === 'problem' ? '2' : '3';
   color: var(--role-on-strong);
   font-size: var(--fig-code);
   font-weight: var(--weight-bold);
-  line-height: var(--leading-normal);
-  overflow-wrap: anywhere;
+  line-height: var(--leading-tight);
 }
 .tbl-body {
   padding: var(--space-1) var(--space-2);
@@ -165,22 +165,32 @@ const recounted = view === 'problem' ? '2' : '3';
 .visits {
   grid-column: 1;
   grid-row: 1 / 3;
-  align-self: end;
+  align-self: stretch;
+}
+.visits .tbl-body {
+  display: flex;
+  flex: 1;
+  align-items: center;
 }
 .events {
-  display: grid;
   grid-column: 3;
-  grid-row: 1 / 4;
-  grid-template-rows: subgrid;
+  grid-row: 1 / 5;
+  align-self: stretch;
+}
+.cfig.migration[data-view="problem"] .events {
+  grid-row: 1 / 3;
 }
 .daily {
   grid-column: 1;
   grid-row: 3;
-  align-self: end;
+  margin-top: var(--space-2);
+}
+.cfig.migration[data-view="problem"] .daily {
+  grid-row: 1;
+  margin-top: 0;
 }
 
 .events-title {
-  padding-bottom: var(--space-1);
   font-size: var(--fig-label);
   font-weight: var(--weight-bold);
 }
@@ -192,7 +202,7 @@ const recounted = view === 'problem' ? '2' : '3';
   background: var(--role-surface);
   padding: 0 var(--space-2);
   font-size: var(--fig-small);
-  line-height: var(--leading-normal);
+  line-height: var(--leading-tight);
 }
 .events-top .ev:last-child,
 .events-mid .ev {
@@ -210,7 +220,7 @@ const recounted = view === 'problem' ? '2' : '3';
   background: var(--role-marker);
   color: var(--role-ink);
   font-weight: var(--weight-bold);
-  padding-block: var(--space-1);
+  padding-block: 0.125rem;
 }
 .ev.migrated .mono {
   line-height: var(--leading-tight);
@@ -226,18 +236,18 @@ const recounted = view === 'problem' ? '2' : '3';
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  min-height: 2.75rem;
-  padding-bottom: var(--space-2);
+  min-height: 2.5rem;
+  padding-bottom: var(--space-1);
 }
 .events > .count {
-  align-self: end;
+  margin-top: auto;
 }
 .count-label {
   font-size: var(--fig-label);
   font-weight: var(--weight-bold);
 }
 .count-value {
-  font-size: var(--text-heading);
+  font-size: 2rem;
   font-weight: var(--weight-bold);
   line-height: 1;
 }
@@ -250,6 +260,9 @@ const recounted = view === 'problem' ? '2' : '3';
   place-items: center;
   height: 2.75rem;
   margin-bottom: calc(var(--space-2) + 2px);
+}
+.cfig.migration[data-view="problem"] .compare {
+  grid-row: 1;
 }
 .sign {
   color: var(--role-accent-strong);
@@ -289,10 +302,12 @@ const recounted = view === 'problem' ? '2' : '3';
 
 .callout {
   grid-column: 1 / 4;
-  grid-row: 4;
-  justify-self: start;
-  width: min(100%, 34rem);
-  margin-top: var(--space-3);
+  grid-row: 5;
+  margin-top: var(--space-2);
+}
+.cfig.migration[data-view="problem"] .callout {
+  grid-column: 1;
+  grid-row: 2;
 }
 
 @container (max-width: 40rem) {
