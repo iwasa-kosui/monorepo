@@ -5,6 +5,8 @@ immersive: true
 ---
 
 import RecordDecisionFigure from '../../../components/figures/RecordDecisionFigure.astro';
+import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
+import { cancelInquirySequence } from '../../../components/figures/sequences';
 import { chapter2Explain } from '../../../components/chapters/chapter-2';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
@@ -21,11 +23,13 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - 日付: 2026-11-09
 - 作成者: 同僚
 
-### 状況
+### 背景
 
 動物病院から、来院を誰が、なぜキャンセルしたのかを問い合わせられました。しかし、来院のキャンセルの処理（`cancelVisit`）がキャンセルした人と理由を保存していないため、回答できませんでした。
 
-この ADR は、キャンセルの記録を残す方法を、次の3つの基準で決定します。
+<SequenceFigure sequence={cancelInquirySequence} />
+
+この ADR の目的は、同じ問い合わせに回答できるようにすることです。そのために、キャンセルの記録を残す方法を、次の3つの基準で決定します。
 
 - キャンセルした人と理由を、後から回答できること
 - 記録が欠落しないこと
@@ -52,7 +56,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 ### 検討した案
 
-採用した案と、採用しなかった5つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、△は一部だけ満たすこと、×は満たさないことを表します。
+採用した案と、採用しなかった5つの案を、背景の3つの基準で比較しました。○は基準を満たすこと、△は一部だけ満たすこと、×は満たさないことを表します。
 
 <div data-alternatives-table>
 

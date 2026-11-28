@@ -4,6 +4,8 @@ immersive: true
 ---
 
 import { chapter4ExternalSyncAdr } from '../../../components/chapters/chapter-4';
+import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
+import { externalCancelDecisionSequence, externalCancelProblemSequence } from '../../../components/figures/sequences';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
@@ -19,13 +21,15 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - 日付: 2026-11-09
 - 作成者: 同僚
 
-### 状況
+### 背景
 
 飼い主が予約サイトで来院をキャンセルすると、予約サイトはキャンセルを予約システムへ送ります。
 
 予約システムは、届いたキャンセルを反映できないことがあります。診察が終わった来院に届いた場合です。このとき、予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。
 
-この ADR は、予約サイトから届いたキャンセルの記録の方法を、次の3つの基準で決定します。
+<SequenceFigure sequence={externalCancelProblemSequence} />
+
+この ADR の目的は、予約サイトでキャンセルした来院が予約システムでキャンセルになっていないと連絡を受けたときに、キャンセルが届いたことと、反映しなかった理由を回答できるようにすることです。そのために、予約サイトから届いたキャンセルの記録の方法を、次の3つの基準で決定します。
 
 - 業務のルールで反映できなかったキャンセルも、届いたことを追えること
 - 業務のルールを変えた後に、届いた内容から取り込み結果を計算し直せること
@@ -39,6 +43,10 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - 届いた事実と取り込み結果は、同じトランザクションで記録します。
 - 診察が終わった来院のように反映できないキャンセルは、事実は取り込み、状態は変化させません。
 
+次の図は、この決定を、予約サイトからキャンセルが届いたときの処理に適用した例です。
+
+<SequenceFigure sequence={externalCancelDecisionSequence} />
+
 ### 結果
 
 - 顧客価値: 飼い主から、予約サイトでキャンセルした来院が予約システムでキャンセルになっていないと連絡を受けたときに、キャンセルが届いたことと、反映しなかった理由を回答できます。
@@ -48,7 +56,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 ### 検討した案
 
-採用した案と、採用しなかった2つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
+採用した案と、採用しなかった2つの案を、背景の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
 
 <div data-alternatives-table>
 

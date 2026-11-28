@@ -5,6 +5,7 @@ immersive: true
 
 import EventAsFunctionFigure from '../../../components/figures/EventAsFunctionFigure.astro';
 import RecordMappingFigure from '../../../components/figures/RecordMappingFigure.astro';
+import TableGrowthFigure from '../../../components/figures/TableGrowthFigure.astro';
 import Quote from '../../../components/Quote.astro';
 import { chapter2Table } from '../../../components/chapters/chapter-2';
 import Workspace from '../../../components/workspace/Workspace.astro';
@@ -22,9 +23,11 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - 日付: 2026-11-09
 - 作成者: 同僚
 
-### 状況
+### 背景
 
 ADR 1 は、来院のキャンセルの記録を `visit_cancellations` テーブルに追記する方式を定めています。`visit_cancellations` テーブルは、名前と列の両方が、キャンセルの記録だけを対象にしています。診察の完了の処理（`completeVisit`）にも同じ方式で記録を追加すると、テーブルがもう1つ必要になります。記録する出来事が増えると、テーブルも増えます。
+
+<TableGrowthFigure />
 
 出来事ごとにテーブルを分割した場合の運用負荷は、次の発表が報告しています。
 
@@ -34,7 +37,7 @@ ADR 1 は、来院のキャンセルの記録を `visit_cancellations` テーブ
 
 </Quote>
 
-この ADR は、出来事の記録を保存するテーブルの構成を、次の3つの基準で決定します。
+この ADR の目的は、記録する出来事を追加しても、運用の負荷が高くならないようにすることです。そのために、出来事の記録を保存するテーブルの構成を、次の3つの基準で決定します。
 
 - 記録する出来事を追加しても、テーブルと列が増えないこと
 - 値の有無を DB が検査できること
@@ -70,7 +73,7 @@ ADR 1 は、来院のキャンセルの記録を `visit_cancellations` テーブ
 
 ### 検討した案
 
-採用した案と、採用しなかった2つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、△は一部だけ満たすこと、×は満たさないことを表します。
+採用した案と、採用しなかった2つの案を、背景の3つの基準で比較しました。○は基準を満たすこと、△は一部だけ満たすこと、×は満たさないことを表します。
 
 <div data-alternatives-table>
 

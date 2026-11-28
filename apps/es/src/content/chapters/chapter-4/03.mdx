@@ -4,6 +4,7 @@ immersive: true
 ---
 
 import { chapter4MigrationAdr } from '../../../components/chapters/chapter-4';
+import MigrationCountFigure from '../../../components/figures/MigrationCountFigure.astro';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
@@ -19,13 +20,17 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - 日付: 2026-11-09
 - 作成者: 同僚
 
-### 状況
+### 背景
+
+経理から、キャンセル数の集計が正しいかを問い合わせられました。
 
 予約システムは、ADR 1 と ADR 2 のとおり、来院のキャンセルを業務イベント `VisitCancelled` として `business_events` テーブルに追記しています。業務イベントを導入する前のキャンセルは、`business_events` テーブルに行がありません。
 
 `daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。4月1日のキャンセル数は3ですが、業務イベントから数え直すと2です。差の1は、業務イベントを導入する前のキャンセルです。
 
-この ADR は、業務イベントを導入する前のデータの扱いを、次の3つの基準で決定します。
+<MigrationCountFigure view="problem" />
+
+この ADR の目的は、集計が正しいことを、業務イベントから数え直した値との一致で回答できるようにすることです。そのために、業務イベントを導入する前のデータの扱いを、次の3つの基準で決定します。
 
 - キャンセル数が正しいまま、業務イベントから数え直した値と一致すること
 - 記録に残っていない理由と操作者を作らないこと
@@ -38,6 +43,10 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - 移行用のイベントには、移行した時点の来院の状態だけを保存します。業務イベントを導入する前のキャンセルの理由と操作者は、どこにも残っていないので、作りません。
 - キャンセル数を業務イベントから数え直すときは、キャンセル済みの来院の `VisitMigrated` も数えます。
 
+次の図は、この決定を4月1日のキャンセル数に適用した例です。
+
+<MigrationCountFigure view="decision" />
+
 ### 結果
 
 - 社内への価値: 経理から、キャンセル数の集計が正しいかを問い合わせられたときに、業務イベントから数え直した値と一致することを示して回答できます。
@@ -47,7 +56,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 ### 検討した案
 
-採用した案と、採用しなかった3つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
+採用した案と、採用しなかった3つの案を、背景の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
 
 <div data-alternatives-table>
 

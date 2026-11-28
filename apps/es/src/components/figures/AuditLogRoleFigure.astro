@@ -1,0 +1,379 @@
+---
+import './figure.css';
+
+const auditLogs: readonly string[] = ['変更前後の値', '操作者'];
+const transitionEvents: readonly string[] = ['業務上の理由', '監査ログの ID'];
+const finalEvents: readonly string[] = ['業務上の理由', '変更の内容'];
+---
+
+<section
+  class="cfig audit-role"
+  data-audit-log-role-figure
+  aria-label="過渡期は監査ログと業務イベントで領域を分け、その後は監査ログを業務イベントから生成する図"
+>
+  <div class="panels">
+    <div class="panel" data-stage="transition">
+      <div class="panel-head">
+        <span class="tag">過渡期</span>
+        <span class="note">すべての変更が業務イベントを記録するまで</span>
+      </div>
+
+      <div class="flow flow-transition">
+        <div class="proc">更新処理</div>
+
+        <div class="link" data-slot="audit">
+          <span class="arrow" aria-hidden="true"></span>
+          <span class="link-label">すべての変更</span>
+        </div>
+        <div class="link" data-slot="events">
+          <span class="arrow" aria-hidden="true"></span>
+          <span class="link-label">業務イベントを記録する変更</span>
+        </div>
+
+        <div class="table" data-slot="audit" data-table="audit_logs">
+          <div class="table-head"><code>audit_<wbr />logs</code></div>
+          <ul class="items">
+            {auditLogs.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+        <div class="ref">
+          <span class="ref-label">
+            <span class="cfig-sr">business_events から audit_logs へ、</span
+            >監査ログの行を参照
+          </span>
+          <span class="ref-line" aria-hidden="true"></span>
+        </div>
+        <div class="table" data-slot="events" data-table="business_events">
+          <div class="table-head"><code>business_<wbr />events</code></div>
+          <ul class="items">
+            {transitionEvents.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+      </div>
+
+      <div class="cfig-callout" data-tone="ok" data-tail="top">
+        <span class="cfig-callout-label">役割</span
+        >値と操作者は監査ログに、理由は業務イベントに残す
+      </div>
+    </div>
+
+    <div class="between" aria-hidden="true"></div>
+    <span class="cfig-sr">その後</span>
+
+    <div class="panel" data-stage="final">
+      <div class="panel-head">
+        <span class="tag">その後</span>
+        <span class="note">すべての変更が業務イベントを記録した後</span>
+      </div>
+
+      <div class="flow flow-final">
+        <div class="proc">更新処理</div>
+
+        <div class="link" data-slot="plain">
+          <span class="arrow" aria-hidden="true"></span>
+        </div>
+
+        <div class="table" data-slot="events" data-table="business_events">
+          <div class="table-head"><code>business_<wbr />events</code></div>
+          <ul class="items">
+            {finalEvents.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+
+        <div class="link" data-slot="generate">
+          <span class="arrow" aria-hidden="true"></span>
+          <span class="link-label">生成</span>
+        </div>
+
+        <div class="table" data-slot="audit" data-table="audit_logs">
+          <div class="table-head"><code>audit_<wbr />logs</code></div>
+          <ul class="items">
+            {auditLogs.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+        <div class="legacy">
+          <span class="legacy-name">導入する前の監査ログ</span>
+          <span class="legacy-note">生成した後も残す</span>
+        </div>
+      </div>
+
+      <div class="cfig-callout" data-tone="ok" data-tail="top">
+        <span class="cfig-callout-label">最終形</span
+        >記録の仕組みが、業務イベントの1つにそろう
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.cfig.audit-role {
+  container-type: inline-size;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  background: var(--role-accent-soft);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+.panel-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.tag {
+  border-radius: var(--radius-sm);
+  background: var(--role-accent-strong);
+  padding: 0 var(--space-2);
+  color: var(--role-on-strong);
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+}
+.note {
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+.cfig.audit-role .panel > .cfig-callout {
+  margin-top: auto;
+}
+.flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr);
+  column-gap: 0;
+  margin-bottom: var(--space-3);
+}
+
+.between {
+  align-self: center;
+  color: var(--role-accent-strong);
+  font-size: var(--fig-text);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+.between::before {
+  content: "→";
+}
+
+.proc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--role-ground);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fig-small);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  text-align: center;
+  word-break: keep-all;
+}
+.flow-transition .proc {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.flow-final .proc {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.link {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 1.75rem;
+}
+.arrow {
+  position: relative;
+  flex: none;
+  width: 0.75rem;
+}
+.arrow::before {
+  position: absolute;
+  top: 0;
+  bottom: 0.375rem;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--role-accent-strong);
+  content: "";
+}
+.arrow::after {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  border: 0.375rem solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--role-accent-strong);
+  content: "";
+  transform: translateX(-50%);
+}
+.link-label {
+  align-self: center;
+  min-width: 0;
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+.flow-transition .link {
+  grid-row: 2;
+}
+.flow-transition .link[data-slot="audit"] {
+  grid-column: 1;
+}
+.flow-transition .link[data-slot="events"] {
+  grid-column: 3;
+}
+.flow-transition .table {
+  grid-row: 3;
+}
+.flow-transition .table[data-slot="audit"] {
+  grid-column: 1;
+}
+.flow-transition .table[data-slot="events"] {
+  grid-column: 3;
+}
+.flow-final .link[data-slot="plain"] {
+  grid-column: 1;
+  grid-row: 2;
+}
+.flow-final .table[data-slot="events"] {
+  grid-column: 1;
+  grid-row: 3;
+}
+.flow-final .link[data-slot="generate"] {
+  grid-column: 1;
+  grid-row: 4;
+}
+.flow-final .table[data-slot="audit"] {
+  grid-column: 1;
+  grid-row: 5;
+}
+
+.table {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--role-ground);
+}
+.table-head {
+  background: var(--role-accent-strong);
+  padding: var(--space-1) var(--space-2);
+  color: var(--role-on-strong);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+.cfig.audit-role .table-head code {
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-code);
+  font-size: var(--fig-label);
+}
+.cfig.audit-role .items {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) var(--space-2) 1.25rem;
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+  list-style: disc;
+}
+.cfig.audit-role .items li {
+  margin: 0;
+  padding: 0;
+}
+.cfig.audit-role .items li + li {
+  margin-top: var(--space-1);
+}
+
+.ref {
+  grid-column: 2;
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.ref-label {
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.ref-line {
+  position: relative;
+  align-self: stretch;
+  height: 0.75rem;
+}
+.ref-line::before {
+  position: absolute;
+  top: calc(50% - 1px);
+  right: 0;
+  left: 0.25rem;
+  border-top: 2px dashed var(--role-accent-strong);
+  content: "";
+}
+.ref-line::after {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  border: 0.375rem solid transparent;
+  border-left: 0;
+  border-right-color: var(--role-accent-strong);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.legacy {
+  grid-column: 2 / -1;
+  grid-row: 5;
+  display: flex;
+  flex-direction: column;
+  align-self: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 0;
+  margin-left: var(--space-2);
+  border: 2px dashed var(--role-ink-sub);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  text-align: center;
+}
+.legacy-name {
+  font-size: var(--fig-label);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+.legacy-note {
+  color: var(--role-muted);
+  font-size: var(--fig-label);
+  line-height: var(--leading-tight);
+}
+
+@container (width < 34rem) {
+  .panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .between::before {
+    content: "↓";
+  }
+  .between {
+    justify-self: center;
+  }
+  .flow {
+    grid-template-columns: minmax(0, 1fr) 5rem minmax(0, 1fr);
+  }
+}
+</style>

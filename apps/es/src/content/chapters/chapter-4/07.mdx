@@ -4,6 +4,9 @@ immersive: true
 ---
 
 import { chapter4AuditLogAdr } from '../../../components/chapters/chapter-4';
+import AuditLogRoleFigure from '../../../components/figures/AuditLogRoleFigure.astro';
+import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
+import { auditReasonSequence } from '../../../components/figures/sequences';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
@@ -19,13 +22,15 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - 日付: 2026-11-09
 - 作成者: 同僚
 
-### 状況
+### 背景
 
 情シスから、監査ログに残っている変更の理由を確認したいという依頼がありました。しかし、`audit_logs` テーブルが持つのは変更前後の値と操作者で、業務上の理由は持ちません。
 
 予約システムは、ADR 1 と ADR 2 のとおり、来院のキャンセルを業務イベントとして記録しています。診察の完了は、まだ業務イベントを記録していません。
 
-この ADR は、監査ログと業務イベントの役割の分け方を、次の3つの基準で決定します。
+<SequenceFigure sequence={auditReasonSequence} />
+
+この ADR の目的は、監査ログに残っている変更の、業務上の理由を回答できるようにすることです。そのために、監査ログと業務イベントの役割の分け方を、次の3つの基準で決定します。
 
 - 変更の業務上の理由を答えられること
 - 業務イベントを記録していない変更も、変更前後の値と操作者を残せること
@@ -39,6 +44,10 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 - すべての変更が業務イベントを記録した後は、監査ログを業務イベントから生成します。イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
 - 業務イベントを導入する前の監査ログは、監査ログを業務イベントから生成した後も残します。
 
+次の図は、過渡期の構成と、すべての変更が業務イベントを記録した後の構成です。
+
+<AuditLogRoleFigure />
+
 ### 結果
 
 - 社内への価値: 情シスから、監査ログに残っている変更の理由を問い合わせられたときに、業務イベントを記録している変更は、業務上の理由を回答できます。
@@ -48,7 +57,7 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 ### 検討した案
 
-採用した案と、採用しなかった2つの案を、状況の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
+採用した案と、採用しなかった2つの案を、背景の3つの基準で比較しました。○は基準を満たすこと、×は満たさないことを表します。
 
 <div data-alternatives-table>
 
