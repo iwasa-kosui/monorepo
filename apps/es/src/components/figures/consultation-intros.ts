@@ -60,7 +60,7 @@ export const consultationIntros = {
   'summary-table': {
     lead: '業務イベントは、既存のシステムに途中から導入しました。',
     label:
-      '1件目のキャンセルの後に業務イベントを導入し、その後に2件目と3件目のキャンセルがあったため、集計の daily_cancellation_counts は3件、business_events の VisitCancelled は2件になり、経理から聞かれた件数のどちらが正しいかを記録から示せないことを表す図',
+      '1件目のキャンセルの後に業務イベントを導入し、その後に2件目と3件目のキャンセルがあったため、集計の daily_cancellation_counts は3件、business_events の VisitCancelled は2件になり、業務イベントから数えた件数が実際の件数と合わないことを表す図',
     speaker: { name: '経理', avatar: '経' },
     question: '4月1日の診察のキャンセル件数は、3件と2件のどちらが正しいか',
     heading: '4月1日の診察のキャンセルの記録',
@@ -96,7 +96,7 @@ export const consultationIntros = {
         },
       ],
     },
-    problem: 'どちらが正しいかを、記録から示せない',
+    problem: '導入する前のキャンセルが無いため、業務イベントから数えた件数が実際と合わない',
   },
   'external-sync': {
     lead: '予約システムは、外部の予約サイトからキャンセルを受け取ります。',
