@@ -44,7 +44,6 @@ const chatHidden = collapsed
   && scenario.history.length === 0
   && scenario.timeline.every((event) => event.kind !== 'post');
 const showStatus = timed;
-const hasComposer = Astro.slots.has('composer');
 ---
 
 <section
@@ -121,15 +120,7 @@ const hasComposer = Astro.slots.has('composer');
     data-chat-collapsed={collapsed && !chatHidden ? '' : undefined}
     data-chat-hidden={chatHidden ? '' : undefined}
   >
-    {
-      hasComposer
-        ? (
-        <ChatWindow scenario={scenario} composer={true}>
-          <slot name="composer" slot="composer" />
-        </ChatWindow>
-      )
-        : <ChatWindow scenario={scenario} />
-    }
+    <ChatWindow scenario={scenario} />
 
     <div
       class="win browser"

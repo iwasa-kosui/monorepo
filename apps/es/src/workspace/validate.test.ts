@@ -82,3 +82,30 @@ describe('筋書きの検査', () => {
     expect(scenarioProblems(scenario)).toEqual([]);
   });
 });
+
+describe('参加者がメッセージを送れるチャンネルの検査', () => {
+  const live = { channel: '# ハンズオン', label: '# ハンズオン へのメッセージ' };
+
+  it('chat.channels にあるチャンネルなら問題がない', () => {
+    expect(scenarioProblems({ ...incidentScenario, chat: { ...incidentScenario.chat, live } })).toEqual([]);
+  });
+
+  it('chat.channels に無いチャンネルを見つける', () => {
+    const broken: WorkspaceScenario = {
+      ...incidentScenario,
+      chat: { ...incidentScenario.chat, live: { ...live, channel: '# どこにも無い' } },
+    };
+    expect(scenarioProblems(broken).join('\n')).toContain('chat.live のチャンネル # どこにも無い');
+  });
+
+  it('送ったメッセージで完了にするページは、保存先の指定が要る', () => {
+    const broken: WorkspaceScenario = {
+      ...incidentScenario,
+      chat: { ...incidentScenario.chat, live },
+      done: 'question:written',
+    };
+    expect(scenarioProblems(broken).join('\n')).toContain('chat.live.saveAs');
+    const fixed: WorkspaceScenario = { ...broken, chat: { ...broken.chat, live: { ...live, saveAs: 'chapter-1' } } };
+    expect(scenarioProblems(fixed)).toEqual([]);
+  });
+});

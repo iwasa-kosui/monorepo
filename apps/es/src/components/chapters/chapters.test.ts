@@ -118,9 +118,9 @@ const inquiry = 'ポチちゃんの来院です（visit-pochi）。誰がいつ�
 const whyNotRecorded = 'なんで記録取ってないんですか';
 const afterIncident = 'さっきの件、おつかれさまでした';
 const ownQuestion =
-  '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときにあなたが聞かれた質問を、下の入力欄に1つ書いてみてください。たとえば、こんなのです。';
+  '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときにあなたが聞かれた質問を、下の入力欄に1つ書いて、送ってみてください。たとえば、こんなのです。';
 const afterOwnQuestion =
-  '質問を書けたら、次のことを考えてみてください。あなたが普段の業務で運用しているシステムは、あなたが書いた質問に答えるための情報を、データベースに保持していますか？\n質問を思いつかない人は、何も書かなくて大丈夫です。何も書かない人は、画面の上の右向きの矢印のボタンを押して、次のページへ進んでください。何も書かなかった人には、この後のページが、質問の代わりに、カスタマーサポートから届いた問い合わせを表示します。ポチの来院を、誰が、いつ、なぜキャンセルしたのかを尋ねる問い合わせです。';
+  '質問を送れたら、次のことを考えてみてください。あなたが普段の業務で運用しているシステムは、あなたが書いた質問に答えるための情報を、データベースに保持していますか？\n質問を思いつかない人は、何も書かなくて大丈夫です。何も書かない人は、画面の上の右向きの矢印のボタンを押して、次のページへ進んでください。何も送らなかった人には、この後のページが、質問の代わりに、カスタマーサポートから届いた問い合わせを表示します。ポチの来院を、誰が、いつ、なぜキャンセルしたのかを尋ねる問い合わせです。';
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
@@ -172,7 +172,7 @@ const startingCodes = '開始コードを3つ置いておくので、選んだ�
 const goodWork = 'おつかれさまでした！';
 const todayMemo = '今日やったことを設計メモにまとめました';
 const decideLast =
-  '最後に、あなたが普段の業務で運用しているシステムの更新処理から、記録を足す更新処理を1つ決めて、下の入力欄に書いてみてください';
+  '最後に、あなたが普段の業務で運用しているシステムの更新処理から、記録を足す更新処理を1つ決めて、下の入力欄に書いて、送ってみてください';
 const skipIfNone = '答えたい質問が特に無ければ、足さなくて大丈夫です';
 
 const answered: readonly (readonly [string, string])[] = [
@@ -281,7 +281,20 @@ describe('第1章から第4章とまとめの筋書き', () => {
     expect(source).toContain(`scenario={`);
     const slots = [...source.matchAll(/<Fragment slot="([^"]+)">/g)].map((match) => match[1]);
     const slotted = scenario.tabs.filter((tab) => tab.kind !== 'console').map((tab) => tab.key);
-    expect(slots.filter((slot) => slot !== 'composer').sort()).toEqual(slotted.sort());
+    expect(slots.sort()).toEqual(slotted.sort());
+  });
+
+  it('どのページも「# ハンズオン」で参加者がメッセージを送れて、送った内容を残すのは問いを書く 2 ページだけである', () => {
+    for (const [id, scenario] of entries) {
+      expect(scenario.chat.live?.channel, id).toBe(handsOnChannel);
+    }
+    const saving = entries.flatMap(([id, scenario]) =>
+      scenario.chat.live?.saveAs === undefined ? [] : [[id, scenario.chat.live.saveAs, scenario.done]]
+    );
+    expect(saving).toEqual([
+      ['chapter-1/02', 'chapter-1', 'question:written'],
+      ['summary/02', 'summary-update', 'question:written'],
+    ]);
   });
 
   it('発言者は、カスタマーサポート、あなた、同僚、経理、情シス、kosui の 6 人で、頭文字と色が異なる', () => {
@@ -969,7 +982,12 @@ describe('第1章から第4章とまとめの筋書き', () => {
       expect(opened(scenario)).toEqual([['kosui', decideLast], ['kosui', skipIfNone]]);
       expect(summary(scenario)).toEqual(['memo:doc:持ち帰る手順']);
       expect(scenario.chat.buttons).toEqual([]);
-      expect(mdxOf('summary/02')).toMatch(/<Fragment slot="composer">\n<OwnQuestion id="summary-update" /);
+      expect(scenario.chat.live).toEqual({
+        channel: handsOnChannel,
+        saveAs: 'summary-update',
+        label: '選んだ更新処理と、記録する内容（誰が、いつ、何を）と変更理由（なぜ）',
+        showLabel: true,
+      });
     });
 
     it('第4章 8 ページ目で選んだパターンを入力欄に書き、まとめの 2 ページ目がその内容を表示する', () => {

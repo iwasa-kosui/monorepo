@@ -13,6 +13,10 @@
   "ai": {
     "binding": "AI",
   },
+  "durable_objects": {
+    "bindings": [{ "name": "HANDS_ON_ROOM", "class_name": "HandsOnRoom" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HandsOnRoom"] }],
   "ratelimits": [
     {
       "name": "AGENT_RATE_LIMIT",

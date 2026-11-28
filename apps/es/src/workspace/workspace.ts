@@ -1,10 +1,21 @@
 import { setAction } from '../lesson/action-bar';
 import { notifyNudge, nudgeAttribute, nudgeTextAttribute } from '../lesson/nudge';
-import { typingLeadMs, typingStartMs } from './channel';
-import { createChat } from './chat';
+import {
+  loadLiveName,
+  loadLiveSender,
+  loadQuestion,
+  saveLiveName,
+  saveLiveSender,
+  saveQuestion,
+} from '../playground/storage';
+import { channelOfPost, typingLeadMs, typingStartMs } from './channel';
+import { createChat, type LivePost } from './chat';
 import { clockOf, formatElapsed } from './clock';
 import { hasFired, isMet, keyOf, record } from './conditions';
 import { backdropOf, fullViewAttribute } from './full-view';
+import { liveUrlOf, nameOrRandom } from './live';
+import { connectLive, type LiveStatus, newLiveId } from './live-client';
+import { isLiveId, liveEndpoint, normalizeName } from './live-protocol';
 import { type LogView, nextSignals, nudgeSpecOf, resetSqlSelector, restorePlaygroundSelector } from './nudge-target';
 import { emitSignal, type PanelController } from './panel';
 import { mountPanel } from './panels';
@@ -79,6 +90,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const emit = (name: SignalName, data?: Readonly<Record<string, unknown>>): void => emitSignal(root, name, data);
 
   const chat = createChat(root, scenario);
+  const liveConfig = scenario.chat.live;
 
   const recurring: Recurring[] = scenario.tabs.flatMap((tab) =>
     tab.kind === 'logs'
@@ -160,6 +172,11 @@ export const mountWorkspace = (root: HTMLElement): void => {
     return shown === null || shown.matches(':disabled') ? null : shown;
   };
 
+  const shownOf = (selector: string): HTMLElement | null => {
+    const found = [...root.querySelectorAll<HTMLElement>(selector)];
+    return found.find((element) => element.getClientRects().length > 0) ?? found[0] ?? null;
+  };
+
   const plainNudge = (element: HTMLElement | null): Nudge | null => element === null ? null : { element, text: null };
 
   const nudgeElement = (status: SchedulerStatus, chatFront: boolean): Nudge | null => {
@@ -181,11 +198,18 @@ export const mountWorkspace = (root: HTMLElement): void => {
       restoreRunShown: restorePlayground !== null && !restorePlayground.hidden,
       sqlMissed: state.sqlMissed,
       resetSqlShown: resetSql !== null && getComputedStyle(resetSql).display !== 'none',
+      ...(liveConfig === undefined ? {} : {
+        live: {
+          channel: liveConfig.channel,
+          shown: root.hasAttribute('data-live-shown'),
+          written: root.querySelector<HTMLButtonElement>('[data-action="send"]')?.disabled === false,
+        },
+      }),
     };
     for (const signal of nextSignals(fired, scenario.gates, doneWhen)) {
       const spec = nudgeSpecOf(signal, context);
       if (spec === null) continue;
-      const target = 'tab' in spec ? tabButtonOf(spec.tab) : root.querySelector<HTMLElement>(spec.selector);
+      const target = 'tab' in spec ? tabButtonOf(spec.tab) : shownOf(spec.selector);
       const element = nudgeVisible(target, chatFront);
       if (element !== null) return { element, text: element === target ? spec.text ?? null : null };
     }
@@ -395,7 +419,55 @@ export const mountWorkspace = (root: HTMLElement): void => {
     }
   };
 
-  const timedItems = (): ScheduledItem[] =>
+  type KnownLive = Omit<LivePost, 'mine'>;
+
+  const liveStatusTexts: Readonly<Record<LiveStatus, string>> = {
+    connecting: 'ほかの参加者につないでいます。',
+    online: '送ったメッセージは、講師とほかの参加者に見えます。',
+    offline: 'ほかの参加者につながっていません。送ったメッセージは、つながったときに届きます。',
+  };
+  const liveSession = {
+    status: 'connecting' as LiveStatus,
+    author: '',
+    released: false,
+    known: new Map<string, KnownLive>(),
+    own: new Set<string>(),
+    shown: new Set<string>(),
+  };
+
+  const showLive = (message: KnownLive, arrival: 'history' | 'arrival'): void => {
+    if (liveSession.shown.has(message.id)) return;
+    liveSession.shown.add(message.id);
+    const mine = liveSession.own.has(message.id)
+      || (liveSession.author !== '' && message.author === liveSession.author);
+    chat.addLivePost({ ...message, mine }, scheduler.elapsedMs(), arrival);
+  };
+
+  const receiveLive = (message: KnownLive, arrival: 'history' | 'arrival'): void => {
+    const known = liveSession.known.has(message.id);
+    liveSession.known.set(message.id, message);
+    if (liveSession.released && !known) showLive(message, arrival);
+  };
+
+  const releaseLive = (): void => {
+    liveSession.released = true;
+    for (const message of liveSession.known.values()) showLive(message, 'history');
+  };
+
+  const liveHoldMs = (): number =>
+    liveConfig === undefined ? 0 : Math.max(
+      0,
+      ...scenario.timeline.flatMap((event) =>
+        event.kind === 'post' && event.at !== undefined
+          && channelOfPost(event.post, scenario.chat.channel) === liveConfig.channel
+          ? [event.at * 1000]
+          : []
+      ),
+    );
+
+  const liveItems = (): ScheduledItem[] => liveConfig === undefined ? [] : [{ at: liveHoldMs(), run: releaseLive }];
+
+  const scriptedItems = (): ScheduledItem[] =>
     scenario.timeline.flatMap((event) => {
       const at = event.at;
       if (at === undefined) return [];
@@ -411,6 +483,8 @@ export const mountWorkspace = (root: HTMLElement): void => {
       }
       return items;
     });
+
+  const timedItems = (): ScheduledItem[] => [...scriptedItems(), ...liveItems()];
 
   const waitingItems = (): WaitingItem[] =>
     scenario.timeline.flatMap((event) => {
@@ -443,6 +517,9 @@ export const mountWorkspace = (root: HTMLElement): void => {
     if (timed) chat.focusFeed();
     if (timed && compact.matches) root.scrollIntoView({ block: 'start' });
     emit('workspace:started');
+    if (liveConfig?.saveAs !== undefined && (loadQuestion(liveConfig.saveAs) ?? '').trim() !== '') {
+      emit('question:written');
+    }
   };
 
   const reset = (): void => {
@@ -465,6 +542,8 @@ export const mountWorkspace = (root: HTMLElement): void => {
     state.unlocked.clear();
     state.memoOverrides.clear();
     state.sqlMissed = false;
+    liveSession.released = false;
+    liveSession.shown.clear();
     chat.clear();
     chat.showHistory();
     render();
@@ -575,10 +654,62 @@ export const mountWorkspace = (root: HTMLElement): void => {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && chat.isOpen()) chat.closeRail();
   });
-  const questionInput = root.querySelector<HTMLTextAreaElement>('[data-own-question] textarea');
-  if (questionInput !== null) {
-    questionInput.addEventListener('input', () => {
-      if (questionInput.value.trim() !== '') emit('question:written');
+  const composer = chat.live;
+  if (liveConfig !== undefined && composer !== null) {
+    const savedSender = loadLiveSender();
+    const sender = isLiveId(savedSender) ? savedSender : newLiveId();
+    if (sender !== savedSender) saveLiveSender(sender);
+    const savedName = loadLiveName();
+    const firstName = nameOrRandom(savedName, Math.random);
+    if (firstName !== savedName) saveLiveName(firstName);
+    composer.setName(firstName);
+    composer.onName((typed) => {
+      const name = nameOrRandom(normalizeName(typed), Math.random);
+      saveLiveName(name);
+      return name;
+    });
+    composer.setStatus(liveStatusTexts.connecting);
+    const connection = connectLive(liveUrlOf(window.location, liveEndpoint, sender), {
+      onStatus: (status) => {
+        liveSession.status = status;
+        composer.setStatus(liveStatusTexts[status]);
+      },
+      onHello: (author, messages) => {
+        liveSession.author = author;
+        for (const message of messages) receiveLive(message, 'history');
+      },
+      onMessage: (message) => receiveLive(message, 'arrival'),
+      onRejected: (id, reason) => {
+        liveSession.known.delete(id);
+        liveSession.shown.delete(id);
+        chat.removeLivePost(id);
+        composer.setStatus(
+          reason === 'rate'
+            ? '続けて送ったので、最後のメッセージは届きませんでした。少し待ってから、もう一度送ってください。'
+            : 'このメッセージは送れませんでした。',
+        );
+      },
+      onCleared: () => {
+        liveSession.known.clear();
+        liveSession.shown.clear();
+        chat.clearLive();
+      },
+    });
+    composer.onSend((text) => {
+      const id = newLiveId();
+      const name = nameOrRandom(normalizeName(composer.name()), Math.random);
+      liveSession.own.add(id);
+      liveSession.known.set(id, { id, author: liveSession.author, name, text });
+      showLive({ id, author: liveSession.author, name, text }, 'arrival');
+      composer.setStatus(liveStatusTexts[liveSession.status]);
+      connection.post({ type: 'post', id, name, text });
+      if (liveConfig.saveAs !== undefined) {
+        saveQuestion(liveConfig.saveAs, text);
+        emit('question:written');
+      }
+    });
+    window.addEventListener('pagehide', (event) => {
+      if (!event.persisted) connection.close();
     });
   }
   root.addEventListener('click', (event) => {

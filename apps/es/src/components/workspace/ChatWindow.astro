@@ -5,16 +5,17 @@ import {
   placeholderOf,
   postsInChannel,
 } from '../../workspace/channel';
+import { liveLimits } from '../../workspace/live-protocol';
 import { chatPanelIdOf } from '../../workspace/panel-props';
 import type { WorkspaceScenario } from '../../workspace/scenario';
 
 interface Props {
   scenario: WorkspaceScenario;
-  composer?: boolean;
 }
 
-const { scenario, composer = false } = Astro.props;
+const { scenario } = Astro.props;
 const { chat, memo, gates } = scenario;
+const { live } = chat;
 const initialChannel = openingChannel(scenario.timeline, chat.channel);
 const placeholder = placeholderOf(
   initialChannel,
@@ -30,7 +31,9 @@ const reasonId = `${scenario.id}-reason`;
 const initialReason = gates?.reply.reasons.all ?? '';
 const collapsed = chat.collapsed === true;
 const mainId = `${scenario.id}-chat-main`;
-const hasComposerSlot = composer;
+const liveInputId = `${scenario.id}-live-input`;
+const liveNameId = `${scenario.id}-live-name`;
+const liveShown = live !== undefined && initialChannel === live.channel;
 const railActorIds = [
   ...new Set([
     ...scenario.history.map((post) => post.actor),
@@ -179,18 +182,40 @@ const railActors = railActorIds.flatMap((id) => {
     <div class="composer">
       <div class="compose-box">
         {
-          hasComposerSlot
-            ? (
-            <div class="compose-slot">
-              <slot name="composer" />
+          live !== undefined && (
+            <div class="live" data-live hidden={!liveShown}>
+              <p class="live-name">
+                <label for={liveNameId}>名前</label>
+                <input
+                  type="text"
+                  id={liveNameId}
+                  maxlength={liveLimits.nameChars}
+                  autocomplete="off"
+                  data-live-name
+                />
+              </p>
+              {
+                live.showLabel === true && (
+                  <label class="live-label" for={liveInputId}>{
+                    live.label
+                  }</label>
+                )
+              }
+              <textarea
+                id={liveInputId}
+                class="live-input"
+                rows="2"
+                maxlength={liveLimits.textChars}
+                placeholder={`${live.channel} へのメッセージ`}
+                aria-label={live.showLabel === true ? undefined : live.label}
+                data-live-input
+              ></textarea>
             </div>
           )
-            : (
-            <p class="ph" aria-hidden="true" data-placeholder>
-              {placeholder}
-            </p>
-          )
         }
+        <p class="ph" aria-hidden="true" data-placeholder hidden={liveShown}>
+          {placeholder}
+        </p>
         {
           memo !== undefined && (
             <>
@@ -228,6 +253,17 @@ const railActors = railActorIds.flatMap((id) => {
           )
         }
         <div class="compose-foot">
+          {
+            live !== undefined && (
+              <p
+                class="live-status"
+                role="status"
+                data-live-status
+                hidden={!liveShown}
+              >
+              </p>
+            )
+          }
           <div class="actions">
             {
               chat.buttons.map((button) => (
@@ -245,7 +281,35 @@ const railActors = railActorIds.flatMap((id) => {
               ))
             }
           </div>
-          <span class="send-shape" aria-hidden="true">
+          {
+            live !== undefined && (
+              <button
+                type="button"
+                class="send"
+                data-action="send"
+                aria-label="送信"
+                title="Enter で送信、Shift + Enter で改行"
+                hidden={!liveShown}
+                disabled
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  width="14"
+                  height="14"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M2 2.5 14 8 2 13.5 3.8 8z"></path>
+                </svg>
+              </button>
+            )
+          }
+          <span
+            class="send-shape"
+            aria-hidden="true"
+            data-send-shape
+            hidden={liveShown}
+          >
             <svg
               viewBox="0 0 16 16"
               width="14"
@@ -634,15 +698,48 @@ const railActors = railActorIds.flatMap((id) => {
   font-size: var(--text-note);
   line-height: var(--leading-normal);
 }
-:global(.scene[data-scenario]) .compose-slot {
+:global(.scene[data-scenario]) .ph[hidden],
+:global(.scene[data-scenario]) .send-shape[hidden],
+:global(.scene[data-scenario]) .send[hidden],
+:global(.scene[data-scenario]) .live-status[hidden],
+:global(.scene[data-scenario]) .live[hidden] {
+  display: none;
+}
+:global(.scene[data-scenario]) .live {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   font-size: var(--text-note);
   line-height: var(--leading-normal);
 }
-:global(.scene[data-scenario]) .compose-slot :global(label) {
+:global(.scene[data-scenario]) .live-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--c-muted);
+}
+:global(.scene[data-scenario]) .live-name label {
+  flex: none;
+}
+:global(.scene[data-scenario]) .live-name input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 16rem;
+  min-height: 2rem;
+  border: 1px solid var(--c-rule);
+  border-radius: var(--radius-md);
+  background: var(--c-bg);
+  padding: 0 var(--space-2);
+  color: var(--c-fg);
   font-size: var(--text-note);
+}
+:global(.scene[data-scenario]) .live-label {
   font-weight: var(--weight-bold);
 }
-:global(.scene[data-scenario]) .compose-slot :global(textarea) {
+:global(.scene[data-scenario]) .live-input {
+  display: block;
+  width: 100%;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -652,14 +749,18 @@ const railActors = railActorIds.flatMap((id) => {
   line-height: var(--leading-normal);
   resize: none;
 }
-:global(.scene[data-scenario]) .compose-slot :global(textarea:focus-visible) {
+:global(.scene[data-scenario]) .live-name input:focus-visible,
+:global(.scene[data-scenario]) .live-input:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-:global(.scene[data-scenario]) .compose-slot :global([data-saved]) {
-  min-height: var(--space-5);
+:global(.scene[data-scenario]) .live-status {
+  flex: 1 1 12rem;
+  align-self: center;
+  margin: 0;
   color: var(--c-muted);
   font-size: var(--text-note);
+  line-height: var(--leading-normal);
 }
 :global(.scene[data-scenario]) .memo-title {
   margin: 0;
@@ -723,8 +824,12 @@ const railActors = railActorIds.flatMap((id) => {
 }
 :global(.scene[data-scenario]) .compose-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-2);
+}
+:global(.scene[data-scenario]) .actions:not(:has(button)) {
+  display: none;
 }
 :global(.scene[data-scenario]) .actions {
   display: flex;
@@ -775,6 +880,32 @@ const railActors = railActorIds.flatMap((id) => {
   border-radius: var(--radius-md);
   background: var(--c-btn-off);
   color: var(--c-muted);
+}
+:global(.scene[data-scenario]) .send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--c-green);
+  color: #ffffff;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .send:hover:not(:disabled) {
+  background: var(--c-green-hover);
+}
+:global(.scene[data-scenario]) .send:disabled {
+  background: var(--c-btn-off);
+  color: var(--c-muted);
+  cursor: not-allowed;
+}
+:global(.scene[data-scenario]) .send:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 :global(.scene[data-ready="true"][data-scenario]) .send-shape {
   background: var(--c-green);

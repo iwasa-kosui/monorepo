@@ -3,7 +3,6 @@ wide: true
 immersive: true
 ---
 
-import OwnQuestion from '../../../components/OwnQuestion.astro';
 import Quote from '../../../components/Quote.astro';
 import { chapter1Question } from '../../../components/chapters/chapter-1';
 import Workspace from '../../../components/workspace/Workspace.astro';
@@ -15,9 +14,6 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 </div>
 
 <Workspace scenario={chapter1Question}>
-<Fragment slot="composer">
-<OwnQuestion />
-</Fragment>
 <Fragment slot="memo">
 
 データ変更の記録があるとできることを、kosui.me の記事から2つ引用します。

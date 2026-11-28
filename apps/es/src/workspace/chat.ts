@@ -6,6 +6,7 @@ import {
   openingChannelState,
   placeholderOf,
   postsInChannel,
+  receiveAmbient,
   receivePost,
   receiveTyping,
   revealChannel,
@@ -16,8 +17,10 @@ import {
 } from './channel';
 import { minuteOf } from './clock';
 import { cloneFirst, fillText, must } from './dom';
+import { avatarOf, sendsOnEnter, toneOf } from './live';
+import { normalizeText } from './live-protocol';
 import type { MemoView } from './rules';
-import type { ButtonName, Post, WorkspaceScenario } from './scenario';
+import type { Actor, ButtonName, Post, WorkspaceScenario } from './scenario';
 import { firstUnreadsAfter, scrollTopToReveal } from './unread';
 
 export type ChatView = {
@@ -32,8 +35,30 @@ export type ChatView = {
   readonly front: boolean;
 };
 
+export type LivePost = {
+  readonly id: string;
+  readonly author: string;
+  readonly name: string;
+  readonly text: string;
+  readonly mine: boolean;
+};
+
+export type LiveArrival = 'history' | 'arrival';
+
+export type LiveComposer = {
+  readonly name: () => string;
+  readonly setName: (name: string) => void;
+  readonly onName: (handler: (typed: string) => string) => void;
+  readonly onSend: (handler: (text: string) => void) => void;
+  readonly setStatus: (text: string) => void;
+};
+
 export type Chat = {
   readonly addPost: (post: Post, atMs: number) => void;
+  readonly addLivePost: (post: LivePost, atMs: number, arrival: LiveArrival) => void;
+  readonly removeLivePost: (id: string) => void;
+  readonly clearLive: () => void;
+  readonly live: LiveComposer | null;
   readonly showHistory: () => void;
   readonly clear: () => void;
   readonly setTyping: (post: Pick<Post, 'actor' | 'channel'>) => void;
@@ -63,10 +88,16 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const channelTitle = root.querySelector<HTMLElement>('[data-channel-title]');
   const channelItems = [...root.querySelectorAll<HTMLButtonElement>('button[data-channel]')];
   const placeholder = root.querySelector<HTMLElement>('[data-placeholder]');
-  const questionInput = root.querySelector<HTMLTextAreaElement>('[data-own-question] textarea');
+  const sendShape = root.querySelector<HTMLElement>('[data-send-shape]');
+  const liveConfig = scenario.chat.live;
+  const liveBox = root.querySelector<HTMLElement>('[data-live]');
+  const liveInput = root.querySelector<HTMLTextAreaElement>('[data-live-input]');
+  const liveName = root.querySelector<HTMLInputElement>('[data-live-name]');
+  const liveStatus = root.querySelector<HTMLElement>('[data-live-status]');
+  const sendButton = root.querySelector<HTMLButtonElement>('[data-action="send"]');
   const defaultChannel = scenario.chat.channel;
   const initialChannel = openingChannel(scenario.timeline, defaultChannel);
-  const entries: { readonly post: Post; readonly element: HTMLElement }[] = [];
+  const entries: { readonly post: Post; readonly element: HTMLElement; readonly liveId?: string }[] = [];
   const awaitsOpeningPost = hasOpeningPost(scenario.timeline);
   let awaiting = awaitsOpeningPost;
   let state = openingChannelState(initialChannel);
@@ -102,7 +133,21 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const renderPlaceholder = (): void => {
     const text = placeholderOf(state.channel, defaultChannel, scenario.chat.placeholder);
     if (placeholder !== null) placeholder.textContent = text;
-    if (questionInput !== null) questionInput.placeholder = text;
+  };
+
+  const renderSend = (): void => {
+    if (sendButton !== null) sendButton.disabled = normalizeText(liveInput?.value ?? '') === '';
+  };
+
+  const renderComposer = (): void => {
+    const shown = liveConfig !== undefined && liveBox !== null && state.channel === liveConfig.channel;
+    root.toggleAttribute('data-live-shown', shown);
+    if (liveBox !== null) liveBox.hidden = !shown;
+    if (liveStatus !== null) liveStatus.hidden = !shown;
+    if (sendButton !== null) sendButton.hidden = !shown;
+    if (placeholder !== null) placeholder.hidden = shown;
+    if (sendShape !== null) sendShape.hidden = shown;
+    renderSend();
   };
 
   const renderChannels = (): void => {
@@ -149,6 +194,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
       renderedChannel = state.channel;
       if (channelTitle !== null) channelTitle.textContent = state.channel;
       renderPlaceholder();
+      renderComposer();
       layoutFeed();
     }
     renderChannels();
@@ -214,10 +260,17 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     else setOpen(true);
   });
 
-  const append = (post: Post, atMs: number): HTMLElement => {
+  const nearEnd = (): boolean => feed.scrollHeight - feed.scrollTop - feed.clientHeight < 48;
+
+  const append = (
+    post: Post,
+    atMs: number,
+    live?: { readonly id: string; readonly look: Actor; readonly stick: boolean },
+  ): HTMLElement => {
     const copy = cloneFirst(postTemplate, 'li');
-    const actor = scenario.actors[post.actor];
+    const actor = live?.look ?? scenario.actors[post.actor];
     const shown = channelOfPost(post, defaultChannel) === state.channel;
+    const stick = live === undefined || live.stick || nearEnd();
     copy.classList.toggle('is-continued', (feed.lastElementChild as HTMLElement | null)?.dataset.actor === post.actor);
     copy.dataset.actor = post.actor;
     copy.classList.toggle('is-you', actor?.self === true);
@@ -237,11 +290,11 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
         }),
       );
     }
-    entries.push({ post, element: copy });
+    entries.push(live === undefined ? { post, element: copy } : { post, element: copy, liveId: live.id });
     if (shown) {
       feed.append(copy);
       renderEmpty();
-      feed.scrollTop = feed.scrollHeight;
+      if (stick) feed.scrollTop = feed.scrollHeight;
     }
     if (typingActor === post.actor) clearTyping();
     return copy;
@@ -254,6 +307,71 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     const element = append(post, atMs);
     firsts = firstUnreadsAfter(firsts, state.unread, { channel, post: element });
   };
+
+  const addLivePost = (post: LivePost, atMs: number, arrival: LiveArrival): void => {
+    if (liveConfig === undefined) return;
+    const channel = liveConfig.channel;
+    if (arrival === 'arrival') apply(receiveAmbient(state, channel, visible()));
+    const element = append(
+      { actor: `live:${post.author}:${post.name}`, text: post.text, channel },
+      atMs,
+      {
+        id: post.id,
+        look: {
+          name: post.mine ? `${post.name}（あなた）` : post.name,
+          avatar: avatarOf(post.name),
+          tone: toneOf(post.author),
+          ...(post.mine ? { self: true as const } : {}),
+        },
+        stick: post.mine || arrival === 'history',
+      },
+    );
+    if (arrival === 'arrival') firsts = firstUnreadsAfter(firsts, state.unread, { channel, post: element });
+  };
+
+  const dropLive = (matches: (liveId: string) => boolean): void => {
+    const kept = entries.filter((entry) => entry.liveId === undefined || !matches(entry.liveId));
+    if (kept.length === entries.length) return;
+    entries.splice(0, entries.length, ...kept);
+    layoutFeed();
+  };
+
+  const sendHandlers: ((text: string) => void)[] = [];
+  const nameHandlers: ((typed: string) => string)[] = [];
+
+  const send = (): void => {
+    const text = normalizeText(liveInput?.value ?? '');
+    if (text === '' || liveInput === null) return;
+    liveInput.value = '';
+    renderSend();
+    for (const handler of sendHandlers) handler(text);
+    liveInput.focus({ preventScroll: true });
+  };
+
+  liveInput?.addEventListener('input', renderSend);
+  liveInput?.addEventListener('keydown', (event) => {
+    if (!sendsOnEnter(event, matchMedia('(pointer: fine)').matches)) return;
+    event.preventDefault();
+    send();
+  });
+  sendButton?.addEventListener('click', send);
+  liveName?.addEventListener('change', () => {
+    for (const handler of nameHandlers) liveName.value = handler(liveName.value);
+  });
+
+  const live: LiveComposer | null = liveConfig === undefined || liveInput === null || liveName === null
+    ? null
+    : {
+      name: () => liveName.value,
+      setName: (name) => {
+        liveName.value = name;
+      },
+      onName: (handler) => nameHandlers.push(handler),
+      onSend: (handler) => sendHandlers.push(handler),
+      setStatus: (text) => {
+        if (liveStatus !== null) liveStatus.textContent = text;
+      },
+    };
 
   const showHistory = (): void => {
     for (const post of scenario.history) append(post, 0);
@@ -291,11 +409,16 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   };
 
   renderPlaceholder();
+  renderComposer();
   showHistory();
   renderEmpty();
 
   return {
     addPost,
+    addLivePost,
+    removeLivePost: (id) => dropLive((liveId) => liveId === id),
+    clearLive: () => dropLive(() => true),
+    live,
     showHistory,
     clear: () => {
       entries.splice(0);

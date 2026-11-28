@@ -24,6 +24,16 @@ describe('handleRequest', () => {
     expect(fetchAsset).not.toHaveBeenCalled();
   });
 
+  it('/api/hands-on は ASSETS を呼ばず、Durable Object のバインディングが無ければ 503 を返す', async () => {
+    const fetchAsset = vi.fn();
+    const response = await handleRequest(new Request('https://example.com/api/hands-on'), {
+      ASSETS: { fetch: fetchAsset },
+    });
+
+    expect(response.status).toBe(503);
+    expect(fetchAsset).not.toHaveBeenCalled();
+  });
+
   it('/api/ の下の知らないパスは、ASSETS を呼ばずに 404 を返す', async () => {
     const fetchAsset = vi.fn();
     const response = await handleRequest(new Request('https://example.com/api/unknown'), {

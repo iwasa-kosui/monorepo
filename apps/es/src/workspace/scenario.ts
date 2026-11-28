@@ -224,6 +224,13 @@ export type ChatButton = {
   readonly locked?: true;
 };
 
+export type LiveConfig = {
+  readonly channel: string;
+  readonly label: string;
+  readonly showLabel?: true;
+  readonly saveAs?: string;
+};
+
 export type ChatConfig = {
   readonly workspace: string;
   readonly channels: readonly { readonly name: string; readonly current?: true }[];
@@ -231,6 +238,7 @@ export type ChatConfig = {
   readonly placeholder: string;
   readonly buttons: readonly ChatButton[];
   readonly collapsed?: true;
+  readonly live?: LiveConfig;
 };
 
 export type FieldFormat = 'datetime';

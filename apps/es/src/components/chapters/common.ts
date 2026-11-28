@@ -4,6 +4,7 @@ import type {
   ChatButton,
   DocConfig,
   EditorConfig,
+  LiveConfig,
   Post,
   TabDefinition,
   TimelineEvent,
@@ -62,7 +63,7 @@ const you = (text: string): Post => ({ actor: 'you', text });
 export const posts = {
   afterIncident: colleague('さっきの件、おつかれさまでした'),
   ownQuestion: presenter(
-    '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときにあなたが聞かれた質問を、下の入力欄に1つ書いてみてください。たとえば、こんなのです。',
+    '仕事で「これ、誰がいつ変えたの？」「なんでこうなってるの？」と聞かれて、DB を見ても分からなかったことはありませんか？\nそのときにあなたが聞かれた質問を、下の入力欄に1つ書いて、送ってみてください。たとえば、こんなのです。',
     [
       'この予約は、誰がキャンセルしましたか。',
       'この金額は、いつ変わりましたか。なぜ変わりましたか。',
@@ -71,7 +72,7 @@ export const posts = {
     ],
   ),
   afterOwnQuestion: presenter(
-    '質問を書けたら、次のことを考えてみてください。あなたが普段の業務で運用しているシステムは、あなたが書いた質問に答えるための情報を、データベースに保持していますか？\n質問を思いつかない人は、何も書かなくて大丈夫です。何も書かない人は、画面の上の右向きの矢印のボタンを押して、次のページへ進んでください。何も書かなかった人には、この後のページが、質問の代わりに、カスタマーサポートから届いた問い合わせを表示します。ポチの来院を、誰が、いつ、なぜキャンセルしたのかを尋ねる問い合わせです。',
+    '質問を送れたら、次のことを考えてみてください。あなたが普段の業務で運用しているシステムは、あなたが書いた質問に答えるための情報を、データベースに保持していますか？\n質問を思いつかない人は、何も書かなくて大丈夫です。何も書かない人は、画面の上の右向きの矢印のボタンを押して、次のページへ進んでください。何も送らなかった人には、この後のページが、質問の代わりに、カスタマーサポートから届いた問い合わせを表示します。ポチの来院を、誰が、いつ、なぜキャンセルしたのかを尋ねる問い合わせです。',
   ),
   wantRecord: colleague('再発防止で、キャンセルしたときに記録を残すようにしたいです'),
   runTests: colleague('先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです'),
@@ -129,7 +130,7 @@ export const posts = {
   goodWork: colleague('おつかれさまでした！'),
   todayMemo: colleague('今日やったことを設計メモにまとめました'),
   decideLast: presenter(
-    '最後に、あなたが普段の業務で運用しているシステムの更新処理から、記録を足す更新処理を1つ決めて、下の入力欄に書いてみてください',
+    '最後に、あなたが普段の業務で運用しているシステムの更新処理から、記録を足す更新処理を1つ決めて、下の入力欄に書いて、送ってみてください',
   ),
   skipIfNone: presenter('答えたい質問が特に無ければ、足さなくて大丈夫です'),
 } as const satisfies Record<string, Post>;
@@ -145,6 +146,7 @@ type LessonOptions = Pick<WorkspaceScenario, 'id' | 'label' | 'tabs'> & {
   readonly gates?: WorkspaceScenario['gates'];
   readonly reply?: WorkspaceScenario['reply'];
   readonly done?: WorkspaceScenario['done'];
+  readonly ask?: Omit<LiveConfig, 'channel'>;
 };
 
 const docsOnly = (tabs: readonly TabDefinition[]): boolean => tabs.every((tab) => tab.kind === 'doc');
@@ -169,6 +171,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
     placeholder: `${inquiryChannel} へのメッセージ`,
     buttons: options.buttons ?? [],
     ...(options.collapsed === true || docsOnly(options.tabs) ? { collapsed: true as const } : {}),
+    live: { channel: handsOnChannel, ...(options.ask ?? { label: `${handsOnChannel} へのメッセージ` }) },
   },
   actors,
   history: options.history ?? [],

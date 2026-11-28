@@ -9,6 +9,7 @@ import {
   openingSchedule,
   placeholderOf,
   postsInChannel,
+  receiveAmbient,
   receivePost,
   receiveTyping,
   revealChannel,
@@ -237,6 +238,26 @@ describe('参加者が選んだチャンネルの状態', () => {
     it('参加者自身の発言のチャンネルの未読は、0 になる', () => {
       const next = receivePost(reading(dev, { [inquiryChannel]: 2 }), arrive(inquiryChannel, true), true);
       expect(unreadOf(next, inquiryChannel)).toBe(0);
+    });
+  });
+
+  describe('ほかの参加者のメッセージが届く', () => {
+    it('表示中のチャンネルに届いたときは、状態を変えない', () => {
+      const state = reading(handsOn, { [dev]: 1 });
+      expect(receiveAmbient(state, handsOn, true)).toEqual(state);
+    });
+
+    it('固定していなくても、表示中のチャンネルを切り替えずに、届いたチャンネルの未読を 1 増やす', () => {
+      const next = receiveAmbient(openingChannelState(inquiryChannel), handsOn, true);
+      expect(next).toMatchObject({ channel: inquiryChannel, pinned: false });
+      expect(unreadOf(next, handsOn)).toBe(1);
+      expect(unreadOf(receiveAmbient(next, handsOn, true), handsOn)).toBe(2);
+    });
+
+    it('チャットが見えていない間は、表示中のチャンネルに届いても、未読を 1 増やす', () => {
+      const next = receiveAmbient(reading(handsOn), handsOn, false);
+      expect(next).toMatchObject({ channel: handsOn, pinned: true });
+      expect(unreadOf(next, handsOn)).toBe(1);
     });
   });
 
