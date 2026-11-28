@@ -92,7 +92,7 @@ A. 古い業務イベントを DB の外へ書き出してから、DB から削�
 
 <Quote source="kosui.me の記事より" href="https://kosui.me/posts/2026/11/28/event-record-patterns-and-retreat">
 
-実務では、DynamoDB の CDC を使ってイベントを受け取り、それを S3 上に Parquet ファイルで書き込むことで、料金・参照しやすさ・完全性のトレードオフを乗り切ったことがあります。
+実務では、DynamoDB の CDC を使ってイベントを受け取り、それを S3 上に Parquet ファイルで書き込むことで、料金・参照しやすさ・完全性のトレードオフを乗り切ったことがあります。DynamoDB 以外では、Aurora PostgreSQL の Outbox テーブルに届いたイベントを、Iceberg/Delta Lake 形式で S3 へ書き出す ECS のワーカーを立てたこともあります。
 
 </Quote>
 
