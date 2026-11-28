@@ -1,0 +1,353 @@
+---
+import './figure.css';
+
+import {
+  type ConsultationIntro,
+  consultationIntros,
+  type ConsultationKey,
+} from './consultation-intros';
+import { richHtml } from './rich';
+
+type Props = { readonly consultation: ConsultationKey };
+
+const { consultation } = Astro.props;
+const intro: ConsultationIntro = consultationIntros[consultation];
+const excerpt = intro.excerpt;
+const at = (index: number): string => `--i:${index}`;
+const breakable = (name: string): string => name.replaceAll('_', '_<wbr>');
+---
+
+<p class="cif-lead">{intro.lead}</p>
+<section
+  class="cfig cif"
+  data-consultation-figure={consultation}
+  aria-label={intro.label}
+>
+  <div class="ask reveal" style={at(0)}>
+    <div class="who">
+      <span class="avatar" aria-hidden="true">{intro.speaker.avatar}</span>
+      <span class="who-text">
+        <span class="who-name">{intro.speaker.name}</span>
+        {
+          intro.speaker.role !== undefined && (
+            <span class="who-role">{intro.speaker.role}</span>
+          )
+        }
+      </span>
+    </div>
+    <div class="bubble" set:html={richHtml(intro.question)} />
+  </div>
+
+  <div class="data">
+    <div class="data-label reveal" style={at(2)}>{intro.heading}</div>
+    <div class="excerpts">
+      {
+        excerpt.kind === 'counts'
+          && excerpt.boxes.map((box, index) => (
+          <div class="tbl reveal" style={at(2 + index)}>
+            <div class="tbl-head mono" set:html={breakable(box.table)} />
+            <div class="tbl-body count">
+              <span class="count-note" set:html={richHtml(box.note)} />
+              <span class="count-figure">
+                <span class="count-value">{box.count}</span>
+                <span class="count-unit">{box.unit}</span>
+              </span>
+            </div>
+          </div>
+        ))
+      }
+      {
+        excerpt.kind === 'states'
+          && excerpt.boxes.map((box, index) => (
+          <div class="tbl reveal" style={at(2 + index)}>
+            <div class="tbl-head">{box.system}</div>
+            <div class="tbl-body state">
+              <span class="state-value">{box.state}</span>
+              {
+                box.detail !== undefined && (
+                  <span class="state-detail" set:html={richHtml(box.detail)} />
+                )
+              }
+            </div>
+          </div>
+        ))
+      }
+      {
+        excerpt.kind === 'columns' && (
+          <div class="tbl wide reveal" style={at(2)}>
+            <div class="tbl-head mono">{excerpt.table}</div>
+            <div class="tbl-body pairs">
+              {
+                excerpt.columns.map((pair) => (
+                  <div class="ev">
+                    <span class="pair-column mono">{pair.column}</span>
+                    <span class:list={['pair-value', { mono: pair.mono }]}>{
+                      pair.value
+                    }</span>
+                  </div>
+                ))
+              }
+              <div class="ev ghost reveal" style={at(4)}>{excerpt.missing}</div>
+            </div>
+          </div>
+        )
+      }
+    </div>
+  </div>
+
+  <div
+    class="cfig-callout callout reveal"
+    style={at(6)}
+    data-tone="problem"
+    data-tail="top"
+  >
+    <span class="cfig-callout-label">課題</span>{intro.problem}
+  </div>
+</section>
+
+<style>
+.cfig.cif {
+  word-break: auto-phrase;
+  --fig-small: var(--text-note);
+  --fig-code: 1em;
+  --fig-label: var(--text-note);
+  gap: var(--space-4);
+  container-type: inline-size;
+}
+:global(.content) :global(.scene[data-scenario]) :global(.doc-paper) .cif-lead {
+  margin-block: 0 var(--space-1);
+  font-size: var(--text-code);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-tight);
+}
+.mono {
+  font-family: var(--font-code);
+}
+
+.ask {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.who {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--role-accent-strong);
+  color: var(--role-on-strong);
+  font-size: var(--text-code);
+  line-height: 1;
+}
+.who-text {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.who-role {
+  color: var(--role-muted);
+}
+.bubble {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--role-rail);
+  border-radius: var(--radius-md);
+  background: var(--role-ground);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-code);
+  line-height: var(--leading-tight);
+}
+.bubble::before,
+.bubble::after {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent;
+  content: "";
+}
+.bubble::before {
+  top: calc(50% - 7px);
+  left: -8px;
+  border-width: 7px 8px 7px 0;
+  border-right-color: var(--role-rail);
+}
+.bubble::after {
+  top: calc(50% - 6px);
+  left: -7px;
+  border-width: 6px 7px 6px 0;
+  border-right-color: var(--role-ground);
+}
+
+.data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.data-label {
+  color: var(--role-muted);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.excerpts {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.tbl {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  border: 2px solid var(--role-accent-strong);
+  border-radius: var(--radius-md);
+  background: var(--role-ground);
+  overflow: hidden;
+  line-height: var(--leading-tight);
+}
+.tbl-head {
+  background: var(--role-accent-strong);
+  padding: 0 var(--space-2);
+  color: var(--role-on-strong);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.tbl-body {
+  padding: var(--space-2);
+  font-size: var(--text-note);
+}
+
+.count {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.count-figure {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+}
+.count-value {
+  font-size: 2rem;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+.count-unit {
+  font-size: var(--text-note);
+  font-weight: var(--weight-regular);
+}
+
+.state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+}
+.state-value {
+  font-size: var(--text-code);
+}
+
+.tbl.wide {
+  flex: 1 1 100%;
+}
+.pairs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ev {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  background: var(--role-surface);
+  padding: 0 var(--space-2);
+  font-size: var(--text-note);
+  line-height: var(--leading-tight);
+}
+.pair-column {
+  color: var(--role-muted);
+}
+.ev.ghost {
+  border: 2px dashed var(--role-ink-sub);
+  background: transparent;
+  padding-block: var(--space-1);
+  color: var(--role-muted);
+}
+
+.callout {
+  margin-top: var(--space-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    animation: reveal-in 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.35s);
+  }
+  .callout.reveal {
+    transform-origin: center top;
+    animation-name: callout-in;
+  }
+}
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes callout-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@container (max-width: 34rem) {
+  .ask {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bubble::before {
+    top: -8px;
+    left: calc(1.25rem - 7px);
+    border-width: 0 7px 8px;
+    border-right-color: transparent;
+    border-bottom-color: var(--role-rail);
+  }
+  .bubble::after {
+    top: -7px;
+    left: calc(1.25rem - 6px);
+    border-width: 0 6px 7px;
+    border-right-color: transparent;
+    border-bottom-color: var(--role-ground);
+  }
+  .excerpts {
+    flex-direction: column;
+  }
+  .tbl {
+    flex: none;
+  }
+}
+</style>

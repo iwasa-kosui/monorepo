@@ -3,30 +3,82 @@ wide: true
 immersive: true
 ---
 
-import DecisionTable from '../../../components/DecisionTable.astro';
-import OwnQuestion from '../../../components/OwnQuestion.astro';
-import OwnQuestionView from '../../../components/OwnQuestionView.astro';
-import { chapter4Compare } from '../../../components/chapters/chapter-4';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import ConsoleTable from '../../../components/ConsoleTable.astro';
+import { chapter4AuditLog } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
+import { readFunctionsOf } from '../../../lib/snapshots';
 
 <div class="visually-hidden">
 
-## 3つのパターンを表で比べて、普段の業務で運用しているシステムに近いものを1つ選ぶ
+## 既存の監査ログ
 
 </div>
 
-<Workspace scenario={chapter4Compare}>
+<Workspace scenario={chapter4AuditLog}>
+<Fragment slot="editor">
+<CodePlayground
+  exercise="chapter-4-audit-log-done"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'why-changed.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'why-changed.ts', label: 'why-changed.ts を実行する' }]}
+/>
+</Fragment>
 <Fragment slot="memo">
 
-普段の業務で運用しているシステムに近いパターンを1つ選びます。選んだパターンの「活用するもの」と「記録しないもの」を読みます。選んだパターンは、判断表の下の入力欄に書きます。まとめの章で、この入力欄の内容を表示します。
+> この変更の業務上の理由は何か。
 
-更新処理の行数は、`cancelVisit` と、`cancelVisit` から呼ぶ補助関数の差分です。外部システム同期では、`importExternalCancellation` と、`importExternalCancellation` から呼ぶ補助関数の差分です。読み取り関数の行数は、未実装の関数を完成させた差分です。この行数は、業務イベントの導入全体の変更量を示しません。
+`audit_logs` テーブルは、変更前後の値と操作者を持ちます。業務上の理由は持ちません。監査ログで足りる領域と、イベントで残す領域を分けます。
 
-<DecisionTable heading="比較" byAxis>
-  <OwnQuestionView />
-</DecisionTable>
+`cancelVisit` は監査ログの ID を業務イベントの `payload` に入れます。`payload` は変更前後の値を持ちません。
 
-<OwnQuestion id="chapter-4" label="選んだパターン" showLabel rows={1} />
+実行結果の表の1行目は、業務イベントを導入する前の変更です。2行目と3行目は、変更前後の値が同じです。担当者は `reason` で2つを見分けられます。4行目の診察の完了は、まだ業務イベントを記録していないので、`reason` が `null` です。
+
+監査ログそのものをイベントログから生成してしまう方法もあります。イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
+
+<div class="detail-row">
+
+<details>
+<summary>読み取り関数を見る</summary>
+
+<CodeBlock code={readFunctionsOf('chapter-4-audit-log-done', 'explainChange')} />
+
+</details>
+
+<details>
+<summary>出力例を見る</summary>
+
+<ConsoleTable
+  head={['(index)', 'auditLogId', 'oldValue', 'newValue', 'operatedBy', 'operatedAt', 'eventName', 'reason']}
+  rows={[
+    ['0', '1', "'reserved'", "'cancelled'", "'受付スタッフ'", "'2026-10-15T01:20:00.000Z'", 'null', 'null'],
+    ['1', '2', "'reserved'", "'cancelled'", "'受付スタッフ'", "'2026-11-27T17:16:45.456Z'", "'VisitCancelled'", "'飼い主の都合'"],
+    ['2', '3', "'reserved'", "'cancelled'", "'受付スタッフ'", "'2026-11-27T17:16:45.457Z'", "'VisitCancelled'", "'来院前に回復したため'"],
+    ['3', '4', "'reserved'", "'completed'", "'獣医師'", "'2026-11-27T17:16:45.457Z'", 'null', 'null'],
+  ]}
+/>
+
+<ConsoleTable
+  head={['(index)', 'auditLogId', 'rowId', 'oldValue', 'newValue', 'operatedBy', 'operatedAt']}
+  rows={[
+    ['0', '1', "'visit-4'", "'reserved'", "'cancelled'", "'受付スタッフ'", "'2026-10-15T01:20:00.000Z'"],
+    ['1', '4', "'visit-3'", "'reserved'", "'completed'", "'獣医師'", "'2026-11-27T17:16:45.457Z'"],
+  ]}
+/>
+
+</details>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+`chapter-4-audit-log-done` で `node why-changed.ts` を実行します。
+
+</details>
+
+</div>
 
 </Fragment>
 </Workspace>

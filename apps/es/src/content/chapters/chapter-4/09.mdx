@@ -3,87 +3,72 @@ wide: true
 immersive: true
 ---
 
-import CodePlayground from '../../../components/CodePlayground.astro';
-import { chapter4Takeaway } from '../../../components/chapters/chapter-4';
+import AdrOptions from '../../../components/adr/AdrOptions.astro';
+import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
+import AdrPanel from '../../../components/adr/AdrPanel.astro';
+import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
+import AdrTabs from '../../../components/adr/AdrTabs.astro';
+import { chapter4AuditLogAdr } from '../../../components/chapters/chapter-4';
+import AuditLogRoleFigure from '../../../components/figures/AuditLogRoleFigure.astro';
+import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
+import { auditReasonSequence } from '../../../components/figures/sequences';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
 
-## 持ち帰りの演習
+## ADR 5 を読む
 
 </div>
 
-<Workspace scenario={chapter4Takeaway}>
-<Fragment slot="summary-table">
-<CodePlayground
-  exercise="chapter-4-summary-table-start"
-  editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'why-this-count.ts']}
-  testFile="visits.test.ts"
-  reveal="export const explainCancellationCount"
-  scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
-  complete={{ exercise: 'chapter-4-summary-table-done' }}
+<Workspace scenario={chapter4AuditLogAdr}>
+<Fragment slot="memo">
+
+<AdrTabs id="adr-5" labels={['背景', '決定', '結果', '検討した案']}>
+
+<AdrPanel lead="監査ログに残っている変更の理由を、情シスから確認されました。回答できるのは、来院のキャンセルだけです。">
+
+<SequenceFigure sequence={auditReasonSequence} />
+
+<AdrPurpose
+  purpose="監査ログに残っている変更の、業務上の理由を回答できるようにする"
+  criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
 />
-</Fragment>
-<Fragment slot="external-sync">
-<CodePlayground
-  exercise="chapter-4-external-sync-start"
-  editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'what-was-imported.ts']}
-  testFile="visits.test.ts"
-  reveal="export const importExternalCancellation"
-  scripts={[{ file: 'what-was-imported.ts', label: 'what-was-imported.ts を実行する' }]}
-  complete={{ exercise: 'chapter-4-external-sync-done' }}
+
+</AdrPanel>
+
+<AdrPanel lead="過渡期は、値と操作者を監査ログに、理由を業務イベントに残します。その後は、監査ログを業務イベントから生成します。">
+
+<AuditLogRoleFigure />
+
+イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
+
+</AdrPanel>
+
+<AdrPanel>
+
+<AdrOutcomes items={[
+  { kind: 'value', label: '社内への価値', text: '業務イベントを記録している変更は、業務上の理由を回答できます。' },
+  { kind: 'reduced', label: '低減するリスク', text: '業務イベントを記録していない変更が、監査ログから消えるリスクを避けます。' },
+  { kind: 'increased', label: '増大するリスク', text: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
+  { kind: 'remaining', label: '残るリスク', text: '業務イベントを導入する前の変更と、業務イベントをまだ記録していない変更は、理由を回答できません。' },
+]} />
+
+</AdrPanel>
+
+<AdrPanel>
+
+<AdrOptions
+  id="adr-5"
+  criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
+  options={[
+    { name: '過渡期は領域を分け、その後は監査ログを業務イベントから生成する', adopted: true, marks: ['○', '○', '○'], merit: '理由を回答でき、業務イベントを記録していない変更も監査ログに残ります。', demerit: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
+    { name: '監査ログだけで済ませる', marks: ['×', '○', '×'], merit: '記録の仕組みを変えずに済みます。', demerit: '監査ログは業務上の理由を持たないので、情シスの依頼に答えられません。' },
+    { name: 'いますぐ監査ログを業務イベントから生成する', marks: ['○', '×', '○'], merit: '記録が業務イベントだけになります。', demerit: '診察の完了はまだ業務イベントを記録していないため、監査ログから診察の完了の変更が消えます。' },
+  ]}
 />
-</Fragment>
-<Fragment slot="audit-log">
-<CodePlayground
-  exercise="chapter-4-audit-log-start"
-  editable={['visits.ts']}
-  readonly={['db.ts', 'visits.test.ts', 'why-changed.ts']}
-  testFile="visits.test.ts"
-  reveal="export const cancelVisit"
-  scripts={[{ file: 'why-changed.ts', label: 'why-changed.ts を実行する' }]}
-  complete={{ exercise: 'chapter-4-audit-log-done' }}
-/>
-</Fragment>
-<Fragment slot="guide">
 
-1. 選んだパターンのタブを押して、開始のコードを開きます。
-2. 「テストを実行する」を押します。
-3. 実行欄で `visits.ts` を編集して実装します。
-4. 「テストを実行する」を押します。`pass 16` と `fail 0` が出れば、実装は完了です。
-5. 確認用スクリプトのボタンを押して、問いに答えられることを確かめます。
-
-開始の結果は、集計テーブルが `pass 11` と `fail 5`、外部システム同期と既存の監査ログが `pass 12` と `fail 4` です。
-
-<div class="detail-row">
-
-<details>
-<summary>パターンごとの実装する内容</summary>
-
-| 開始のコード | 実装する内容 | 確認用スクリプト |
-|---|---|---|
-| `chapter-4-summary-table-start` | `explainCancellationCount` と `verifyCancellationCount` | `why-this-count.ts` |
-| `chapter-4-external-sync-start` | `importExternalCancellation` の届いた内容と取り込んだ結果の記録、`findImportRecords`、`findUnappliedImports` | `what-was-imported.ts` |
-| `chapter-4-audit-log-start` | `cancelVisit` の `payload` への `auditLogId` の追加、`explainChange`、`findChangesWithoutReason` | `why-changed.ts` |
-
-</details>
-
-<details>
-<summary>手元の Node で動かすとき</summary>
-
-1. 事前準備で展開したディレクトリの中にある、選んだパターンの開始のコードへ移動します。
-2. `node --test visits.test.ts` を実行します。
-3. `visits.ts` を編集して実装します。
-4. `node --test visits.test.ts` を実行します。`pass 16` と `fail 0` が出れば、実装は完了です。
-5. 確認用スクリプトを実行して、問いに答えられることを確かめます。
-
-解答は、名前の末尾が `-done` のディレクトリにあります。
-
-</details>
-
-</div>
+</AdrPanel>
+</AdrTabs>
 
 </Fragment>
 </Workspace>

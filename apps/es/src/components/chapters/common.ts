@@ -107,6 +107,7 @@ export const posts = {
     '古いデータについても、VisitMigrated のようなイベントを作って、イベントテーブルに取り込んでおいた方がいいですよ',
   ),
   migrationRecord: colleague('ADR 3 にまとめました。ざっと読んでもらえると助かります'),
+  secondConsultation: colleague('2つ目は、カスタマーサポートからの相談です'),
   siteGreeting: support('すみません、また1件お願いします🙏'),
   siteAsked: support(
     'コタロウの飼い主さんから、予約サイトではキャンセルになってるのに、こっちでは診察済みになってるって連絡があって…どっちが正しいですか？',
@@ -119,6 +120,7 @@ export const posts = {
     '導入前に予約サイトから届いたキャンセルは、取り込みの記録に出てきません。ADR 3 のとおり VisitMigrated で取り込んでも、予約サイトから来たのか、いつ届いたのかは分からないままです',
   ),
   externalSyncRecord: colleague('ADR 4 にまとめました。ざっと読んでもらえると助かります'),
+  thirdConsultation: colleague('3つ目は、情シスからの相談です'),
   auditGreeting: infoSys('お疲れ様です、監査対応で確認させてください'),
   auditAsked: infoSys('監査ログに reserved → cancelled の変更は残ってるんですが、理由が載ってなくて。分かりますか？'),
   auditAnswer: you('監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました'),
@@ -207,6 +209,9 @@ export const docTab = (key: string, title: string, path: string, approvable = fa
     updatedBy: '同僚',
     ...(approvable ? { approvable } : {}),
   });
+
+export const introDocTab = (key: string, title: string, path: string): TabDefinition =>
+  documentTab(key, title, path, { title });
 
 export const editorTab = (
   key: string,

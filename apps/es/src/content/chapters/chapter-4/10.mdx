@@ -1,0 +1,32 @@
+---
+wide: true
+immersive: true
+---
+
+import DecisionTable from '../../../components/DecisionTable.astro';
+import OwnQuestion from '../../../components/OwnQuestion.astro';
+import OwnQuestionView from '../../../components/OwnQuestionView.astro';
+import { chapter4Compare } from '../../../components/chapters/chapter-4';
+import Workspace from '../../../components/workspace/Workspace.astro';
+
+<div class="visually-hidden">
+
+## 3つのパターンを表で比べて、普段の業務で運用しているシステムに近いものを1つ選ぶ
+
+</div>
+
+<Workspace scenario={chapter4Compare}>
+<Fragment slot="memo">
+
+普段の業務で運用しているシステムに近いパターンを1つ選び、表の下の入力欄に書きます。
+
+表の行数は、更新処理と読み取り関数の差分だけを数えた値で、業務イベントの導入全体の変更量を示しません。
+
+<DecisionTable heading="比較" byAxis>
+  <OwnQuestionView />
+</DecisionTable>
+
+<OwnQuestion id="chapter-4" label="選んだパターン" showLabel rows={1} />
+
+</Fragment>
+</Workspace>

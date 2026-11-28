@@ -1,5 +1,5 @@
 import type { Post, TabDefinition, TableInfo, WorkspaceScenario } from '../../workspace/scenario';
-import { docTab, editorTab, lessonScenario, opening, posts, replyButton } from './common';
+import { docTab, editorTab, introDocTab, lessonScenario, opening, posts, replyButton } from './common';
 
 const overviewPosts: readonly Post[] = [
   posts.otherTeams,
@@ -165,6 +165,23 @@ const adrPage = (options: AdrPage): WorkspaceScenario =>
     tabs: [docTab('memo', options.doc.title, options.doc.path, true)],
   });
 
+type IntroPage = {
+  readonly id: string;
+  readonly label: string;
+  readonly history: readonly Post[];
+  readonly opened: Post;
+  readonly doc: { readonly title: string; readonly path: string };
+};
+
+const introPage = (options: IntroPage): WorkspaceScenario =>
+  lessonScenario({
+    id: options.id,
+    label: options.label,
+    history: options.history,
+    timeline: opening(options.opened),
+    tabs: [introDocTab('memo', options.doc.title, options.doc.path)],
+  });
+
 const summaryTable: Pattern = {
   exercise: 'chapter-4-summary-table-done',
   script: 'why-this-count.ts',
@@ -225,12 +242,12 @@ const auditLog: Pattern = {
 
 const comparisonPosts: readonly Post[] = [posts.comparisonMade, posts.chooseOne];
 
-export const chapter4Overview: WorkspaceScenario = lessonScenario({
-  id: 'chapter-4-overview',
-  label: '3つの相談を、普段の業務で運用しているシステムに近いかを考えながら見る',
+export const chapter4SummaryTableIntro: WorkspaceScenario = lessonScenario({
+  id: 'chapter-4-summary-table-intro',
+  label: '経理から、集計の件数について問い合わせが届く',
   history: [posts.tamaAsked, posts.tamaAnswer, posts.tamaAcknowledged],
   timeline: opening(...overviewPosts),
-  tabs: [docTab('memo', '相談の一覧', 'consultations/list')],
+  tabs: [introDocTab('memo', '相談1: 経理からの問い合わせ', 'consultations/1-finance')],
 });
 
 const summaryTableConsultation: Consultation = {
@@ -260,10 +277,18 @@ const migrationAdr: AdrPage = {
 
 export const chapter4MigrationAdr: WorkspaceScenario = adrPage(migrationAdr);
 
+export const chapter4ExternalSyncIntro: WorkspaceScenario = introPage({
+  id: 'chapter-4-external-sync-intro',
+  label: 'カスタマーサポートから、予約サイトのキャンセルについて問い合わせが届く',
+  history: postsOfAdr(migrationAdr),
+  opened: posts.secondConsultation,
+  doc: { title: '相談2: カスタマーサポートからの問い合わせ', path: 'consultations/2-support' },
+});
+
 const externalSyncConsultation: Consultation = {
   id: 'chapter-4-external-sync',
   label: '予約サイトのキャンセルが反映されたか分からない',
-  history: postsOfAdr(migrationAdr),
+  history: [...postsOfAdr(migrationAdr), posts.secondConsultation],
   opened: [posts.siteGreeting, posts.siteAsked],
   answer: posts.siteAnswer,
   thanks: posts.siteThanks,
@@ -288,10 +313,18 @@ const externalSyncAdr: AdrPage = {
 
 export const chapter4ExternalSyncAdr: WorkspaceScenario = adrPage(externalSyncAdr);
 
+export const chapter4AuditLogIntro: WorkspaceScenario = introPage({
+  id: 'chapter-4-audit-log-intro',
+  label: '情シスから、監査ログについて問い合わせが届く',
+  history: postsOfAdr(externalSyncAdr),
+  opened: posts.thirdConsultation,
+  doc: { title: '相談3: 情シスからの問い合わせ', path: 'consultations/3-it' },
+});
+
 const auditLogConsultation: Consultation = {
   id: 'chapter-4-audit-log',
   label: '監査ログに変更の理由がない',
-  history: postsOfAdr(externalSyncAdr),
+  history: [...postsOfAdr(externalSyncAdr), posts.thirdConsultation],
   opened: [posts.auditGreeting, posts.auditAsked],
   answer: posts.auditAnswer,
   thanks: posts.auditThanks,

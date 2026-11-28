@@ -3,73 +3,75 @@ wide: true
 immersive: true
 ---
 
-import AdrOptions from '../../../components/adr/AdrOptions.astro';
-import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
-import AdrPanel from '../../../components/adr/AdrPanel.astro';
-import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
-import AdrTabs from '../../../components/adr/AdrTabs.astro';
-import { chapter4ExternalSyncAdr } from '../../../components/chapters/chapter-4';
-import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
-import { externalCancelDecisionSequence, externalCancelProblemSequence } from '../../../components/figures/sequences';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import ConsoleTable from '../../../components/ConsoleTable.astro';
+import { chapter4ExternalSync } from '../../../components/chapters/chapter-4';
 import Workspace from '../../../components/workspace/Workspace.astro';
+import { readFunctionsOf } from '../../../lib/snapshots';
 
 <div class="visually-hidden">
 
-## ADR 4 を読む
+## 外部システム同期
 
 </div>
 
-<Workspace scenario={chapter4ExternalSyncAdr}>
+<Workspace scenario={chapter4ExternalSync}>
+<Fragment slot="editor">
+<CodePlayground
+  exercise="chapter-4-external-sync-done"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'what-was-imported.ts']}
+  testFile="visits.test.ts"
+  reveal="export const importExternalCancellation"
+  scripts={[{ file: 'what-was-imported.ts', label: 'what-was-imported.ts を実行する' }]}
+/>
+</Fragment>
 <Fragment slot="memo">
 
-<AdrTabs id="adr-4" labels={['背景', '決定', '結果', '検討した案']}>
+> 予約サイトから、いつ何が届き、どう取り込んだのか。
 
-<AdrPanel lead="予約サイトではキャンセル済み、予約システムでは診察済みです。飼い主からの連絡に、キャンセルが届いたのかを回答できません。">
+飼い主は、予約サイトで来院をキャンセルできます。予約サイトは、キャンセルを予約システムへ送ります。`importExternalCancellation` は、届いたキャンセルを `ExternalCancellationReceived` として記録します。この記録は、予約サイトが送ってきた内容で、予約システムがどう反映したかを含みません。続けて、`importExternalCancellation` は来院をキャンセルし、取り込んだ結果を記録します。キャンセルできた場合は、第2章と同じ `VisitCancelled` を記録します。キャンセルできなかった場合は、`ExternalCancellationRejected` を理由と一緒に記録します。届いた内容と取り込んだ結果は、同じトランザクションで記録します。
 
-<SequenceFigure sequence={externalCancelProblemSequence} />
+届いた事実と取り込み結果は、分けて記録します。そうしないと、次の2つで困ります。
 
-<AdrPurpose
-  purpose="キャンセルが届いたことと、反映しなかった理由を回答できるようにする"
-  criteria={['反映できなかったキャンセルを追える', '取り込み結果を計算し直せる', 'エンティティを増やさない']}
-/>
+- バリデーションエラー時の記録喪失: 外部データの不備で処理が失敗した際、イベントが保存されないと「そもそも外部からデータが来たこと」自体が追えなくなります。
+- ビジネスルールの変更に弱い: 「外部のこのデータ（事実）を、当時はこういう解釈（取り込み結果）で処理したが、仕様変更後に再計算（リプレイ）したい」というイベントソーシング最大のメリットが活かせなくなります。
 
-</AdrPanel>
+実行結果の表の1行目は、届いたキャンセルを取り込み、来院をキャンセルした例です。2行目は、診察が終わった来院に、予約サイトからキャンセルが届いた例です。予約サイトではキャンセル済みですが、予約システムでは診察済みのままです。事実は取り込み、状態は変化させません。`result` の `rejected` は、届いたキャンセルで来院の状態を変えなかったことを表します。`rejectedReason` は、状態を変えなかった理由です。
 
-<AdrPanel lead="予約サイトから届いた事実と、取り込み結果を、別の業務イベントとして、同じトランザクションで記録します。">
+そもそも自プロダクトのスキーマに合わせたパースに失敗した場合などを考えると、「取り込み依頼」というエンティティがあるとみなして「取り込み依頼作成」イベントとして永続化しておく方法もあります。
 
-<SequenceFigure sequence={externalCancelDecisionSequence} />
+<div class="detail-row">
 
-反映できないキャンセルは、事実は取り込み、状態は変化させません。
+<details>
+<summary>読み取り関数を見る</summary>
 
-</AdrPanel>
+<CodeBlock code={readFunctionsOf('chapter-4-external-sync-done', 'findImportRecords')} />
 
-<AdrPanel>
+</details>
 
-<AdrOutcomes items={[
-  { kind: 'value', label: '顧客価値', text: '飼い主から連絡を受けたときに、キャンセルが届いたことと、反映しなかった理由を回答できます。' },
-  { kind: 'reduced', label: '低減するリスク', text: '反映できなかったキャンセルを、届いていないキャンセルと区別できないリスクを低減します。' },
-  { kind: 'increased', label: '増大するリスク', text: '届いたキャンセル1件につき、`business_events` テーブルの行が2行増えます。' },
-  { kind: 'remaining', label: '残るリスク', text: '来院が見つからない場合や、届いた内容をパースできなかった場合は、届いた事実も残りません。' },
-]} />
+<details>
+<summary>出力例を見る</summary>
 
-</AdrPanel>
-
-<AdrPanel>
-
-<AdrOptions
-  id="adr-4"
-  criteria={['反映できなかったキャンセルを追える', '取り込み結果を計算し直せる', 'エンティティを増やさない']}
-  options={[
-    { name: '届いた事実と取り込み結果を分けて記録する', adopted: true, marks: ['○', '○', '○'], merit: '反映できなかったキャンセルも追え、業務のルールを変えた後に取り込み結果を計算し直せます。', demerit: '届いたキャンセル1件につき、行が2行増えます。' },
-    { name: '取り込み結果だけを記録する', marks: ['○', '×', '○'], merit: '届いたキャンセル1件につき1行で済みます。', demerit: '届いた内容が残らないため、業務のルールを変えた後に取り込み結果を計算し直せません。' },
-    { name: '「取り込み依頼作成」イベントとして記録する', marks: ['○', '○', '×'], merit: '届いた内容をパースできなかった場合も、届いたことを残せます。', demerit: '予約システムが扱うエンティティに、取り込み依頼が増えます。' },
+<ConsoleTable
+  head={['(index)', 'visitId', 'petName', 'operatedAt', 'receivedAt', 'cancelReason', 'result', 'rejectedReason']}
+  rows={[
+    ['0', "'visit-1'", "'ポチ'", "'2026-11-20T09:00:00.000Z'", "'2026-11-27T14:36:07.121Z'", "'飼い主の都合'", "'applied'", 'null'],
+    ['1', "'visit-2'", "'コタロウ'", "'2026-11-20T09:30:00.000Z'", "'2026-11-27T14:36:07.122Z'", "'来院前に回復したため'", "'rejected'", "'診察が終わった来院はキャンセルできません'"],
   ]}
 />
 
-パースに失敗した場合の扱いは、別の ADR で決定します。
+</details>
 
-</AdrPanel>
-</AdrTabs>
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+`chapter-4-external-sync-done` で `node what-was-imported.ts` を実行します。
+
+</details>
+
+</div>
 
 </Fragment>
 </Workspace>

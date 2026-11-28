@@ -4,42 +4,20 @@ wide: true
 immersive: true
 ---
 
-import DecisionTable from '../../../components/DecisionTable.astro';
-import OwnQuestionView from '../../../components/OwnQuestionView.astro';
-import Quote from '../../../components/Quote.astro';
-import { chapter4Overview } from '../../../components/chapters/chapter-4';
+import { chapter4SummaryTableIntro } from '../../../components/chapters/chapter-4';
+import ConsultationIntroFigure from '../../../components/figures/ConsultationIntroFigure.astro';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
 
-## この章の進め方
+## 相談1: 集計の件数が合わない
 
 </div>
 
-<Workspace scenario={chapter4Overview}>
+<Workspace scenario={chapter4SummaryTableIntro}>
 <Fragment slot="memo">
 
-この章では、集計テーブル、外部システム同期、既存の監査ログという3つのパターンを比較し、普段の業務で運用しているシステムに合う現実的な適用方法を探ります。
-
-集計テーブルでは、集計済みの現在値とイベント列を照合します。外部システム同期では、届いた事実と取り込み結果を分けて記録します。既存の監査ログでは、監査ログで足りる領域と、イベントで残す領域を分けます。
-
-パターンは、第2章の記録を既存のシステムに足す場面の例です。どのパターンも `business_events` に記録します。講師は3つのパターンの完成コードと実行結果を順に見せます。参加者はこの章でコードを書きません。最後に、参加者は判断表で3つのパターンを比べ、普段の業務で運用しているシステムに近いパターンを1つ選びます。判断表は、パターンを同じ観点で並べた表です。選んだパターンは、まとめの章の持ち帰る手順で、業務イベントを何に使い、何を記録しないかを読むときに使います。各パターンの実装は持ち帰りの演習です。
-
-<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2026/03/03/service-based-architecture">
-
-なお、イベント駆動アーキテクチャを採用しない場合でも、監査証跡の確保は重要です。
-
-</Quote>
-
-<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2026/03/03/service-based-architecture">
-
-サービスベースアーキテクチャであっても、各サービスのユースケース層でイベントをDBに記録すれば、非同期メッセージングの複雑さを避けつつ監査証跡を確保できます。
-
-</Quote>
-
-<OwnQuestionView />
-
-<DecisionTable heading="普段の業務で運用しているシステムに近いパターンを選ぶ" />
+<ConsultationIntroFigure consultation="summary-table" />
 
 </Fragment>
 </Workspace>

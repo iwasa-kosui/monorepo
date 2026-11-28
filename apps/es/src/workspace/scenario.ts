@@ -159,8 +159,8 @@ export type EditorConfig = {
 
 export type DocConfig = {
   readonly title: string;
-  readonly updatedAt: string;
-  readonly updatedBy: string;
+  readonly updatedAt?: string;
+  readonly updatedBy?: string;
   readonly approvable?: boolean;
 };
 

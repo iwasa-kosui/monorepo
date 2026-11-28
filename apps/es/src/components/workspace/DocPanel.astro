@@ -12,6 +12,7 @@ const { scenario, tab: definition, hidden } = Astro.props;
 const tab = expectTab(definition, 'doc');
 const config = tab.config;
 const approvable = config.approvable === true;
+const { updatedAt, updatedBy } = config;
 ---
 
 <div
@@ -42,14 +43,16 @@ const approvable = config.approvable === true;
         </p>
         <p class="doc-title">{config.title}</p>
         {
-          !approvable && (
+          !approvable && updatedAt !== undefined
+            && updatedBy !== undefined
+            && (
             <p class="doc-updated">
               <span class="doc-avatar" aria-hidden="true">{
-                [...config.updatedBy][0]
+                [...updatedBy][0]
               }</span>
-              最終更新 <time datetime={config.updatedAt}>{
-                config.updatedAt
-              }</time>・{config.updatedBy}
+              最終更新 <time datetime={updatedAt}>{updatedAt}</time>・{
+                updatedBy
+              }
             </p>
           )
         }

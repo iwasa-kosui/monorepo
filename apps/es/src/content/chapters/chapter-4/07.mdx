@@ -3,72 +3,33 @@ wide: true
 immersive: true
 ---
 
-import AdrOptions from '../../../components/adr/AdrOptions.astro';
-import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
-import AdrPanel from '../../../components/adr/AdrPanel.astro';
-import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
-import AdrTabs from '../../../components/adr/AdrTabs.astro';
-import { chapter4AuditLogAdr } from '../../../components/chapters/chapter-4';
-import AuditLogRoleFigure from '../../../components/figures/AuditLogRoleFigure.astro';
-import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
-import { auditReasonSequence } from '../../../components/figures/sequences';
+import { chapter4AuditLogIntro } from '../../../components/chapters/chapter-4';
+import ConsultationIntroFigure from '../../../components/figures/ConsultationIntroFigure.astro';
+import Quote from '../../../components/Quote.astro';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
 
-## ADR 5 を読む
+## 相談3: 監査ログに変更の理由がない
 
 </div>
 
-<Workspace scenario={chapter4AuditLogAdr}>
+<Workspace scenario={chapter4AuditLogIntro}>
 <Fragment slot="memo">
 
-<AdrTabs id="adr-5" labels={['背景', '決定', '結果', '検討した案']}>
+<ConsultationIntroFigure consultation="audit-log" />
 
-<AdrPanel lead="監査ログに残っている変更の理由を、情シスから確認されました。回答できるのは、来院のキャンセルだけです。">
+<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2026/03/03/service-based-architecture">
 
-<SequenceFigure sequence={auditReasonSequence} />
+なお、イベント駆動アーキテクチャを採用しない場合でも、監査証跡の確保は重要です。
 
-<AdrPurpose
-  purpose="監査ログに残っている変更の、業務上の理由を回答できるようにする"
-  criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
-/>
+</Quote>
 
-</AdrPanel>
+<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2026/03/03/service-based-architecture">
 
-<AdrPanel lead="過渡期は、値と操作者を監査ログに、理由を業務イベントに残します。その後は、監査ログを業務イベントから生成します。">
+サービスベースアーキテクチャであっても、各サービスのユースケース層でイベントをDBに記録すれば、非同期メッセージングの複雑さを避けつつ監査証跡を確保できます。
 
-<AuditLogRoleFigure />
-
-イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
-
-</AdrPanel>
-
-<AdrPanel>
-
-<AdrOutcomes items={[
-  { kind: 'value', label: '社内への価値', text: '業務イベントを記録している変更は、業務上の理由を回答できます。' },
-  { kind: 'reduced', label: '低減するリスク', text: '業務イベントを記録していない変更が、監査ログから消えるリスクを避けます。' },
-  { kind: 'increased', label: '増大するリスク', text: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
-  { kind: 'remaining', label: '残るリスク', text: '業務イベントを導入する前の変更と、業務イベントをまだ記録していない変更は、理由を回答できません。' },
-]} />
-
-</AdrPanel>
-
-<AdrPanel>
-
-<AdrOptions
-  id="adr-5"
-  criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
-  options={[
-    { name: '過渡期は領域を分け、その後は監査ログを業務イベントから生成する', adopted: true, marks: ['○', '○', '○'], merit: '理由を回答でき、業務イベントを記録していない変更も監査ログに残ります。', demerit: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
-    { name: '監査ログだけで済ませる', marks: ['×', '○', '×'], merit: '記録の仕組みを変えずに済みます。', demerit: '監査ログは業務上の理由を持たないので、情シスの依頼に答えられません。' },
-    { name: 'いますぐ監査ログを業務イベントから生成する', marks: ['○', '×', '○'], merit: '記録が業務イベントだけになります。', demerit: '診察の完了はまだ業務イベントを記録していないため、監査ログから診察の完了の変更が消えます。' },
-  ]}
-/>
-
-</AdrPanel>
-</AdrTabs>
+</Quote>
 
 </Fragment>
 </Workspace>
