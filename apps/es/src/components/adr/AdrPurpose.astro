@@ -3,32 +3,23 @@ import { richHtml } from '../figures/rich';
 
 type Props = {
   readonly purpose: string;
-  readonly criteria: readonly string[];
 };
 
-const { purpose, criteria } = Astro.props;
+const { purpose } = Astro.props;
 ---
 
 <div class="adr-purpose">
   <span class="adr-purpose-label">目的</span>
   <span class="adr-purpose-text" set:html={richHtml(purpose)} />
-  <span class="adr-purpose-label">判断の基準</span>
-  <ul class="adr-chips">
-    {
-      criteria.map((criterion) => (
-        <li class="adr-chip" set:html={richHtml(criterion)} />
-      ))
-    }
-  </ul>
 </div>
 
 <style>
 .adr-purpose {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0.125rem var(--space-2);
-  margin-top: var(--space-1);
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
   font-size: var(--text-note);
   line-height: var(--leading-tight);
 }
@@ -36,25 +27,6 @@ const { purpose, criteria } = Astro.props;
   color: var(--role-muted);
   font-size: var(--text-note);
   white-space: nowrap;
-}
-:global(.content)
-  :global(.scene[data-scenario])
-  :global(.doc-paper)
-  .adr-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-:global(.content) :global(.scene[data-scenario]) :global(.doc-paper) .adr-chip {
-  margin: 0;
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
-  padding: 0.0625rem var(--space-2);
-  font-size: var(--text-note);
-  line-height: var(--leading-tight);
 }
 :global(.content)
   :global(.scene[data-scenario])
