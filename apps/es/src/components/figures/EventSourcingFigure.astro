@@ -133,10 +133,6 @@ const lit = (name: string): Record<string, string> =>
   view === 'mechanism'
     ? { 'data-lit': name }
     : {};
-const focus = (n: number): Record<string, string> =>
-  view === 'burdens'
-    ? { 'data-focus': '', style: `--at:${(n - 1) / 5}` }
-    : {};
 ---
 
 <section class="cfig es" data-view={view} aria-label={label}>
@@ -208,7 +204,7 @@ const focus = (n: number): Record<string, string> =>
             <Fragment set:html={shortArrow} />
             {
               view === 'burdens' && (
-                <span class="badge" aria-hidden="true" {...focus(1)}>1</span>
+                <span class="badge" aria-hidden="true">1</span>
               )
             }
           </span>
@@ -218,7 +214,7 @@ const focus = (n: number): Record<string, string> =>
             <caption>
               {
                 view === 'burdens' && (
-                  <span class="badge" aria-hidden="true" {...focus(3)}>3</span>
+                  <span class="badge" aria-hidden="true">3</span>
                 )
               }イベントの記録
             </caption>
@@ -234,7 +230,7 @@ const focus = (n: number): Record<string, string> =>
                 view === 'burdens' && (
                   <tr class="past">
                     <td colspan="3">
-                      <span class="badge" aria-hidden="true" {...focus(2)}
+                      <span class="badge" aria-hidden="true"
                       >2</span>導入する前の出来事
                     </td>
                   </tr>
@@ -260,7 +256,7 @@ const focus = (n: number): Record<string, string> =>
             <Fragment set:html={midArrow} />
             {
               view === 'burdens' && (
-                <span class="badge" aria-hidden="true" {...focus(4)}>4</span>
+                <span class="badge" aria-hidden="true">4</span>
               )
             }
           </span>
@@ -288,7 +284,7 @@ const focus = (n: number): Record<string, string> =>
           <Fragment set:html={downArrow} />
           {
             view === 'burdens' && (
-              <span class="badge" aria-hidden="true" {...focus(5)}>5</span>
+              <span class="badge" aria-hidden="true">5</span>
             )
           }
         </span>
@@ -336,7 +332,7 @@ const focus = (n: number): Record<string, string> =>
               <ol class="items">
                 {
                   group.items.map((item) => (
-                    <li class="item" {...focus(item.n)}>
+                    <li class="item">
                       <span class="badge" aria-hidden="true">{item.n}</span>
                       <div class="item-text">
                         <strong class="item-title">{item.title}</strong>
@@ -637,13 +633,10 @@ const focus = (n: number): Record<string, string> =>
   list-style: none;
 }
 .cfig.es .item {
-  --base: transparent;
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   margin: 0;
-  border-radius: var(--radius-md);
-  background-color: var(--base);
   padding: var(--space-2);
   font-size: var(--fig-text);
   line-height: var(--leading-normal);
@@ -765,15 +758,6 @@ const focus = (n: number): Record<string, string> =>
   }
   [data-lit="read"] {
     animation: lit-read var(--cycle) linear infinite;
-  }
-
-  .item[data-focus] {
-    animation: focus-face var(--cycle) linear infinite;
-    animation-delay: calc((var(--at) - 1) * var(--cycle));
-  }
-  .badge[data-focus] {
-    animation: focus-scale var(--cycle) linear infinite;
-    animation-delay: calc((var(--at) - 1) * var(--cycle));
   }
 
   @keyframes travel {
@@ -966,29 +950,6 @@ const focus = (n: number): Record<string, string> =>
     85.2%,
     92.2% {
       background-color: var(--lit);
-    }
-  }
-
-  @keyframes focus-face {
-    0%,
-    20%,
-    100% {
-      background-color: var(--base);
-    }
-    2%,
-    18% {
-      background-color: var(--lit);
-    }
-  }
-  @keyframes focus-scale {
-    0%,
-    20%,
-    100% {
-      scale: 1;
-    }
-    2%,
-    18% {
-      scale: 1.3;
     }
   }
 }
