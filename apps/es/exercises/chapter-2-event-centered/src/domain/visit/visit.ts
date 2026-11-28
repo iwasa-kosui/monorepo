@@ -1,6 +1,5 @@
 import type { Aggregate, Resolver, Store } from '../aggregate/aggregate.ts';
-import type { BusinessEvent } from '../aggregate/event.ts';
-import { AggregateEvent } from '../aggregate/event.ts';
+import { BusinessEvent } from '../aggregate/event.ts';
 
 export type Visit = Readonly<{
   id: string;
@@ -20,7 +19,7 @@ export type VisitResolver = Resolver<Visit['id'], Visit>;
 
 export type VisitCancelledStore = Store<VisitCancelled>;
 
-const VisitEvent = AggregateEvent.createFactory<VisitAggregate>('Visit');
+const VisitEvent = BusinessEvent.createFactory<VisitAggregate>('Visit');
 
 const cancel = (
   visit: Visit,

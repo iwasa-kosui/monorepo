@@ -28,4 +28,4 @@ const createFactory = <TAggregate extends AnyAggregate>(targetType: InferName<TA
   }),
 });
 
-export const AggregateEvent = { createFactory } as const;
+export const BusinessEvent = { createFactory } as const;

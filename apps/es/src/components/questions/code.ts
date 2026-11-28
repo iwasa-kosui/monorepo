@@ -1,16 +1,14 @@
-export const storeRecording =
-  `export const createSqliteVisitCancelledStore = (db: DatabaseSync): VisitCancelledStore => ({
+export const storeRecording = `const create = (db: DatabaseSync): SqliteVisitCancelledStore => ({
   store: (event) => {
     db.prepare(\`UPDATE visits SET status = ? WHERE id = ?\`).run(event.targetState.status, event.targetId);
     db.prepare(\`
       INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
       VALUES (?, ?, ?, ?, ?, ?)
-    \`).run(...toBusinessEventRow(event));
+    \`).run(...BusinessEventRow.from(event));
   },
 });`;
 
-export const storeWithdrawn =
-  `export const createSqliteVisitCancelledStore = (db: DatabaseSync): VisitCancelledStore => ({
+export const storeWithdrawn = `const create = (db: DatabaseSync): SqliteVisitCancelledStore => ({
   store: (event) => {
     db.prepare(\`UPDATE visits SET status = ? WHERE id = ?\`).run(event.targetState.status, event.targetId);
   },

@@ -103,15 +103,17 @@ export const Visit = { cancel } as const;
 業務イベントを保存するストアは、次のようになります。
 
 ```typescript
-export const createSqliteVisitCancelledStore = (db: DatabaseSync): VisitCancelledStore => ({
+const create = (db: DatabaseSync): SqliteVisitCancelledStore => ({
   store: (event) => {
     db.prepare(`UPDATE visits SET status = ? WHERE id = ?`).run(event.targetState.status, event.targetId);
     db.prepare(`
       INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(...toBusinessEventRow(event));
+    `).run(...BusinessEventRow.from(event));
   },
 });
+
+export const SqliteVisitCancelledStore = { create } as const;
 ```
 
 ストアは、業務イベントが持つ変更後の状態を `visits` に書き、同じ業務イベントを `business_events` に書きます。`visits` に書く値と `target_state` に残す値は同じ業務イベントから取るので、この2つは一致します。

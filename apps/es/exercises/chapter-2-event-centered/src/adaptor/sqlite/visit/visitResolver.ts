@@ -1,7 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { Visit, VisitResolver } from '../../../domain/visit/visit.ts';
 
-export const createSqliteVisitResolver = (db: DatabaseSync): VisitResolver => ({
+export type SqliteVisitResolver = VisitResolver;
+
+const create = (db: DatabaseSync): SqliteVisitResolver => ({
   resolve: (visitId) => {
     const visit = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(visitId);
     if (visit === undefined) {
@@ -10,3 +12,5 @@ export const createSqliteVisitResolver = (db: DatabaseSync): VisitResolver => ({
     return visit as Visit;
   },
 });
+
+export const SqliteVisitResolver = { create } as const;

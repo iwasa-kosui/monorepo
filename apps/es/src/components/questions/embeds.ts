@@ -85,7 +85,7 @@ export const embeds = {
             lines: 8,
             title: '集約と業務イベントの型は、来院に依存しない',
             body:
-              '集約は、来院のように、ID と状態を持つ対象です。`BusinessEvent` は、どの集約に何が起きたかを表します。来院のキャンセル以外の更新処理も、同じ型と `AggregateEvent.createFactory` を使えます。',
+              '集約は、来院のように、ID と状態を持つ対象です。`BusinessEvent` は、どの集約に何が起きたかを表します。来院のキャンセル以外の更新処理も、同じ型と `BusinessEvent.createFactory` を使えます。',
           },
           {
             file: 'src/adaptor/sqlite/visit/visitCancelledStore.ts',

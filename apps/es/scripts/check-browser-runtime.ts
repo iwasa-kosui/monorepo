@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import initSqlJs from 'sql.js';
 
 import { runCode } from '../src/playground/engine/run-code.ts';
@@ -21,8 +21,9 @@ const normalize = (text: string): string =>
 
 const readFiles = (dir: string): Record<string, string> =>
   Object.fromEntries(
-    readdirSync(join(exercisesDir, dir))
-      .filter((file) => file.endsWith('.ts'))
+    readdirSync(join(exercisesDir, dir), { recursive: true, encoding: 'utf8' })
+      .map((file) => file.split(sep).join('/'))
+      .filter((file) => file.endsWith('.ts') && !file.split('/').includes('node_modules'))
       .map((file) => [file, readFileSync(join(exercisesDir, dir, file), 'utf8')]),
   );
 
@@ -129,7 +130,7 @@ const snapshots = readdirSync(exercisesDir, { withFileTypes: true })
 for (const dir of snapshots) {
   const files = readFiles(dir);
   await checkTests(dir, files);
-  for (const script of Object.keys(files).filter((file) => !sharedFiles.has(file))) {
+  for (const script of Object.keys(files).filter((file) => !file.includes('/') && !sharedFiles.has(file))) {
     await checkScript(dir, script, files);
   }
 }
