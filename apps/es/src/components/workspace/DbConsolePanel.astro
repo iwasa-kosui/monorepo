@@ -538,6 +538,27 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
 }
 :global(.scene[data-scenario])
   .panel[data-kind="console"]
+  :global(.playground-result tbody tr[aria-selected]) {
+  cursor: pointer;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result tbody tr[aria-selected]:hover) {
+  background: var(--db-band);
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result tbody tr[aria-selected="true"]) {
+  background: var(--db-soft);
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result tbody tr[aria-selected]:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
   :global(.playground-result > .playground-note) {
   position: sticky;
   bottom: 0;

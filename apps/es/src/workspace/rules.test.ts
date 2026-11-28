@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import { isMet, keyOf, record } from './conditions';
-import { fillTemplate, formatField, interimText, type LatestData, memoViews, readField, replyGate } from './rules';
-import type { Condition, GatesConfig, MemoConfig, SignalName } from './scenario';
+import {
+  fillTemplate,
+  formatField,
+  interimText,
+  judgeReply,
+  type LatestData,
+  memoViews,
+  readField,
+  replyGate,
+} from './rules';
+import type { Condition, GatesConfig, GroundedReply, MemoConfig, SignalName } from './scenario';
 
 const firedOf = (...signals: (SignalName | [SignalName, string])[]) => {
   const fired = new Map<SignalName, Set<string>>();
@@ -187,5 +196,152 @@ describe('結果から読む値', () => {
       }),
     ).toBe('受付スタッフが、飼い主の都合でキャンセルしました。日時は 2026-11-24 05:12:33 です。');
     expect(fillTemplate('{unknown}', { row })).toBe('{unknown}');
+  });
+});
+
+describe('選択した行から作る調査メモ', () => {
+  const memo: MemoConfig = {
+    title: 'メモ',
+    unknown: '結果の表から行を選択してください',
+    items: [
+      {
+        key: 'who',
+        label: '誰が',
+        text: '使わない',
+        result: 'found',
+        fill: 'sql:row-selected',
+        read: { signal: 'sql:row-selected', field: 'operated_by', absent: '記録なし' },
+      },
+      {
+        key: 'what',
+        label: '何を',
+        text: '使わない',
+        result: 'found',
+        fill: 'sql:row-selected',
+        read: {
+          signal: 'sql:row-selected',
+          field: 'event_name',
+          absent: '記録なし',
+          labels: { VisitCancelled: '来院のキャンセル' },
+        },
+      },
+    ],
+  };
+  const selected = (row: Record<string, string | null>): LatestData => new Map([['sql:row-selected', { row }]]);
+  const textsOf = (fired: ReturnType<typeof firedOf>, latest: LatestData) =>
+    memoViews(memo, fired, new Map(), latest).map((view) => [view.state, view.text]);
+
+  it('行を選択する前は、すべての項目が未入力で、選択を促す文を出す', () => {
+    expect(textsOf(firedOf(), new Map())).toEqual([
+      ['unknown', '結果の表から行を選択してください'],
+      ['unknown', '結果の表から行を選択してください'],
+    ]);
+  });
+
+  it('選択した行の値を、項目ごとに表示する', () => {
+    const row = { id: 'visit-pochi', operated_by: '受付スタッフ', event_name: 'VisitCancelled' };
+    expect(textsOf(firedOf('sql:row-selected'), selected(row))).toEqual([
+      ['found', '受付スタッフ'],
+      ['found', '来院のキャンセル'],
+    ]);
+  });
+
+  it('選択した行の列が NULL の項目は、見つからない状態で「記録なし」を表示する', () => {
+    const row = { id: 'visit-tama', operated_by: null, event_name: null };
+    expect(textsOf(firedOf('sql:row-selected'), selected(row))).toEqual([
+      ['missing', '記録なし'],
+      ['missing', '記録なし'],
+    ]);
+  });
+
+  it('選択した行に列が無い項目も、見つからない状態で「記録なし」を表示する', () => {
+    expect(textsOf(firedOf('sql:row-selected'), selected({ id: 'visit-tama', operated_by: '受付スタッフ' }))).toEqual([
+      ['found', '受付スタッフ'],
+      ['missing', '記録なし'],
+    ]);
+  });
+});
+
+describe('返信の根拠の判定', () => {
+  const grounded: GroundedReply = {
+    signal: 'sql:row-selected',
+    column: 'id',
+    target: 'visit-pochi',
+    needs: ['operated_by', 'reason', 'event_at'],
+    line: '{operated_by}が、{reason}でキャンセルしてます（{event_at}）',
+    formats: { event_at: 'datetime' },
+    missing: 'この行には、キャンセルの記録が残ってないです…',
+    challenge: { actor: 'support', delay: 0.6, text: '聞き返し' },
+  };
+  const pochi = {
+    id: 'visit-pochi',
+    status: 'cancelled',
+    event_at: '2026-11-24T05:12:33.123Z',
+    event_name: 'VisitCancelled',
+    operated_by: '受付スタッフ',
+    reason: '飼い主の都合',
+  };
+  const tama = { id: 'visit-tama', status: 'cancelled', event_at: null, operated_by: null, reason: null };
+
+  it('id が対象の来院と一致する行は、正しい根拠である', () => {
+    expect(judgeReply({ row: pochi }, grounded)).toEqual({ kind: 'grounded' });
+    expect(judgeReply({ row: tama }, { ...grounded, target: 'visit-tama' })).toEqual({ kind: 'grounded' });
+  });
+
+  it('別の来院の行で、必要な値がすべてあれば、その行の値で返信文を作る', () => {
+    expect(judgeReply({ row: pochi }, { ...grounded, target: 'visit-tama' })).toEqual({
+      kind: 'ungrounded',
+      text: '受付スタッフが、飼い主の都合でキャンセルしてます（2026-11-24 05:12:33）',
+    });
+  });
+
+  it('別の来院の行で、必要な値が1つでも欠けていれば、記録が残っていない旨の返信文にする', () => {
+    expect(judgeReply({ row: tama }, grounded)).toEqual({ kind: 'ungrounded', text: grounded.missing });
+    expect(judgeReply({ row: { ...pochi, id: 'visit-x', reason: null } }, grounded)).toEqual({
+      kind: 'ungrounded',
+      text: grounded.missing,
+    });
+    expect(judgeReply({ row: { ...pochi, id: 'visit-x', reason: '' } }, grounded)).toEqual({
+      kind: 'ungrounded',
+      text: grounded.missing,
+    });
+  });
+
+  it('返信文に行の値が要る場面では、id が一致しても必要な値が欠けていれば、誤った根拠で、別の聞き返しにする', () => {
+    const needing: GroundedReply = { ...grounded, incomplete: { challenge: '値の聞き返し' } };
+    expect(judgeReply({ row: { id: 'visit-pochi' } }, needing)).toEqual({
+      kind: 'ungrounded',
+      text: needing.missing,
+      challenge: '値の聞き返し',
+    });
+    expect(judgeReply({ row: { ...pochi, reason: null } }, needing)).toEqual({
+      kind: 'ungrounded',
+      text: needing.missing,
+      challenge: '値の聞き返し',
+    });
+  });
+
+  it('返信文に行の値が要る場面では、id が一致し必要な値がそろっていれば、正しい根拠である', () => {
+    const needing: GroundedReply = { ...grounded, incomplete: { challenge: '値の聞き返し' } };
+    expect(judgeReply({ row: pochi }, needing)).toEqual({ kind: 'grounded' });
+  });
+
+  it('返信文に行の値が要る場面でも、id が一致しない行の聞き返しは変わらない', () => {
+    const needing: GroundedReply = { ...grounded, incomplete: { challenge: '値の聞き返し' } };
+    expect(judgeReply({ row: tama }, needing)).toEqual({ kind: 'ungrounded', text: needing.missing });
+  });
+
+  it('返信文が固定の場面では、id が一致し値が NULL の行も、正しい根拠である', () => {
+    expect(judgeReply({ row: tama }, { ...grounded, target: 'visit-tama' })).toEqual({ kind: 'grounded' });
+  });
+
+  it('id の列が無い行は、誤った根拠である', () => {
+    const { id: _id, ...withoutId } = pochi;
+    expect(judgeReply({ row: withoutId }, grounded).kind).toBe('ungrounded');
+    expect(judgeReply({ row: { event_at: null } }, grounded)).toEqual({ kind: 'ungrounded', text: grounded.missing });
+  });
+
+  it('行が選択されていないときは、誤った根拠で、記録が残っていない旨の返信文にする', () => {
+    expect(judgeReply(undefined, grounded)).toEqual({ kind: 'ungrounded', text: grounded.missing });
   });
 });

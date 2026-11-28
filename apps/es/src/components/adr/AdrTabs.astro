@@ -2,9 +2,11 @@
 type Props = {
   readonly id: string;
   readonly labels: readonly string[];
+  readonly initial?: number;
+  readonly locked?: readonly number[];
 };
 
-const { id, labels } = Astro.props;
+const { id, labels, initial = 0, locked = [] } = Astro.props;
 ---
 
 <div class="adr-tabs" data-adr-tabs>
@@ -15,14 +17,21 @@ const { id, labels } = Astro.props;
         type="radio"
         name={`${id}-tab`}
         id={`${id}-tab-${index}`}
-        checked={index === 0}
+        checked={index === initial}
+        disabled={locked.includes(index)}
+        data-locked={locked.includes(index) ? '' : undefined}
       />
     ))
   }
   <div class="adr-tablist">
     {
       labels.map((label, index) => (
-        <label for={`${id}-tab-${index}`}>{label}</label>
+        <label
+          for={`${id}-tab-${index}`}
+          data-locked={locked.includes(index) ? '' : undefined}
+        >
+          {label}
+        </label>
       ))
     }
   </div>
@@ -72,6 +81,9 @@ const { id, labels } = Astro.props;
   line-height: var(--leading-tight);
   white-space: nowrap;
   cursor: pointer;
+}
+:global(.panel[data-choice="pending"]) .adr-tablist label[data-locked] {
+  display: none;
 }
 .adr-tablist label:hover {
   background: color-mix(in srgb, var(--role-ground) 60%, transparent);

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { projectFilesOf } from '../../lib/snapshots';
 import { channelOfPost, openingChannel, typingStartMs } from '../../workspace/channel';
 import { type Post, signalNames, type WorkspaceScenario } from '../../workspace/scenario';
+import { createScheduler } from '../../workspace/scheduler';
 import { scenarioProblems } from '../../workspace/validate';
 import { evidenceScenario } from '../intro/evidence-scenario';
 import { incidentScenario } from '../intro/incident-scenario';
@@ -41,7 +42,7 @@ const textsOf = (scenario: WorkspaceScenario): string[] => [
   ...scenario.tabs.flatMap((tab) => [tab.title, tab.label, tab.url, tab.note ?? '']),
   ...scenario.tabs.flatMap((tab) =>
     tab.kind === 'doc'
-      ? [tab.config.title, tab.config.updatedBy ?? '']
+      ? [tab.config.title, tab.config.updatedBy ?? '', tab.config.choice?.pendingTitle ?? '']
       : tab.kind === 'pr'
       ? [tab.config.title, tab.config.owner, tab.config.name]
       : tab.kind === 'editor'
@@ -86,6 +87,18 @@ const spokenOf = (scenario: WorkspaceScenario): Spoken[] => [
     text: followUp.text,
     channel: followUp.channel ?? scenario.chat.channel,
   })),
+  ...(scenario.reply?.grounded === undefined ? [] : [{
+    where: 'reply.grounded.challenge',
+    actor: scenario.reply.grounded.challenge.actor,
+    text: scenario.reply.grounded.challenge.text,
+    channel: scenario.chat.channel,
+  }]),
+  ...(scenario.reply?.grounded?.incomplete === undefined ? [] : [{
+    where: 'reply.grounded.incomplete.challenge',
+    actor: scenario.reply.grounded.challenge.actor,
+    text: scenario.reply.grounded.incomplete.challenge,
+    channel: scenario.chat.channel,
+  }]),
 ];
 
 const channelProblems = (id: string, scenario: WorkspaceScenario): string[] => {
@@ -124,7 +137,10 @@ const afterOwnQuestion =
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
-const decisionRecord = '方針を ADR にまとめました。ざっと読んでもらえると助かります';
+const optionsListed =
+  'キャンセルの記録の残し方を、案として ADR に並べました。どの案がいいと思うか、先に意見をもらえますか';
+const sameOpinion = '同じ意見です。この案で進めます';
+const otherOption = 'その案も検討しました。評価を「検討した案」に書いたので、自分の選んだ案と比べてみてください';
 const tableRecord = '記録を1つのテーブルにまとめる案も ADR にしました';
 const prSeen = 'PR 見ました！差分、思ったより小さいですね';
 const prRemaining = '足したあとに残る作業も書いておきます';
@@ -136,6 +152,12 @@ const answeredThanks = 'はやっ！ありがとうございます、病院さ�
 const tamaAsked = 'あと、タマちゃん（visit-tama）の方もキャンセルの理由わかりますか？';
 const tamaAnswer = 'タマの方は、記録を足す前のキャンセルなので、理由は残ってないです…';
 const tamaAcknowledged = 'そうなんですね…了解です';
+const cancelledLine = '{operated_by}が、{reason}でキャンセルしてます（{event_at}）';
+const noRecord = 'この行には、キャンセルの記録が残ってないです…';
+const askedPochiRow = 'それはポチ（visit-pochi）の来院の行ですか？ id の列を見てもらえると助かります';
+const askedTamaRow = 'それはポチの来院の記録ではないですか？ タマ（visit-tama）の方を知りたいです';
+const askedWhoWhy = '誰がなぜキャンセルしたかを知りたいです。その行から分かりますか？';
+const selectRowReason = '結果の表から、根拠にする行を選択すると返信できます。';
 const otherTeams = '記録の話、ほかのチームからも相談が来てます';
 const threeConsultations = '3つあるので順番に見ていきましょう';
 const pastExperience =
@@ -439,7 +461,6 @@ describe('第1章から第4章とまとめの筋書き', () => {
       'chapter-2/03',
       'chapter-3/02',
       'chapter-3/03',
-      'chapter-3/04',
       'chapter-4/01',
       'chapter-4/03',
       'chapter-4/04',
@@ -484,7 +505,9 @@ describe('第1章から第4章とまとめの筋書き', () => {
       wantRecord,
       runTests,
       failedFour,
-      decisionRecord,
+      optionsListed,
+      sameOpinion,
+      otherOption,
       tableRecord,
       prSeen,
       prRemaining,
@@ -502,6 +525,32 @@ describe('第1章から第4章とまとめの筋書き', () => {
       for (const post of postsOf(scenario)) {
         expect(allowed.has(post.text), `${id}: ${post.text}`).toBe(true);
       }
+    }
+  });
+
+  it('返信の文と聞き返しの文は、定めた文だけである', () => {
+    const allowed = new Set([
+      cancelledLine,
+      noRecord,
+      askedPochiRow,
+      askedTamaRow,
+      askedWhoWhy,
+      tamaAnswer,
+      answeredThanks,
+      tamaAcknowledged,
+    ]);
+    for (const [id, scenario] of entries) {
+      const reply = scenario.reply;
+      if (reply === undefined || reply.grounded === undefined) continue;
+      const texts = [
+        ...reply.lines.map((line) => line.text),
+        reply.grounded.line,
+        reply.grounded.missing,
+        reply.grounded.challenge.text,
+        ...(reply.grounded.incomplete === undefined ? [] : [reply.grounded.incomplete.challenge]),
+        ...reply.followUps.map((item) => item.text),
+      ];
+      for (const text of texts) expect(allowed.has(text), `${id}: ${text}`).toBe(true);
     }
   });
 
@@ -602,8 +651,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
   describe('第2章', () => {
     it('ADR の 2 ページは、それまでの投稿を履歴に持ち、同僚が1件投稿する', () => {
       const expected: [string, readonly (readonly [string, string])[], string][] = [
-        ['chapter-2/01', earlier, decisionRecord],
-        ['chapter-2/03', [...earlier, ['colleague', decisionRecord]], tableRecord],
+        ['chapter-2/01', earlier, optionsListed],
+        ['chapter-2/03', [...earlier, ['colleague', optionsListed]], tableRecord],
       ];
       for (const [id, history, post] of expected) {
         const scenario = lessonScenarios[id];
@@ -611,6 +660,77 @@ describe('第1章から第4章とまとめの筋書き', () => {
         expect(scenario.history.map((item) => [item.actor, item.text]), id).toEqual(history);
         expect(opened(scenario), id).toEqual([['colleague', post]]);
       }
+    });
+
+    describe('ADR 1 は、参加者が先に案を選び、その後で同僚の決定を見る', () => {
+      const scenario = lessonScenarios['chapter-2/01'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      const source = mdxOf('chapter-2/01');
+      const optionIds = [
+        'append-in-update',
+        'write-to-log',
+        'add-visits-column',
+        'db-feature',
+        'separate-transaction',
+        'rebuild-system',
+      ];
+
+      it('文書のタブは、案を選ぶ前の表題を持ち、本来の表題はタブの名前に残す', () => {
+        const tab = scenario.tabs[0];
+        if (tab?.kind !== 'doc') throw new Error('文書のタブがありません');
+        expect(tab.config.choice).toEqual({ id: 'adr-1', pendingTitle: 'キャンセルの記録を、どこに、どう残すか' });
+        expect(tab.config.approvable).toBe(true);
+        expect(tab.title).toBe('ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する');
+        for (const word of ['トランザクション', '追記', 'ADR', 'record-in']) {
+          expect(`${tab.config.choice?.pendingTitle}${tab.url}`).not.toContain(word);
+        }
+      });
+
+      it('案を選んだ後に、採用案と同じ案なら賛同し、別の案なら評価を読むよう促す発言を「# dev」に出す', () => {
+        const waiting = scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]));
+        expect(waiting).toMatchObject([
+          { when: 'option:chosen', key: 'adopted', kind: 'post', post: { actor: 'colleague', text: sameOpinion } },
+          { when: 'option:chosen', key: 'other', kind: 'post', post: { actor: 'colleague', text: otherOption } },
+        ]);
+        expect(waiting.flatMap((event) => (event.kind === 'post' ? [event.post.channel] : []))).toEqual([
+          devChannel,
+          devChannel,
+        ]);
+      });
+
+      it.each([['adopted', sameOpinion], ['other', otherOption]] as const)(
+        '合図のキーが %s のときだけ、対応する発言を出す',
+        (key, text) => {
+          const posted: string[] = [];
+          const scheduler = createScheduler({ now: () => 0 });
+          scheduler.start(
+            [],
+            scenario.timeline.flatMap((event) =>
+              event.when === undefined || event.kind !== 'post'
+                ? []
+                : [{ when: event.when, key: event.key, run: () => posted.push(event.post.text) }]
+            ),
+          );
+          scheduler.signal('option:chosen', key);
+          expect(posted).toEqual([text]);
+        },
+      );
+
+      it('MDX は、6 つの案に識別子を付け、採用する案を 1 つだけ決め、案を選べる形で部品を使う', () => {
+        expect([...source.matchAll(/\{ id: '([a-z-]+)', name:/g)].map((match) => match[1])).toEqual(optionIds);
+        expect([...source.matchAll(/adopted: true/g)]).toHaveLength(1);
+        expect(source).toMatch(/\{ id: 'append-in-update', name: '[^']+', adopted: true,/);
+        expect(source).toMatch(/<AdrOptions\n\s+id="adr-1"\n\s+choosable\n/);
+        expect(source).toContain(`labels={['背景', '決定', '結果', '検討した案']} initial={3} locked={[1, 2]}`);
+      });
+
+      it('他の ADR のページは、案を選ぶ形にしない', () => {
+        for (const [id, other] of entries) {
+          if (id === 'chapter-2/01') continue;
+          for (const tab of other.tabs) expect(tab.kind === 'doc' && tab.config.choice, id).toBeFalsy();
+          expect(mdxOf(id), id).not.toContain('choosable');
+        }
+      });
     });
 
     it('タブの種類と名前', () => {
@@ -694,16 +814,26 @@ describe('第1章から第4章とまとめの筋書き', () => {
       ]);
       expect(opened(scenario)).toEqual([['support', otherClinicFirst], ['support', otherClinicSecond]]);
       expect(summary(scenario)).toEqual(['console:console:DB Console', 'guide:doc:SQL の実行手順']);
-      expect(scenario.memo?.unknown).toBe('結果を確認してください');
-      expect(scenario.memo?.items.map((item) => [item.label, item.read?.field])).toEqual([
-        ['誰が', 'operated_by'],
-        ['いつ', 'event_at'],
-        ['何を', 'event_name'],
-        ['なぜ', 'reason'],
+      expect(scenario.memo?.unknown).toBe('結果の表から行を選択してください');
+      expect(scenario.memo?.items.map((item) => [item.label, item.read?.field, item.read?.absent])).toEqual([
+        ['誰が', 'operated_by', '記録なし'],
+        ['いつ', 'event_at', '記録なし'],
+        ['何を', 'event_name', '記録なし'],
+        ['なぜ', 'reason', '記録なし'],
       ]);
       expect(scenario.reply?.followUps.map((item) => [item.actor, item.text])).toEqual([['support', answeredThanks]]);
-      expect(scenario.reply?.lines).toEqual([{ text: '{operated_by}が、{reason}でキャンセルしてます（{event_at}）' }]);
+      expect(scenario.reply?.lines).toEqual([{ text: cancelledLine }]);
       expect(scenario.chat.buttons.map((button) => button.label)).toEqual(['調査結果を返信する']);
+      expect(scenario.gates?.reply.requires).toEqual([{ signal: 'sql:row-selected', reason: selectRowReason }]);
+      expect(scenario.done).toEqual({ name: 'chat:replied', key: 'grounded' });
+      expect(scenario.reply?.grounded).toMatchObject({
+        signal: 'sql:row-selected',
+        column: 'id',
+        target: 'visit-pochi',
+        line: cancelledLine,
+        missing: noRecord,
+        challenge: { actor: 'support', delay: 0.6, text: askedPochiRow },
+      });
       const console = scenario.tabs[0];
       if (console?.kind !== 'console') throw new Error('DB Console のタブがありません');
       expect(console.config.storageId).toBe('chapter-3-who-cancelled');
@@ -713,11 +843,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
         entry: 'who-cancelled.ts',
         own: { exercise: 'step-2', file: 'visits.ts', testFile: 'visits.test.ts' },
       });
-      expect(console.config.target).toEqual({
-        column: 'operated_by',
-        value: 'visit-pochi',
-        read: ['event_at', 'event_name', 'operated_by', 'reason'],
-      });
+      expect(console.config.selectRows).toBe(true);
+      expect(console.config.target).toBeUndefined();
     });
 
     it('2 と 3 ページ目は、履歴だけで投稿が無い', () => {
@@ -733,17 +860,57 @@ describe('第1章から第4章とまとめの筋書き', () => {
       expect(summary(lessonScenarios['chapter-3/03'] as WorkspaceScenario)).toEqual(['memo:doc:実行結果の読み方']);
     });
 
-    it('4 ページ目は、タマの問い合わせが届き、図を最後まで進めると返信できる', () => {
+    it('4 ページ目は、タマの問い合わせが届き、結果の表から行を選択すると返信できる', () => {
       const scenario = lessonScenarios['chapter-3/04'];
-      if (scenario === undefined) throw new Error('筋書きがありません');
+      const answer = lessonScenarios['chapter-3/01'];
+      if (scenario === undefined || answer === undefined) throw new Error('筋書きがありません');
       expect(opened(scenario)).toEqual([['support', tamaAsked]]);
-      expect(scenario.gates?.reply.requires.map((item) => item.signal)).toEqual([{ name: 'figure:step', key: 'last' }]);
+      expect(scenario.gates?.reply.requires).toEqual([{ signal: 'sql:row-selected', reason: selectRowReason }]);
+      expect(scenario.done).toEqual({ name: 'chat:replied', key: 'grounded' });
       expect(scenario.reply).toMatchObject({
         lines: [{ text: tamaAnswer }],
-        followUps: [{ actor: 'support', text: tamaAcknowledged }],
+        grounded: {
+          signal: 'sql:row-selected',
+          column: 'id',
+          target: 'visit-tama',
+          line: cancelledLine,
+          missing: noRecord,
+          challenge: { actor: 'support', delay: 0.6, text: askedTamaRow },
+        },
+        followUps: [{ actor: 'support', text: tamaAcknowledged, addTab: 'memo' }],
       });
       expect(scenario.chat.buttons.map((button) => button.label)).toEqual(['返信する']);
-      expect(summary(scenario)).toEqual(['memo:doc:記録を足す前に起きたこと']);
+      expect(scenario.memo).toEqual(answer.memo);
+    });
+
+    it('4 ページ目は、ポチの場面と同じ結果の DB コンソールを別の保存先で持ち、図の文書は返信の後に追加する', () => {
+      const scenario = lessonScenarios['chapter-3/04'];
+      const answer = lessonScenarios['chapter-3/01'];
+      if (scenario === undefined || answer === undefined) throw new Error('筋書きがありません');
+      expect(summary(scenario)).toEqual([
+        'console:console:DB Console',
+        'guide:doc:SQL の実行手順',
+        'memo:doc:記録を足す前に起きたこと',
+      ]);
+      expect(scenario.tabs.map((tab) => tab.initial)).toEqual([undefined, undefined, false]);
+      const console = scenario.tabs[0];
+      const pochi = answer.tabs[0];
+      if (console?.kind !== 'console' || pochi?.kind !== 'console') throw new Error('DB Console のタブがありません');
+      expect(console.config.storageId).toBe('chapter-3-who-cancelled-tama');
+      expect({ ...console.config, storageId: '' }).toEqual({ ...pochi.config, storageId: '' });
+    });
+
+    it('4 ページ目の MDX は、答えを説明する文と図を、返信の後に追加するタブにだけ置く', () => {
+      const source = mdxOf('chapter-3/04');
+      const guide = source.slice(source.indexOf('<Fragment slot="guide">'), source.indexOf('<Fragment slot="memo">'));
+      const memo = source.slice(source.indexOf('<Fragment slot="memo">'));
+      expect(guide).toContain(
+        'タマの来院（`visit-tama`）の問い合わせにも、結果の表から根拠にする行を選択して返信します。',
+      );
+      for (const part of ['なので、この来院の問い合わせには今も答えられません', 'BeforeRecordFigure', '<Quote']) {
+        expect(guide).not.toContain(part);
+        expect(memo).toContain(part);
+      }
     });
   });
 

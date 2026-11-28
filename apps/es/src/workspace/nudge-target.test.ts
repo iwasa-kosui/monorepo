@@ -9,6 +9,7 @@ import {
   nudgeSpecOf,
   restoredKey,
   restoreSelector,
+  resultTableSelector,
   signalSelectors,
   unmetSignals,
 } from './nudge-target';
@@ -130,6 +131,36 @@ describe('nudgeSpecOf', () => {
   it('sql:executed と sql:target-shown は、SQL の実行ボタンを指す', () => {
     expect(nudgeSpecOf('sql:executed', context)).toEqual({ selector: signalSelectors['sql:executed'] });
     expect(nudgeSpecOf('sql:target-shown', context)).toEqual({ selector: '[data-playground="sql"] [data-role="run"]' });
+  });
+
+  describe('sql:row-selected', () => {
+    const rowGates: GatesConfig = {
+      reply: {
+        requires: [{ signal: 'sql:row-selected', reason: '行を選択します。' }],
+        reasons: { all: '行を選択します。', several: '行を選択します。' },
+      },
+    };
+    const done: Condition = { name: 'chat:replied', key: 'grounded' };
+
+    it('結果の表が表示されていなければ、SQL の実行ボタンを指す', () => {
+      expect(nudgeSpecOf('sql:row-selected', context)).toEqual({ selector: signalSelectors['sql:row-selected'] });
+      expect(nudgeSpecOf('sql:row-selected', { ...context, rowsShown: false })).toEqual({
+        selector: '[data-playground="sql"] [data-role="run"]',
+      });
+    });
+
+    it('結果の表が表示され、行が未選択なら、特定の行ではなく結果の表の全体を指し、行を選択する文言を出す', () => {
+      const spec = nudgeSpecOf('sql:row-selected', { ...context, rowsShown: true });
+      expect(spec).toEqual({ selector: resultTableSelector, text: '根拠にする行を選択します' });
+      expect(resultTableSelector).not.toMatch(/tr|visit-|nth/);
+    });
+
+    it('行が未選択の間は、返信ではなく行の選択を指し、選択した後は返信の条件が残るだけになる', () => {
+      expect(nextSignals(firedOf(), rowGates, done)).toEqual(['sql:row-selected']);
+      expect(nextSignals(firedOf('sql:row-selected'), rowGates, done)).toEqual([done]);
+      expect(nextSignals(firedOf(['chat:replied', 'ungrounded'], 'sql:row-selected'), rowGates, done)).toEqual([done]);
+      expect(nudgeSpecOf(done, context)).toBeNull();
+    });
   });
 
   it('バックアップの復元を待つ sql:executed は、復元ボタンを指す', () => {

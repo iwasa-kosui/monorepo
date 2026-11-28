@@ -281,53 +281,47 @@ import { richHtml } from './rich';
 
 const last = 4;
 
-for (
-  const root of document.querySelectorAll<HTMLElement>(
-    '[data-before-record-figure]',
-  )
-) {
+const show = (root: HTMLElement, step: number): void => {
   const message = root.querySelector<HTMLElement>('[data-message]');
   const next = root.querySelector<HTMLButtonElement>('[data-action="next"]');
   const reset = root.querySelector<HTMLButtonElement>('[data-action="reset"]');
-  const points = [...root.querySelectorAll<HTMLElement>('.point')];
-  if (message === null || next === null || reset === null) continue;
+  if (message === null || next === null || reset === null) return;
   const messages = JSON.parse(
     root.dataset.messages ?? '[]',
   ) as readonly string[];
-
-  let step = 0;
-
-  const show = (): void => {
-    root.dataset.step = String(step);
-    root.dataset.tama = step >= 1
-      ? 'cancelled'
-      : 'reserved';
-    root.dataset.pochi = step >= 3
-      ? 'cancelled'
-      : 'reserved';
-    root.dataset.events = step >= 3
-      ? 'row'
-      : 'empty';
-    points.forEach((point, index) => {
-      const order = index + 1;
-      point.dataset.state = step === order
-        ? 'current'
-        : step > order
-        ? 'done'
-        : 'future';
-    });
-    message.innerHTML = richHtml(messages[step] ?? '');
-    next.disabled = step === last;
-    reset.disabled = step === 0;
-  };
-
-  next.addEventListener('click', () => {
-    step += 1;
-    show();
+  root.dataset.step = String(step);
+  root.dataset.tama = step >= 1
+    ? 'cancelled'
+    : 'reserved';
+  root.dataset.pochi = step >= 3
+    ? 'cancelled'
+    : 'reserved';
+  root.dataset.events = step >= 3
+    ? 'row'
+    : 'empty';
+  root.querySelectorAll<HTMLElement>('.point').forEach((point, index) => {
+    const order = index + 1;
+    point.dataset.state = step === order
+      ? 'current'
+      : step > order
+      ? 'done'
+      : 'future';
   });
-  reset.addEventListener('click', () => {
-    step = 0;
-    show();
-  });
-}
+  message.innerHTML = richHtml(messages[step] ?? '');
+  next.disabled = step === last;
+  reset.disabled = step === 0;
+};
+
+document.addEventListener('click', (event) => {
+  const button = event.target instanceof Element
+    ? event.target.closest<HTMLButtonElement>(
+      '[data-before-record-figure] [data-action]',
+    )
+    : null;
+  const root = button?.closest<HTMLElement>('[data-before-record-figure]');
+  if (button === null || root === null || root === undefined) return;
+  const step = Number(root.dataset.step ?? '0');
+  if (button.dataset.action === 'next') show(root, step + 1);
+  else if (button.dataset.action === 'reset') show(root, 0);
+});
 </script>

@@ -1,6 +1,6 @@
 import { whoCancelledSql } from '../../lib/snapshots';
 import { sceneSteps } from '../../playground/scene-steps';
-import type { MemoItem, Post, WorkspaceScenario } from '../../workspace/scenario';
+import type { GroundedReply, MemoItem, Post, TabDefinition, WorkspaceScenario } from '../../workspace/scenario';
 import { answeredThanks, docTab, inquiry, lessonScenario, opening, posts, replyButton, whyNotRecorded } from './common';
 
 const answered: readonly Post[] = [
@@ -12,13 +12,100 @@ const answered: readonly Post[] = [
   answeredThanks,
 ];
 
-const targetShown = 'sql:target-shown' as const;
+const rowSelected = 'sql:row-selected' as const;
+
+const rowReason = '結果の表から、根拠にする行を選択すると返信できます。';
+
+const cancelledLine = '{operated_by}が、{reason}でキャンセルしてます（{event_at}）';
+
+const noRecord = 'この行には、キャンセルの記録が残ってないです…';
 
 const memoItem = (
   key: string,
   label: string,
-  read: NonNullable<MemoItem['read']>,
-): MemoItem => ({ key, label, text: '結果から読みます', result: 'found', fill: targetShown, read });
+  read: Omit<NonNullable<MemoItem['read']>, 'signal' | 'absent'>,
+): MemoItem => ({
+  key,
+  label,
+  text: '結果から読みます',
+  result: 'found',
+  fill: rowSelected,
+  read: { signal: rowSelected, absent: '記録なし', ...read },
+});
+
+const investigationMemo: NonNullable<WorkspaceScenario['memo']> = {
+  title: '返信の下書き（調査メモ）',
+  unknown: '結果の表から行を選択してください',
+  items: [
+    memoItem('who', '誰が', { field: 'operated_by' }),
+    memoItem('when', 'いつ', { field: 'event_at', format: 'datetime' }),
+    memoItem('what', '何を', { field: 'event_name', labels: { VisitCancelled: '来院のキャンセル' } }),
+    memoItem('why', 'なぜ', { field: 'reason' }),
+  ],
+};
+
+const rowGates: NonNullable<WorkspaceScenario['gates']> = {
+  reply: {
+    requires: [{ signal: rowSelected, reason: rowReason }],
+    reasons: { all: rowReason, several: rowReason },
+  },
+};
+
+const groundedReply = (target: string, challenge: string, incompleteChallenge?: string): GroundedReply => ({
+  signal: rowSelected,
+  column: 'id',
+  target,
+  needs: ['operated_by', 'reason', 'event_at'],
+  line: cancelledLine,
+  formats: { event_at: 'datetime' },
+  missing: noRecord,
+  challenge: { actor: 'support', delay: 0.6, text: challenge },
+  ...(incompleteChallenge === undefined ? {} : { incomplete: { challenge: incompleteChallenge } }),
+});
+
+const whoCancelledConsole = (storageId: string): TabDefinition => ({
+  key: 'console',
+  kind: 'console',
+  title: 'DB Console',
+  label: 'DB コンソール',
+  url: 'https://db.internal.example/console',
+  favicon: { tone: 'teal', shape: 'circle' },
+  config: {
+    storageId,
+    initialSql: whoCancelledSql(),
+    connection: { name: 'clinic_production（read-write）', engine: 'SQLite' },
+    setup: {
+      kind: 'script',
+      exercise: 'chapter-2-step-2',
+      entry: 'who-cancelled.ts',
+      own: { exercise: sceneSteps[2].storageId, file: 'visits.ts', testFile: 'visits.test.ts' },
+      tables: [
+        {
+          name: 'visits',
+          columns: [
+            { name: 'id', type: 'TEXT' },
+            { name: 'pet_name', type: 'TEXT' },
+            { name: 'status', type: 'TEXT' },
+          ],
+        },
+        {
+          name: 'business_events',
+          columns: [
+            { name: 'event_id', type: 'INTEGER' },
+            { name: 'event_at', type: 'TEXT' },
+            { name: 'event_name', type: 'TEXT' },
+            { name: 'payload', type: 'TEXT' },
+            { name: 'target_id', type: 'TEXT' },
+            { name: 'target_type', type: 'TEXT' },
+            { name: 'target_state', type: 'TEXT' },
+          ],
+        },
+      ],
+    },
+    controls: true,
+    selectRows: true,
+  },
+});
 
 export const chapter3Answer: WorkspaceScenario = lessonScenario({
   id: 'chapter-3-answer',
@@ -26,85 +113,21 @@ export const chapter3Answer: WorkspaceScenario = lessonScenario({
   history: [inquiry, whyNotRecorded],
   timeline: opening(posts.otherClinicFirst, posts.otherClinicSecond),
   buttons: replyButton('調査結果を返信する'),
-  memo: {
-    title: '返信の下書き（調査メモ）',
-    unknown: '結果を確認してください',
-    items: [
-      memoItem('who', '誰が', { signal: targetShown, field: 'operated_by' }),
-      memoItem('when', 'いつ', { signal: targetShown, field: 'event_at', format: 'datetime' }),
-      memoItem('what', '何を', {
-        signal: targetShown,
-        field: 'event_name',
-        labels: { VisitCancelled: '来院のキャンセル' },
-      }),
-      memoItem('why', 'なぜ', { signal: targetShown, field: 'reason' }),
-    ],
-  },
-  gates: {
-    reply: {
-      requires: [{
-        signal: targetShown,
-        reason: 'SQL を実行して、visit-pochi の行の結果を表示すると返信できます。',
-      }],
-      reasons: {
-        all: 'SQL を実行して、visit-pochi の行の結果を表示すると返信できます。',
-        several: 'SQL を実行して、visit-pochi の行の結果を表示すると返信できます。',
-      },
-    },
-  },
+  memo: investigationMemo,
+  gates: rowGates,
   reply: {
-    lines: [{ text: '{operated_by}が、{reason}でキャンセルしてます（{event_at}）' }],
-    from: { signal: targetShown, formats: { event_at: 'datetime' } },
+    lines: [{ text: cancelledLine }],
+    from: { signal: rowSelected, formats: { event_at: 'datetime' } },
+    grounded: groundedReply(
+      'visit-pochi',
+      'それはポチ（visit-pochi）の来院の行ですか？ id の列を見てもらえると助かります',
+      '誰がなぜキャンセルしたかを知りたいです。その行から分かりますか？',
+    ),
     followUps: [{ actor: 'support', delay: 0.6, text: answeredThanks.text }],
   },
+  done: { name: 'chat:replied', key: 'grounded' },
   tabs: [
-    {
-      key: 'console',
-      kind: 'console',
-      title: 'DB Console',
-      label: 'DB コンソール',
-      url: 'https://db.internal.example/console',
-      favicon: { tone: 'teal', shape: 'circle' },
-      config: {
-        storageId: 'chapter-3-who-cancelled',
-        initialSql: whoCancelledSql(),
-        connection: { name: 'clinic_production（read-write）', engine: 'SQLite' },
-        setup: {
-          kind: 'script',
-          exercise: 'chapter-2-step-2',
-          entry: 'who-cancelled.ts',
-          own: { exercise: sceneSteps[2].storageId, file: 'visits.ts', testFile: 'visits.test.ts' },
-          tables: [
-            {
-              name: 'visits',
-              columns: [
-                { name: 'id', type: 'TEXT' },
-                { name: 'pet_name', type: 'TEXT' },
-                { name: 'status', type: 'TEXT' },
-              ],
-            },
-            {
-              name: 'business_events',
-              columns: [
-                { name: 'event_id', type: 'INTEGER' },
-                { name: 'event_at', type: 'TEXT' },
-                { name: 'event_name', type: 'TEXT' },
-                { name: 'payload', type: 'TEXT' },
-                { name: 'target_id', type: 'TEXT' },
-                { name: 'target_type', type: 'TEXT' },
-                { name: 'target_state', type: 'TEXT' },
-              ],
-            },
-          ],
-        },
-        target: {
-          column: 'operated_by',
-          value: 'visit-pochi',
-          read: ['event_at', 'event_name', 'operated_by', 'reason'],
-        },
-        controls: true,
-      },
-    },
+    whoCancelledConsole('chapter-3-who-cancelled'),
     docTab('guide', 'SQL の実行手順', 'guides/run-sql'),
   ],
 });
@@ -129,21 +152,20 @@ export const chapter3Before: WorkspaceScenario = lessonScenario({
   history: answered,
   timeline: opening(posts.tamaAsked),
   buttons: replyButton('返信する'),
-  gates: {
-    reply: {
-      requires: [{
-        signal: { name: 'figure:step', key: 'last' },
-        reason: '図を最後まで進めると返信できます。',
-      }],
-      reasons: {
-        all: '図を最後まで進めると返信できます。',
-        several: '図を最後まで進めると返信できます。',
-      },
-    },
-  },
+  memo: investigationMemo,
+  gates: rowGates,
   reply: {
     lines: [{ text: posts.tamaAnswer.text }],
-    followUps: [{ actor: 'support', delay: 0.6, text: posts.tamaAcknowledged.text }],
+    grounded: groundedReply(
+      'visit-tama',
+      'それはポチの来院の記録ではないですか？ タマ（visit-tama）の方を知りたいです',
+    ),
+    followUps: [{ actor: 'support', delay: 0.6, text: posts.tamaAcknowledged.text, addTab: 'memo' }],
   },
-  tabs: [docTab('memo', '記録を足す前に起きたこと', 'guides/before-record')],
+  done: { name: 'chat:replied', key: 'grounded' },
+  tabs: [
+    whoCancelledConsole('chapter-3-who-cancelled-tama'),
+    docTab('guide', 'SQL の実行手順', 'guides/run-sql'),
+    { ...docTab('memo', '記録を足す前に起きたこと', 'guides/before-record'), initial: false },
+  ],
 });

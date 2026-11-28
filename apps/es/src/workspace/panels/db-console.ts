@@ -62,6 +62,52 @@ export const mountDbConsole: PanelMount<'console'> = (host) => {
     return undefined;
   };
 
+  const selectable = config.selectRows === true;
+  let selected: HTMLElement | null = null;
+
+  const selectableRows = (): HTMLElement[] => [...results.querySelectorAll<HTMLElement>('.playground-result tbody tr')];
+
+  const valuesOf = (row: HTMLElement): Readonly<Record<string, string | null>> => {
+    const heads = [...(row.closest('table')?.querySelectorAll('thead th') ?? [])].map((cell) => cell.textContent ?? '');
+    const values: Record<string, string | null> = {};
+    row.querySelectorAll('td').forEach((cell, index) => {
+      values[heads[index] ?? ''] = cell.classList.contains('playground-null') ? null : cell.textContent;
+    });
+    return values;
+  };
+
+  const select = (row: HTMLElement): void => {
+    if (selected === row) return;
+    selected?.setAttribute('aria-selected', 'false');
+    selected = row;
+    row.setAttribute('aria-selected', 'true');
+    host.emit('sql:row-selected', { row: valuesOf(row) });
+  };
+
+  const deselect = (): void => {
+    if (selected === null) return;
+    selected.setAttribute('aria-selected', 'false');
+    selected = null;
+    host.emit('sql:row-cleared');
+  };
+
+  const rowOfEvent = (event: Event): HTMLElement | null =>
+    event.target instanceof Element ? event.target.closest<HTMLElement>('.playground-result tbody tr') : null;
+
+  if (selectable) {
+    results.addEventListener('click', (event) => {
+      const row = rowOfEvent(event);
+      if (row !== null) select(row);
+    });
+    results.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const row = rowOfEvent(event);
+      if (row === null) return;
+      event.preventDefault();
+      select(row);
+    });
+  }
+
   for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-table]')) {
     button.addEventListener('click', () => setSql(`SELECT * FROM ${button.dataset.table ?? ''};`));
   }
@@ -77,6 +123,13 @@ export const mountDbConsole: PanelMount<'console'> = (host) => {
   placeholder();
   new MutationObserver(() => {
     if (!results.contains(hint)) revealResults();
+    if (selectable) {
+      if (selected !== null && !results.contains(selected)) deselect();
+      for (const row of selectableRows()) {
+        row.tabIndex = 0;
+        row.setAttribute('aria-selected', 'false');
+      }
+    }
     if (results.querySelector('.playground-result, .playground-error') === null) return;
     host.emit('sql:executed');
     const row = targetRow();
@@ -91,6 +144,7 @@ export const mountDbConsole: PanelMount<'console'> = (host) => {
     open: () => {
       if (config.open !== undefined) setSql(config.open.sql);
     },
+    deselect,
     reset: () => {
       resetSql.click();
       restoreSql.hidden = true;

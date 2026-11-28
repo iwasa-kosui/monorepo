@@ -1,4 +1,5 @@
 ---
+import { titleOf } from '../../workspace/choice';
 import {
   expectTab,
   panelIdOf,
@@ -12,7 +13,8 @@ const { scenario, tab: definition, hidden } = Astro.props;
 const tab = expectTab(definition, 'doc');
 const config = tab.config;
 const approvable = config.approvable === true;
-const { updatedAt, updatedBy } = config;
+const { updatedAt, updatedBy, choice } = config;
+const title = titleOf(config.title, choice, false);
 ---
 
 <div
@@ -22,6 +24,7 @@ const { updatedAt, updatedBy } = config;
   aria-labelledby={tabIdOf(scenario, tab.key)}
   data-tool={tab.key}
   data-kind="doc"
+  data-choice={choice === undefined ? undefined : 'pending'}
   hidden={hidden}
 >
   <div class="doc">
@@ -41,7 +44,7 @@ const { updatedAt, updatedBy } = config;
           </svg>
           <span>社内ドキュメント</span>
         </p>
-        <p class="doc-title">{config.title}</p>
+        <p class="doc-title" data-doc-title>{title}</p>
         {
           !approvable && updatedAt !== undefined
             && updatedBy !== undefined
@@ -63,6 +66,7 @@ const { updatedAt, updatedBy } = config;
             class="doc-approve"
             type="button"
             aria-pressed="false"
+            hidden={choice !== undefined}
             data-approve
           >
             <svg
@@ -85,7 +89,8 @@ const { updatedAt, updatedBy } = config;
       class="doc-scroll"
       tabindex="0"
       role="region"
-      aria-label={config.title}
+      aria-label={title}
+      data-doc-region
     >
       <article class="doc-paper"><slot /></article>
     </div>
@@ -223,6 +228,9 @@ const { updatedAt, updatedBy } = config;
   font-weight: var(--weight-bold);
   line-height: 1;
   cursor: pointer;
+}
+:global(.scene[data-scenario]) .doc-approve[hidden] {
+  display: none;
 }
 :global(.scene[data-scenario]) .doc-approve svg {
   flex: none;

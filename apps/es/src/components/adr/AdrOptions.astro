@@ -3,6 +3,7 @@ import { richHtml } from '../figures/rich';
 
 type Mark = '○' | '△' | '×';
 type Option = {
+  readonly id?: string;
   readonly name: string;
   readonly adopted?: boolean;
   readonly marks: readonly Mark[];
@@ -13,9 +14,13 @@ type Props = {
   readonly id: string;
   readonly criteria: readonly string[];
   readonly options: readonly Option[];
+  readonly choosable?: boolean;
 };
 
-const { id, criteria, options } = Astro.props;
+const { id, criteria, options, choosable = false } = Astro.props;
+if (choosable && options.some((option) => option.id === undefined)) {
+  throw new Error('選べる案の一覧では、すべての案に id が必要です');
+}
 
 const headRem = 1;
 const emWidth = (text: string): number =>
@@ -29,7 +34,7 @@ const columns = criteria.map((criterion) => `${columnRem(criterion)}rem`).join(
   ' ',
 );
 
-const selected = Math.max(
+const selected = choosable ? -1 : Math.max(
   0,
   options.findIndex((option) => option.adopted === true),
 );
@@ -42,13 +47,15 @@ const meaning: Record<Mark, string> = {
 
 <div class="adr-options" data-adr-options style={`--adr-columns:${columns}`}>
   {
-    options.map((_, index) => (
+    options.map((option, index) => (
       <input
         class="adr-sr"
         type="radio"
         name={`${id}-option`}
         id={`${id}-option-${index}`}
         checked={index === selected}
+        data-option={choosable ? option.id : undefined}
+        data-adopted={choosable && option.adopted === true ? 'true' : undefined}
       />
     ))
   }
@@ -60,10 +67,15 @@ const meaning: Record<Mark, string> = {
       </div>
       {
         options.map((option, index) => (
-          <label class="adr-row" for={`${id}-option-${index}`}>
+          <label
+            class="adr-row"
+            for={`${id}-option-${index}`}
+            data-option-row={choosable ? '' : undefined}
+          >
             <span class="adr-name">
               <span set:html={richHtml(option.name)} />
               {option.adopted === true && <span class="adr-badge">採用</span>}
+              {choosable && <span class="adr-badge adr-own">あなたの選択</span>}
             </span>
             {
               option.marks.map((mark) => (
@@ -93,6 +105,13 @@ const meaning: Record<Mark, string> = {
         ))
       }
     </div>
+    {
+      choosable && (
+        <button type="button" class="adr-choose" data-choose disabled>
+          この案を選ぶ
+        </button>
+      )
+    }
   </div>
 </div>
 
@@ -167,6 +186,41 @@ const meaning: Record<Mark, string> = {
   color: var(--role-on-strong);
   font-size: var(--text-note);
   line-height: var(--leading-tight);
+}
+.adr-own {
+  display: none;
+  background: var(--role-accent-soft);
+  color: var(--role-accent-strong);
+}
+.adr-row[data-chosen] .adr-own {
+  display: inline;
+}
+:global(.panel[data-choice="pending"]) .adr-head,
+:global(.panel[data-choice="pending"]) .adr-badge,
+:global(.panel[data-choice="pending"]) .adr-mark {
+  display: none;
+}
+:global(.panel[data-choice="pending"]) .adr-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+.adr-choose {
+  justify-self: start;
+  min-height: var(--tap-min);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--role-accent);
+  color: var(--role-on-accent);
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  cursor: pointer;
+}
+.adr-choose:disabled {
+  background: var(--role-sunken);
+  color: var(--role-muted);
+  cursor: not-allowed;
 }
 .adr-mark {
   text-align: center;

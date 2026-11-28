@@ -2,6 +2,7 @@ import { openingSchedule } from '../../workspace/channel';
 import type {
   Actor,
   ChatButton,
+  DocChoice,
   DocConfig,
   EditorConfig,
   LiveConfig,
@@ -81,7 +82,11 @@ export const posts = {
   wantRecord: colleague('再発防止で、キャンセルしたときに記録を残すようにしたいです'),
   runTests: colleague('先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです'),
   failedFour: colleague('落ちた4件が、これから足すところです👍'),
-  decisionRecord: colleague('方針を ADR にまとめました。ざっと読んでもらえると助かります'),
+  optionsListed: colleague(
+    'キャンセルの記録の残し方を、案として ADR に並べました。どの案がいいと思うか、先に意見をもらえますか',
+  ),
+  sameOpinion: colleague('同じ意見です。この案で進めます'),
+  otherOption: colleague('その案も検討しました。評価を「検討した案」に書いたので、自分の選んだ案と比べてみてください'),
   tableRecord: colleague('記録を1つのテーブルにまとめる案も ADR にしました'),
   prSeen: colleague('PR 見ました！差分、思ったより小さいですね'),
   prRemaining: colleague('足したあとに残る作業も書いておきます'),
@@ -202,12 +207,19 @@ export const documentTab = (key: string, title: string, path: string, config: Do
   config,
 });
 
-export const docTab = (key: string, title: string, path: string, approvable = false): TabDefinition =>
+export const docTab = (
+  key: string,
+  title: string,
+  path: string,
+  approvable = false,
+  choice?: DocChoice,
+): TabDefinition =>
   documentTab(key, title, path, {
     title,
     updatedAt: '2026-11-09',
     updatedBy: '同僚',
     ...(approvable ? { approvable } : {}),
+    ...(choice === undefined ? {} : { choice }),
   });
 
 export const introDocTab = (key: string, title: string, path: string): TabDefinition =>

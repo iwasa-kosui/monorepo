@@ -17,13 +17,18 @@ export const chapter2Explain: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-explain',
   label: '更新処理の中で記録する方針',
   history: earlier,
-  timeline: opening(posts.decisionRecord),
+  timeline: [
+    ...opening(posts.optionsListed),
+    { when: 'option:chosen', key: 'adopted', kind: 'post', post: posts.sameOpinion },
+    { when: 'option:chosen', key: 'other', kind: 'post', post: posts.otherOption },
+  ],
   tabs: [
     docTab(
       'memo',
       'ADR 1: キャンセルの記録を、来院の更新と同じトランザクションで追記する',
-      'adr/1-record-in-update',
+      'adr/1-cancel-record',
       true,
+      { id: 'adr-1', pendingTitle: 'キャンセルの記録を、どこに、どう残すか' },
     ),
   ],
 });
@@ -43,7 +48,7 @@ export const chapter2Step1: WorkspaceScenario = lessonScenario({
 export const chapter2Table: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-table',
   label: '記録を1つのテーブルにまとめる',
-  history: [...earlier, posts.decisionRecord],
+  history: [...earlier, posts.optionsListed],
   timeline: opening(posts.tableRecord),
   tabs: [
     docTab('memo', 'ADR 2: 出来事ごとの記録を、1つのテーブルにまとめる', 'adr/2-record-table', true),

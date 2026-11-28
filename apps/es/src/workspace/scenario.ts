@@ -3,6 +3,8 @@ export const signalNames = [
   'tab:selected',
   'sql:executed',
   'sql:target-shown',
+  'sql:row-selected',
+  'sql:row-cleared',
   'log:detail-opened',
   'log:target-opened',
   'chat:interim-sent',
@@ -13,6 +15,7 @@ export const signalNames = [
   'tests:passed',
   'code:run',
   'question:written',
+  'option:chosen',
   'figure:step',
 ] as const;
 
@@ -115,6 +118,7 @@ export type DbConsoleConfig = {
   };
   readonly open?: { readonly sql: string };
   readonly controls?: true;
+  readonly selectRows?: true;
 };
 
 export type LogRule = {
@@ -157,11 +161,17 @@ export type EditorConfig = {
   readonly active: string;
 };
 
+export type DocChoice = {
+  readonly id: string;
+  readonly pendingTitle: string;
+};
+
 export type DocConfig = {
   readonly title: string;
   readonly updatedAt?: string;
   readonly updatedBy?: string;
   readonly approvable?: boolean;
+  readonly choice?: DocChoice;
 };
 
 export type PrDiffConfig = {
@@ -249,6 +259,7 @@ export type MemoRead = {
   readonly field: string;
   readonly labels?: Readonly<Record<string, string>>;
   readonly format?: FieldFormat;
+  readonly absent?: string;
 };
 
 export type MemoItem = {
@@ -283,8 +294,21 @@ export type InterimConfig = {
 
 export type ReplyLine = { readonly text: string; readonly after?: number };
 
+export type GroundedReply = {
+  readonly signal: SignalName;
+  readonly column: string;
+  readonly target: string;
+  readonly needs: readonly string[];
+  readonly line: string;
+  readonly formats?: Readonly<Record<string, FieldFormat>>;
+  readonly missing: string;
+  readonly challenge: { readonly actor: string; readonly delay: number; readonly text: string };
+  readonly incomplete?: { readonly challenge: string };
+};
+
 export type ReplyConfig = {
   readonly lines: readonly ReplyLine[];
+  readonly grounded?: GroundedReply;
   readonly from?: { readonly signal: SignalName; readonly formats?: Readonly<Record<string, FieldFormat>> };
   readonly followUps: readonly {
     readonly actor: string;

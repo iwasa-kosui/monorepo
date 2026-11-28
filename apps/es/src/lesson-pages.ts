@@ -72,8 +72,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-2/01': {
     flow: 'explain',
     mode: 'listen',
-    role:
-      'ADR（設計上の決定を残す文書）で、キャンセルした人と理由を、来院の更新と同じトランザクションで `visit_cancellations` に追記する方針を読む',
+    role: 'ADR（設計上の決定を残す文書）に同僚が並べた案から、自分ならどの案を選ぶかを決め、その後で同僚の決定と比べる',
   },
   'chapter-2/02': {
     flow: 'exercise',
@@ -98,7 +97,8 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-3/01': {
     flow: 'try',
     mode: 'do',
-    role: 'DB コンソールで `visits` と業務イベントを結びつける SQL を実行し、結果から問い合わせに返信する',
+    role:
+      'DB コンソールで `visits` と業務イベントを結びつける SQL を実行し、結果の表から根拠にする行を選択して、問い合わせに返信する',
   },
   'chapter-3/02': {
     flow: 'explain',
@@ -113,7 +113,8 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-3/04': {
     flow: 'problem',
     mode: 'do',
-    role: '記録を足す前にキャンセルされた `visit-tama` の問い合わせには、今も答えられないことを図で確かめて返信する',
+    role:
+      'DB コンソールの結果の表から `visit-tama` の行を選択して返信し、記録を足す前にキャンセルされた来院には今も答えられないことを図で確かめる',
   },
   'chapter-4/01': {
     flow: 'explain',

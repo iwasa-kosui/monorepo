@@ -1,6 +1,7 @@
 import { setAction } from '../../lesson/action-bar';
 import type { PanelMount } from '../panel';
 import { approvalDetail, approvalLabel, parseActionState, toggleApproval } from './approval';
+import { mountChoice } from './choice';
 import { watchSlotSignals } from './watch';
 
 export const mountDoc: PanelMount<'doc'> = (host) => {
@@ -17,5 +18,6 @@ export const mountDoc: PanelMount<'doc'> = (host) => {
       setAction(approvalDetail(approved, origin));
     });
   }
-  return {};
+  const choice = host.tab.config.choice;
+  return choice === undefined ? {} : mountChoice(host, choice);
 };

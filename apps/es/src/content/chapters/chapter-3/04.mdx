@@ -15,6 +15,11 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 </div>
 
 <Workspace scenario={chapter3Before}>
+<Fragment slot="guide">
+
+タマの来院（`visit-tama`）の問い合わせにも、結果の表から根拠にする行を選択して返信します。
+
+</Fragment>
 <Fragment slot="memo">
 
 `visit-tama` は、記録を足す前にキャンセルされた来院を表します。導入の障害対応で見た行の1つです。この行の `event_at` から `reason` までの列は `null` なので、この来院の問い合わせには今も答えられません。記録を足しても、足す前に起きたことは分かりません。

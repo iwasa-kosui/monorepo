@@ -19,7 +19,7 @@ import { isLiveId, liveEndpoint, normalizeName } from './live-protocol';
 import { type LogView, nextSignals, nudgeSpecOf, resetSqlSelector, restorePlaygroundSelector } from './nudge-target';
 import { emitSignal, type PanelController } from './panel';
 import { mountPanel } from './panels';
-import { fillTemplate, interimText, type MemoOverride, memoViews, replyGate } from './rules';
+import { fillTemplate, interimText, judgeReply, type MemoOverride, memoViews, replyGate } from './rules';
 import {
   type ButtonName,
   type Condition,
@@ -79,6 +79,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     opened: [] as string[],
     forcedUnseen: new Set<string>(),
     replied: false,
+    awaiting: false,
     counter: scenario.status.counter?.initial ?? 0,
     unlocked: new Set<ButtonName>(),
     memoOverrides: new Map<string, MemoOverride>(),
@@ -197,6 +198,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
       logs: logsTab !== undefined && logsTab.key === selected ? logViewOf(logsTab.key) : undefined,
       restoreRunShown: restorePlayground !== null && !restorePlayground.hidden,
       sqlMissed: state.sqlMissed,
+      rowsShown: root.querySelector('[data-playground="sql"] .playground-result tbody tr') !== null,
       resetSqlShown: resetSql !== null && getComputedStyle(resetSql).display !== 'none',
       ...(liveConfig === undefined ? {} : {
         live: {
@@ -292,7 +294,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     tabs.sync({ selected: state.selected, unseen, chatFront, compact: compact.matches });
     chat.render({
       started,
-      replied: state.replied,
+      replied: state.replied || state.awaiting,
       ready: gate.ready,
       reason: gate.reason,
       memo: scenario.memo === undefined ? [] : memoViews(scenario.memo, fired, state.memoOverrides, latest),
@@ -507,6 +509,10 @@ export const mountWorkspace = (root: HTMLElement): void => {
     if (detail.data !== undefined) latest.set(detail.name, detail.data);
     if (detail.name === 'sql:executed' && key === '') state.sqlMissed = true;
     if (detail.name === 'sql:target-shown') state.sqlMissed = false;
+    if (detail.name === 'sql:row-cleared') {
+      fired.delete('sql:row-selected');
+      latest.delete('sql:row-selected');
+    }
     syncOpened();
     scheduler.signal(detail.name, key);
     render();
@@ -517,6 +523,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     if (timed) chat.focusFeed();
     if (timed && compact.matches) root.scrollIntoView({ block: 'start' });
     emit('workspace:started');
+    for (const controller of controllers.values()) controller.start?.();
     if (liveConfig?.saveAs !== undefined && (loadQuestion(liveConfig.saveAs) ?? '').trim() !== '') {
       emit('question:written');
     }
@@ -538,6 +545,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     latest.clear();
     state.forcedUnseen.clear();
     state.replied = false;
+    state.awaiting = false;
     state.counter = scenario.status.counter?.initial ?? 0;
     state.unlocked.clear();
     state.memoOverrides.clear();
@@ -565,31 +573,20 @@ export const mountWorkspace = (root: HTMLElement): void => {
     emit('chat:interim-sent');
   };
 
-  const replyDone = (): void => {
-    const reply = scenario.reply;
-    if (reply === undefined) return;
-    scheduler.tick();
-    const status = scheduler.status();
-    if (status !== 'running' && status !== 'paused') return;
-    const at = scheduler.elapsedMs();
-    chat.clearTyping();
-    for (const line of reply.lines) {
-      if (line.after !== undefined && at < line.after * 1000) continue;
-      const text = reply.from === undefined
-        ? line.text
-        : fillTemplate(line.text, latest.get(reply.from.signal), reply.from.formats);
-      chat.addPost({ actor: selfActor, text }, at);
-    }
-    state.replied = true;
+  const scheduleFollowUps = (
+    items: NonNullable<WorkspaceScenario['reply']>['followUps'],
+    at: number,
+    onLast: (due: number) => void,
+  ): void => {
     let when = at;
     let previous = at;
     scheduler.schedule(
-      reply.followUps.flatMap((item, index) => {
+      items.flatMap((item, index) => {
         when += item.delay * 1000;
         const due = when;
         const typingFrom = Math.max(previous, due - typingLeadMs);
         previous = due;
-        const last = index === reply.followUps.length - 1;
+        const last = index === items.length - 1;
         const channel = item.channel === undefined ? {} : { channel: item.channel };
         const typing = (): void => chat.setTyping({ actor: item.actor, ...channel });
         if (!reducedMotion() && typingFrom <= at) typing();
@@ -600,13 +597,46 @@ export const mountWorkspace = (root: HTMLElement): void => {
             run: () => {
               chat.addPost({ actor: item.actor, text: item.text, ...channel }, due);
               if (item.addTab !== undefined) applyTab(item.addTab, 'add');
-              if (last) scheduler.finish(due);
+              if (last) onLast(due);
             },
           },
         ];
       }),
     );
-    emit('chat:replied');
+  };
+
+  const replyDone = (): void => {
+    const reply = scenario.reply;
+    if (reply === undefined) return;
+    scheduler.tick();
+    const status = scheduler.status();
+    if (status !== 'running' && status !== 'paused') return;
+    const at = scheduler.elapsedMs();
+    chat.clearTyping();
+    const grounded = reply.grounded;
+    const verdict = grounded === undefined ? undefined : judgeReply(latest.get(grounded.signal), grounded);
+    if (grounded !== undefined && verdict?.kind === 'ungrounded') {
+      chat.addPost({ actor: selfActor, text: verdict.text }, at);
+      state.awaiting = true;
+      for (const controller of controllers.values()) controller.deselect?.();
+      scheduleFollowUps([{ ...grounded.challenge, text: verdict.challenge ?? grounded.challenge.text }], at, () => {
+        state.awaiting = false;
+        render();
+      });
+      emit('chat:replied', { key: 'ungrounded' });
+      chat.focusFeed();
+      return;
+    }
+    for (const line of reply.lines) {
+      if (line.after !== undefined && at < line.after * 1000) continue;
+      const text = reply.from === undefined
+        ? line.text
+        : fillTemplate(line.text, latest.get(reply.from.signal), reply.from.formats);
+      chat.addPost({ actor: selfActor, text }, at);
+    }
+    state.replied = true;
+    scheduleFollowUps(reply.followUps, at, (due) => scheduler.finish(due));
+    emit('chat:replied', grounded === undefined ? undefined : { key: 'grounded' });
     chat.focusFeed();
   };
 
