@@ -30,7 +30,8 @@ export type ConsultationIntro = {
 
 export const consultationIntros = {
   'summary-table': {
-    lead: '集計テーブルがあるシステムでは、集計の件数と、記録から数えた件数が合わないことがあります。',
+    lead:
+      '既存のシステムに業務イベントを途中から導入すると、導入する前のキャンセルは業務イベントに残りません。このため、集計の件数と、業務イベントから数えた件数がずれます。',
     label:
       '経理から、4月1日の診察のキャンセル件数について、集計の3件と業務イベントから数えた2件のどちらが正しいかを聞かれ、記録から示せないことを表す図',
     speaker: { name: '経理', avatar: '経' },
@@ -40,7 +41,7 @@ export const consultationIntros = {
       kind: 'counts',
       boxes: [
         { table: 'daily_cancellation_counts', note: '集計', count: '3', unit: '件' },
-        { table: 'business_events', note: '`VisitCancelled` を数えた値', count: '2', unit: '件' },
+        { table: 'business_events', note: '導入した後の `VisitCancelled`', count: '2', unit: '件' },
       ],
     },
     problem: 'どちらが正しいかを、記録から示せない',
