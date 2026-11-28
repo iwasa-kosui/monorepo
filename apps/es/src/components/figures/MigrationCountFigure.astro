@@ -11,6 +11,35 @@ const label = view === 'problem'
   : '業務イベントを導入する前からある来院を VisitMigrated として取り込み、数え直した値を3に一致させる図';
 
 const recounted = view === 'problem' ? '2' : '3';
+
+const order = view === 'problem'
+  ? {
+    visits: 0,
+    bridge: 0,
+    daily: 0,
+    events: 1,
+    first: 2,
+    second: 3,
+    middle: 4,
+    dailyCount: 5,
+    eventsCount: 6,
+    sign: 7,
+    callout: 8,
+  }
+  : {
+    visits: 0,
+    bridge: 1,
+    daily: 7,
+    events: 2,
+    first: 3,
+    second: 3,
+    middle: 4,
+    dailyCount: 7,
+    eventsCount: 6,
+    sign: 7,
+    callout: 8,
+  };
+const at = (index: number): string => `--i:${index}`;
 ---
 
 <section
@@ -22,7 +51,7 @@ const recounted = view === 'problem' ? '2' : '3';
   <div class="grid">
     {
       view === 'decision' && (
-        <div class="tbl visits">
+        <div class="tbl visits reveal" style={at(order.visits)}>
           <div class="tbl-head mono">visits</div>
           <div class="tbl-body">業務イベントを導入する前からある来院</div>
         </div>
@@ -30,53 +59,74 @@ const recounted = view === 'problem' ? '2' : '3';
     }
     {
       view === 'decision' && (
-        <span class="bridge-label">移行用のイベントとして取り込む</span>
+        <span class="bridge-label reveal" style={at(order.bridge)}
+        >移行用のイベントとして取り込む</span>
       )
     }
     {
       view === 'decision' && (
-        <span class="bridge-arrow" aria-hidden="true"></span>
+        <span
+          class="bridge-arrow reveal"
+          style={at(order.bridge)}
+          aria-hidden="true"
+        ></span>
       )
     }
 
-    <div class="tbl events" data-table="business_events">
+    <div
+      class="tbl events reveal"
+      style={at(order.events)}
+      data-table="business_events"
+    >
       <div class="events-top">
         <div class="tbl-head mono">business_events</div>
         <div class="tbl-body">
           <div class="events-title">4月1日のキャンセル</div>
-          <div class="ev"><span class="mono">VisitCancelled</span></div>
-          <div class="ev"><span class="mono">VisitCancelled</span></div>
+          <div class="ev reveal" style={at(order.first)}>
+            <span class="mono">VisitCancelled</span>
+          </div>
+          <div class="ev reveal" style={at(order.second)}>
+            <span class="mono">VisitCancelled</span>
+          </div>
         </div>
       </div>
       <div class="tbl-body events-mid">
         {
           view === 'problem'
             ? (
-              <div class="ev ghost">
-                業務イベントを導入する前のキャンセル（行が無い）
-              </div>
-            )
+            <div class="ev ghost reveal" style={at(order.middle)}>
+              業務イベントを導入する前のキャンセル（行が無い）
+            </div>
+          )
             : (
-              <div class="ev migrated">
-                <span class="mono">VisitMigrated</span>
-                <span class="ev-note">
-                  移行した時点の状態だけ。理由と操作者は作らない
-                </span>
-              </div>
-            )
+            <div class="ev migrated reveal" style={at(order.middle)}>
+              <span class="mono">VisitMigrated</span>
+              <span class="ev-note">
+                移行した時点の状態だけ。理由と操作者は作らない
+              </span>
+            </div>
+          )
         }
       </div>
       <div class="tbl-body count">
         <span class="count-label">数え直した値</span>
-        <span class="count-value">{recounted}</span>
+        <span class="count-value reveal" style={at(order.eventsCount)}>{
+          recounted
+        }</span>
       </div>
     </div>
 
-    <div class="tbl daily" data-table="daily_cancellation_counts">
-      <div class="tbl-head mono">daily_<wbr />cancellation_<wbr />counts</div>
+    <div
+      class="tbl daily reveal"
+      style={at(order.daily)}
+      data-table="daily_cancellation_counts"
+    >
+      <div class="tbl-head mono">
+        daily_<wbr />cancellation_<wbr />counts
+      </div>
       <div class="tbl-body count">
         <span class="count-label">4月1日のキャンセル数</span>
-        <span class="count-value">3</span>
+        <span class="count-value reveal" style={at(order.dailyCount)}>3</span>
       </div>
     </div>
 
@@ -84,42 +134,55 @@ const recounted = view === 'problem' ? '2' : '3';
       {
         view === 'problem'
           ? (
-            <>
-              <span class="sign" aria-hidden="true">≠</span>
-              <span class="cfig-sr">一致しない</span>
-            </>
-          )
+          <>
+            <span class="sign reveal" style={at(order.sign)} aria-hidden="true"
+            >≠</span>
+            <span class="cfig-sr">一致しない</span>
+          </>
+        )
           : (
-            <>
-              <span class="sign" aria-hidden="true">＝</span>
-              <span class="cfig-sr">一致する</span>
-            </>
-          )
+          <>
+            <span class="sign reveal" style={at(order.sign)} aria-hidden="true"
+            >＝</span>
+            <span class="cfig-sr">一致する</span>
+          </>
+        )
       }
     </div>
 
     {
       view === 'problem'
         ? (
-          <div
-            class="cfig-callout callout"
-            data-tone="problem"
-            data-tail="top"
-          >
-            <span class="cfig-callout-label">課題</span>差の1が、導入する前のキャンセルなのか、業務イベントを通らない書き換えなのかを区別できない
-          </div>
-        )
+        <div
+          class="cfig-callout callout reveal"
+          style={at(order.callout)}
+          data-tone="problem"
+          data-tail="top"
+        >
+          <span class="cfig-callout-label"
+          >課題</span>差の1が、導入する前のキャンセルなのか、業務イベントを通らない書き換えなのかを区別できない
+        </div>
+      )
         : (
-          <div class="cfig-callout callout" data-tone="ok" data-tail="top">
-            <span class="cfig-callout-label">解決</span>集計が正しいことを、数え直した値との一致で示せる
-          </div>
-        )
+        <div
+          class="cfig-callout callout reveal"
+          style={at(order.callout)}
+          data-tone="ok"
+          data-tail="top"
+        >
+          <span class="cfig-callout-label"
+          >解決</span>集計が正しいことを、数え直した値との一致で示せる
+        </div>
+      )
     }
   </div>
 </section>
 
 <style>
 .cfig.migration {
+  word-break: auto-phrase;
+  --fig-small: var(--text-note);
+  --fig-code: var(--text-note);
   container-type: inline-size;
 }
 .mono {
@@ -136,7 +199,7 @@ const recounted = view === 'problem' ? '2' : '3';
   min-width: 34rem;
 }
 .cfig.migration[data-view="decision"] .grid {
-  --link: 6.5rem;
+  --link: 9rem;
 }
 
 .tbl {
@@ -154,7 +217,6 @@ const recounted = view === 'problem' ? '2' : '3';
   padding: 0 var(--space-2);
   color: var(--role-on-strong);
   font-size: var(--fig-code);
-  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
 }
 .tbl-body {
@@ -192,7 +254,6 @@ const recounted = view === 'problem' ? '2' : '3';
 
 .events-title {
   font-size: var(--fig-label);
-  font-weight: var(--weight-bold);
 }
 .ev {
   display: flex;
@@ -219,7 +280,6 @@ const recounted = view === 'problem' ? '2' : '3';
 .ev.migrated {
   background: var(--role-marker);
   color: var(--role-ink);
-  font-weight: var(--weight-bold);
   padding-block: 0.125rem;
 }
 .ev.migrated .mono {
@@ -244,7 +304,6 @@ const recounted = view === 'problem' ? '2' : '3';
 }
 .count-label {
   font-size: var(--fig-label);
-  font-weight: var(--weight-bold);
 }
 .count-value {
   font-size: 2rem;
@@ -267,7 +326,6 @@ const recounted = view === 'problem' ? '2' : '3';
 .sign {
   color: var(--role-accent-strong);
   font-size: var(--text-heading);
-  font-weight: var(--weight-bold);
   line-height: 1;
 }
 
@@ -279,6 +337,7 @@ const recounted = view === 'problem' ? '2' : '3';
   font-size: var(--fig-label);
   line-height: var(--leading-tight);
   text-align: center;
+  text-wrap: balance;
 }
 .bridge-arrow {
   position: relative;
@@ -308,6 +367,76 @@ const recounted = view === 'problem' ? '2' : '3';
 .cfig.migration[data-view="problem"] .callout {
   grid-column: 1;
   grid-row: 2;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    animation: reveal-in 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.35s);
+  }
+  .bridge-arrow.reveal {
+    transform-origin: left center;
+    animation-name: bridge-grow;
+  }
+  .sign.reveal {
+    animation-name: sign-in;
+  }
+  .callout.reveal {
+    transform-origin: center top;
+    animation-name: callout-in;
+  }
+  .ev.migrated.reveal {
+    animation-name: reveal-in, marker-in;
+    animation-delay:
+      calc(var(--i) * 0.35s),
+      calc((var(--i) + 1) * 0.35s);
+  }
+}
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes bridge-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes sign-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes callout-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes marker-in {
+  from {
+    background: var(--role-surface);
+  }
+  to {
+    background: var(--role-marker);
+  }
 }
 
 @container (max-width: 40rem) {

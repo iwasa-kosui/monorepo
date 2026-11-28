@@ -3,6 +3,11 @@ wide: true
 immersive: true
 ---
 
+import AdrOptions from '../../../components/adr/AdrOptions.astro';
+import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
+import AdrPanel from '../../../components/adr/AdrPanel.astro';
+import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
+import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import { chapter4MigrationAdr } from '../../../components/chapters/chapter-4';
 import MigrationCountFigure from '../../../components/figures/MigrationCountFigure.astro';
 import Workspace from '../../../components/workspace/Workspace.astro';
@@ -16,63 +21,53 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter4MigrationAdr}>
 <Fragment slot="memo">
 
-- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
-- 日付: 2026-11-09
-- 作成者: 同僚
+<AdrTabs id="adr-3" labels={['背景', '決定', '結果', '検討した案']}>
 
-### 背景
-
-経理から、キャンセル数の集計が正しいかを問い合わせられました。集計は3件ですが、業務イベントから数え直すと2件です。業務イベントを導入する前のキャンセルは、`business_events` テーブルに行が無いためです。
+<AdrPanel lead="キャンセル数の集計は3件、業務イベントから数え直すと2件です。経理からの問い合わせに、どちらが正しいかを示せません。">
 
 <MigrationCountFigure view="problem" />
 
-この ADR の目的は、集計が正しいことを、業務イベントから数え直した値との一致で回答できるようにすることです。業務イベントを導入する前のデータの扱いを、次の3つの基準で決定します。
+<AdrPurpose
+  purpose="集計が正しいことを、数え直した値との一致で回答できるようにする"
+  criteria={['キャンセル数が正しいまま一致する', '理由と操作者を作らない', '導入の前後を区別できる']}
+/>
 
-- キャンセル数が正しいまま、業務イベントから数え直した値と一致すること
-- 記録に残っていない理由と操作者を作らないこと
-- 業務イベントを導入した後の出来事と、導入する前のデータを区別できること
+</AdrPanel>
 
-### 決定
-
-- 業務イベントを導入する前からある来院を、移行用のイベント `VisitMigrated` として `business_events` テーブルに取り込みます。
-- `VisitMigrated` は、`VisitCancelled` とは別の種類にし、移行した時点の来院の状態だけを保存します。理由と操作者は、どこにも残っていないので作りません。
-- キャンセル数を業務イベントから数え直すときは、キャンセル済みの来院の `VisitMigrated` も数えます。
+<AdrPanel lead="業務イベントを導入する前からある来院を、移行用のイベント `VisitMigrated` として取り込みます。">
 
 <MigrationCountFigure view="decision" />
 
-### 結果
+キャンセル数を数え直すときは、キャンセル済みの来院の `VisitMigrated` も数えます。
 
-- 社内への価値: 経理から問い合わせられたときに、集計が数え直した値と一致することを示して回答できます。
-- 低減するリスク: 集計と数え直した値に差が出たときに、原因を特定できないリスクを低減します。差が示すのは、業務イベントを通らないキャンセル数の書き換えだけになります。
-- 増大するリスク: `business_events` テーブルの行が、業務イベントを導入する前からある来院の数だけ増えます。
-- 残るリスク: 業務イベントを導入する前のキャンセルは、理由、操作者、キャンセルした日時を回答できません。
+</AdrPanel>
 
-### 検討した案
+<AdrPanel>
 
-採用した案と、採用しなかった3つの案を、背景の3つの基準で比較しました。○は満たす、×は満たさないことを表します。
+<AdrOutcomes items={[
+  { kind: 'value', label: '社内への価値', text: '経理から問い合わせられたときに、集計が数え直した値と一致することを示して回答できます。' },
+  { kind: 'reduced', label: '低減するリスク', text: '集計と数え直した値の差が示すのは、業務イベントを通らないキャンセル数の書き換えだけになります。' },
+  { kind: 'increased', label: '増大するリスク', text: '`business_events` テーブルの行が、業務イベントを導入する前からある来院の数だけ増えます。' },
+  { kind: 'remaining', label: '残るリスク', text: '業務イベントを導入する前のキャンセルは、理由、操作者、キャンセルした日時を回答できません。' },
+]} />
 
-<div data-alternatives-table>
+</AdrPanel>
 
-| 案 | キャンセル数が正しいまま一致する | 理由と操作者を作らない | 導入の前後を区別できる |
-|---|---|---|---|
-| `VisitMigrated` として取り込む（採用） | ○ | ○ | ○ |
-| 取り込まない | × | ○ | ○ |
-| キャンセル数を業務イベントから作り直す | × | ○ | ○ |
-| `VisitCancelled` として取り込む | ○ | × | × |
+<AdrPanel>
 
-</div>
+<AdrOptions
+  id="adr-3"
+  criteria={['キャンセル数が正しいまま一致する', '理由と操作者を作らない', '導入の前後を区別できる']}
+  options={[
+    { name: '`VisitMigrated` として取り込む', adopted: true, marks: ['○', '○', '○'], merit: '集計が数え直した値と一致し、導入の前後も区別できます。', demerit: '`business_events` テーブルの行が、導入する前からある来院の数だけ増えます。' },
+    { name: '取り込まない', marks: ['×', '○', '○'], merit: '移行の作業が要りません。', demerit: '数え直した値が集計より少ないままになり、差の原因を区別できません。' },
+    { name: 'キャンセル数を業務イベントから作り直す', marks: ['×', '○', '○'], merit: 'キャンセル数が、数え直した値と常に一致します。', demerit: '導入する前のキャンセルが消え、4月1日は正しい3件ではなく2件になります。' },
+    { name: '`VisitCancelled` として取り込む', marks: ['○', '×', '×'], merit: 'キャンセル数を数え直す SQL を変えずに済みます。', demerit: '残っていない理由と操作者を空にするか作るかになり、導入した後のキャンセルと区別できません。' },
+  ]}
+/>
 
-#### 取り込まない
-
-移行の作業が要りません。しかし、数え直した値が集計より少ないままになり、差が導入する前のキャンセルなのか、キャンセル数の書き換えなのかを区別できません。
-
-#### キャンセル数を業務イベントから作り直す
-
-キャンセル数が、数え直した値と常に一致します。しかし、導入する前のキャンセルがキャンセル数から消え、4月1日は正しい3件ではなく2件になります。
-
-#### `VisitCancelled` として取り込む
-
-キャンセル数を数え直す SQL を変えずに済みます。しかし、残っていない理由と操作者を空にするか作るかになり、導入した後のキャンセルと区別できません。
+</AdrPanel>
+</AdrTabs>
 
 </Fragment>
 </Workspace>

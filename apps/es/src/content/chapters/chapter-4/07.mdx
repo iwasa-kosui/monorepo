@@ -3,6 +3,11 @@ wide: true
 immersive: true
 ---
 
+import AdrOptions from '../../../components/adr/AdrOptions.astro';
+import AdrOutcomes from '../../../components/adr/AdrOutcomes.astro';
+import AdrPanel from '../../../components/adr/AdrPanel.astro';
+import AdrPurpose from '../../../components/adr/AdrPurpose.astro';
+import AdrTabs from '../../../components/adr/AdrTabs.astro';
 import { chapter4AuditLogAdr } from '../../../components/chapters/chapter-4';
 import AuditLogRoleFigure from '../../../components/figures/AuditLogRoleFigure.astro';
 import SequenceFigure from '../../../components/figures/SequenceFigure.astro';
@@ -18,58 +23,52 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <Workspace scenario={chapter4AuditLogAdr}>
 <Fragment slot="memo">
 
-- ステータス: <span data-adr-status="proposed">提案</span><span data-adr-status="approved">承認済み</span>
-- 日付: 2026-11-09
-- 作成者: 同僚
+<AdrTabs id="adr-5" labels={['背景', '決定', '結果', '検討した案']}>
 
-### 背景
-
-情シスから、監査ログに残っている変更の理由を確認したいという依頼がありました。しかし、理由を回答できる変更は、業務イベントを記録している来院のキャンセルだけです。
+<AdrPanel lead="監査ログに残っている変更の理由を、情シスから確認されました。回答できるのは、来院のキャンセルだけです。">
 
 <SequenceFigure sequence={auditReasonSequence} />
 
-この ADR の目的は、監査ログに残っている変更の、業務上の理由を回答できるようにすることです。監査ログと業務イベントの役割の分け方を、次の3つの基準で決定します。
+<AdrPurpose
+  purpose="監査ログに残っている変更の、業務上の理由を回答できるようにする"
+  criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
+/>
 
-- 変更の業務上の理由を答えられること
-- 業務イベントを記録していない変更も、変更前後の値と操作者を残せること
-- 記録の仕組みを、最終的に業務イベントの1つにそろえられること
+</AdrPanel>
 
-### 決定
-
-- 記録の仕組みは、最終的に業務イベントの1つにそろえます。
-- すべての変更が業務イベントを記録するまでの過渡期は、変更前後の値と操作者を監査ログに、業務上の理由を業務イベントに残します。
-- その後は、監査ログを業務イベントから生成します。イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
+<AdrPanel lead="過渡期は、値と操作者を監査ログに、理由を業務イベントに残します。その後は、監査ログを業務イベントから生成します。">
 
 <AuditLogRoleFigure />
 
-### 結果
+イベントから監査ログを生成できるなら、それが一番シンプルで楽です。
 
-- 社内への価値: 業務イベントを記録している変更は、業務上の理由を回答できます。
-- 低減するリスク: 業務イベントを記録していない変更が、監査ログから消えるリスクを避けます。
-- 増大するリスク: 過渡期の間は、2つの記録の仕組みを保守する負担が続きます。
-- 残るリスク: 業務イベントを導入する前の変更と、業務イベントをまだ記録していない変更は、理由を回答できません。
+</AdrPanel>
 
-### 検討した案
+<AdrPanel>
 
-採用した案と、採用しなかった2つの案を、背景の3つの基準で比較しました。○は満たす、×は満たさないことを表します。
+<AdrOutcomes items={[
+  { kind: 'value', label: '社内への価値', text: '業務イベントを記録している変更は、業務上の理由を回答できます。' },
+  { kind: 'reduced', label: '低減するリスク', text: '業務イベントを記録していない変更が、監査ログから消えるリスクを避けます。' },
+  { kind: 'increased', label: '増大するリスク', text: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
+  { kind: 'remaining', label: '残るリスク', text: '業務イベントを導入する前の変更と、業務イベントをまだ記録していない変更は、理由を回答できません。' },
+]} />
 
-<div data-alternatives-table>
+</AdrPanel>
 
-| 案 | 理由を答えられる | 業務イベントの無い変更も残せる | 業務イベントにそろえられる |
-|---|---|---|---|
-| 過渡期は領域を分け、その後は監査ログを業務イベントから生成する（採用） | ○ | ○ | ○ |
-| 監査ログだけで済ませる | × | ○ | × |
-| いますぐ監査ログを業務イベントから生成する | ○ | × | ○ |
+<AdrPanel>
 
-</div>
+<AdrOptions
+  id="adr-5"
+  criteria={['理由を答えられる', '業務イベントの無い変更も残せる', '業務イベントにそろえられる']}
+  options={[
+    { name: '過渡期は領域を分け、その後は監査ログを業務イベントから生成する', adopted: true, marks: ['○', '○', '○'], merit: '理由を回答でき、業務イベントを記録していない変更も監査ログに残ります。', demerit: '過渡期の間は、2つの記録の仕組みを保守する負担が続きます。' },
+    { name: '監査ログだけで済ませる', marks: ['×', '○', '×'], merit: '記録の仕組みを変えずに済みます。', demerit: '監査ログは業務上の理由を持たないので、情シスの依頼に答えられません。' },
+    { name: 'いますぐ監査ログを業務イベントから生成する', marks: ['○', '×', '○'], merit: '記録が業務イベントだけになります。', demerit: '診察の完了はまだ業務イベントを記録していないため、監査ログから診察の完了の変更が消えます。' },
+  ]}
+/>
 
-#### 監査ログだけで済ませる
-
-記録の仕組みを変えずに済みます。しかし、監査ログは業務上の理由を持たないので、情シスの依頼に答えられません。
-
-#### いますぐ監査ログを業務イベントから生成する
-
-記録が業務イベントだけになります。しかし、診察の完了はまだ業務イベントを記録していないため、監査ログから診察の完了の変更が消えます。
+</AdrPanel>
+</AdrTabs>
 
 </Fragment>
 </Workspace>

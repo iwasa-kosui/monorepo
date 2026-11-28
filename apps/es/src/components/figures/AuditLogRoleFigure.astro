@@ -4,6 +4,8 @@ import './figure.css';
 const auditLogs: readonly string[] = ['変更前後の値', '操作者'];
 const transitionEvents: readonly string[] = ['業務上の理由', '監査ログの ID'];
 const finalEvents: readonly string[] = ['業務上の理由', '変更の内容'];
+
+const at = (index: number): string => `--i:${index}`;
 ---
 
 <section
@@ -19,31 +21,41 @@ const finalEvents: readonly string[] = ['業務上の理由', '変更の内容']
       </div>
 
       <div class="flow flow-transition">
-        <div class="proc">更新処理</div>
+        <div class="proc reveal" style={at(0)}>更新処理</div>
 
-        <div class="link" data-slot="audit">
+        <div class="link reveal" style={at(1)} data-slot="audit">
           <span class="arrow" aria-hidden="true"></span>
           <span class="link-label">すべての変更</span>
         </div>
-        <div class="link" data-slot="events">
+        <div class="link reveal" style={at(1)} data-slot="events">
           <span class="arrow" aria-hidden="true"></span>
           <span class="link-label">業務イベントを記録する変更</span>
         </div>
 
-        <div class="table" data-slot="audit" data-table="audit_logs">
+        <div
+          class="table reveal"
+          style={at(2)}
+          data-slot="audit"
+          data-table="audit_logs"
+        >
           <div class="table-head"><code>audit_<wbr />logs</code></div>
           <ul class="items">
             {auditLogs.map((item) => <li>{item}</li>)}
           </ul>
         </div>
-        <div class="ref">
+        <div class="ref reveal" style={at(3)}>
           <span class="ref-label">
-            <span class="cfig-sr">business_events から audit_logs へ、</span
-            >監査ログの行を参照
+            <span class="cfig-sr"
+            >business_events から audit_logs へ、</span>監査ログの行を参照
           </span>
           <span class="ref-line" aria-hidden="true"></span>
         </div>
-        <div class="table" data-slot="events" data-table="business_events">
+        <div
+          class="table reveal"
+          style={at(2)}
+          data-slot="events"
+          data-table="business_events"
+        >
           <div class="table-head"><code>business_<wbr />events</code></div>
           <ul class="items">
             {transitionEvents.map((item) => <li>{item}</li>)}
@@ -51,55 +63,75 @@ const finalEvents: readonly string[] = ['業務上の理由', '変更の内容']
         </div>
       </div>
 
-      <div class="cfig-callout" data-tone="ok" data-tail="top">
-        <span class="cfig-callout-label">役割</span
-        >値と操作者は監査ログに、理由は業務イベントに残す
+      <div
+        class="cfig-callout reveal"
+        style={at(4)}
+        data-tone="ok"
+        data-tail="top"
+      >
+        <span class="cfig-callout-label"
+        >役割</span>値と操作者は監査ログに、理由は業務イベントに残す
       </div>
     </div>
 
-    <div class="between" aria-hidden="true"></div>
+    <div class="between reveal" style={at(5)} aria-hidden="true"></div>
     <span class="cfig-sr">その後</span>
 
-    <div class="panel" data-stage="final">
+    <div class="panel reveal" style={at(6)} data-stage="final">
       <div class="panel-head">
         <span class="tag">その後</span>
         <span class="note">すべての変更が業務イベントを記録した後</span>
       </div>
 
       <div class="flow flow-final">
-        <div class="proc">更新処理</div>
+        <div class="proc reveal" style={at(6)}>更新処理</div>
 
-        <div class="link" data-slot="plain">
+        <div class="link reveal" style={at(7)} data-slot="plain">
           <span class="arrow" aria-hidden="true"></span>
         </div>
 
-        <div class="table" data-slot="events" data-table="business_events">
+        <div
+          class="table reveal"
+          style={at(7)}
+          data-slot="events"
+          data-table="business_events"
+        >
           <div class="table-head"><code>business_<wbr />events</code></div>
           <ul class="items">
             {finalEvents.map((item) => <li>{item}</li>)}
           </ul>
         </div>
 
-        <div class="link" data-slot="generate">
+        <div class="link reveal" style={at(8)} data-slot="generate">
           <span class="arrow" aria-hidden="true"></span>
           <span class="link-label">生成</span>
         </div>
 
-        <div class="table" data-slot="audit" data-table="audit_logs">
+        <div
+          class="table reveal"
+          style={at(8)}
+          data-slot="audit"
+          data-table="audit_logs"
+        >
           <div class="table-head"><code>audit_<wbr />logs</code></div>
           <ul class="items">
             {auditLogs.map((item) => <li>{item}</li>)}
           </ul>
         </div>
-        <div class="legacy">
+        <div class="legacy reveal" style={at(9)}>
           <span class="legacy-name">導入する前の監査ログ</span>
           <span class="legacy-note">生成した後も残す</span>
         </div>
       </div>
 
-      <div class="cfig-callout" data-tone="ok" data-tail="top">
-        <span class="cfig-callout-label">最終形</span
-        >記録の仕組みが、業務イベントの1つにそろう
+      <div
+        class="cfig-callout reveal"
+        style={at(10)}
+        data-tone="ok"
+        data-tail="top"
+      >
+        <span class="cfig-callout-label"
+        >最終形</span>記録の仕組みが、業務イベントの1つにそろう
       </div>
     </div>
   </div>
@@ -107,6 +139,10 @@ const finalEvents: readonly string[] = ['業務上の理由', '変更の内容']
 
 <style>
 .cfig.audit-role {
+  word-break: auto-phrase;
+  --fig-text: var(--text-note);
+  --fig-small: var(--text-note);
+  --fig-code: var(--text-note);
   container-type: inline-size;
 }
 
@@ -135,7 +171,6 @@ const finalEvents: readonly string[] = ['業務上の理由', '変更の内容']
   padding: 0 var(--space-2);
   color: var(--role-on-strong);
   font-size: var(--fig-label);
-  font-weight: var(--weight-bold);
   line-height: var(--leading-normal);
 }
 .note {
@@ -160,7 +195,6 @@ const finalEvents: readonly string[] = ['業務上の理由', '変更の内容']
   padding-inline: 0.125rem;
   color: var(--role-accent-strong);
   font-size: var(--fig-text);
-  font-weight: var(--weight-bold);
   line-height: 1;
 }
 .between::before {
@@ -177,7 +211,6 @@ const finalEvents: readonly string[] = ['業務上の理由', '変更の内容']
   background: var(--role-ground);
   padding: 0.125rem var(--space-3);
   font-size: var(--fig-small);
-  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
   text-align: center;
   word-break: keep-all;
@@ -261,14 +294,13 @@ const finalEvents: readonly string[] = ['業務上の理由', '変更の内容']
   background: var(--role-accent-strong);
   padding: var(--space-1);
   color: var(--role-on-strong);
-  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
 }
 .cfig.audit-role .table-head code {
   background: transparent;
   color: inherit;
   font-family: var(--font-code);
-  font-size: 0.875rem;
+  font-size: inherit;
 }
 .cfig.audit-role .table .items {
   margin: 0;
@@ -351,13 +383,56 @@ const finalEvents: readonly string[] = ['業務上の理由', '変更の内容']
 }
 .legacy-name {
   font-size: var(--fig-label);
-  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
 }
 .legacy-note {
   color: var(--role-muted);
   font-size: var(--fig-label);
   line-height: var(--leading-tight);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    animation: reveal-in 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.35s);
+  }
+  .cfig-callout.reveal {
+    transform-origin: center top;
+    animation-name: callout-in;
+  }
+  .between.reveal {
+    animation-name: between-in;
+  }
+}
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes between-in {
+  from {
+    opacity: 0;
+    transform: translateX(-0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes callout-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @container (width < 34rem) {

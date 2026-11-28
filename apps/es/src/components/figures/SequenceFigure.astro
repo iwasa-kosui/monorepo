@@ -9,10 +9,24 @@ const { sequence } = Astro.props;
 const lanes = sequence.lanes;
 const frame = sequence.frame;
 
-const laneIndex = (id: string): number => Math.max(0, lanes.findIndex((lane) => lane.id === id));
+const laneIndex = (id: string): number =>
+  Math.max(0, lanes.findIndex((lane) => lane.id === id));
 const laneName = (id: string): string => lanes[laneIndex(id)]?.name ?? id;
 const edgeOf = (index: number): 'start' | 'end' | 'center' =>
-  lanes.length < 2 || index === 0 ? 'start' : index === lanes.length - 1 ? 'end' : 'center';
+  lanes.length < 2 || index === 0
+    ? 'start'
+    : index === lanes.length - 1
+    ? 'end'
+    : 'center';
+
+let order = 0;
+const slots = sequence.steps.map((step) => {
+  const at = order++;
+  const calloutAt = step.type !== 'divider' && step.callout !== undefined
+    ? order++
+    : undefined;
+  return { at, calloutAt };
+});
 ---
 
 <section
@@ -26,7 +40,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
       {
         lanes.map((lane) => (
           <div class="head" data-kind={lane.kind}>
-            <span set:html={richHtml(lane.name)} />
+            <span set:html={richHtml(lane.name).replace(/_/g, '_<wbr />')} />
           </div>
         ))
       }
@@ -42,10 +56,14 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
       <ol class="steps">
         {
           sequence.steps.map((step, index) => {
-            const inFrame = frame !== undefined && index >= frame.from &&
-              index <= frame.to;
-            const frameStart = frame !== undefined && index === frame.from;
-            const frameEnd = frame !== undefined && index === frame.to;
+            const slot = slots[index]
+              ?? { at: index, calloutAt: undefined };
+            const inFrame = frame !== undefined && index >= frame.from
+              && index <= frame.to;
+            const frameStart = frame !== undefined
+              && index === frame.from;
+            const frameEnd = frame !== undefined
+              && index === frame.to;
             const frameAttrs = {
               'data-frame': inFrame ? '' : undefined,
               'data-frame-start': frameStart ? '' : undefined,
@@ -54,81 +72,52 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
 
             if (step.type === 'divider') {
               return (
-                <li class="step" data-step="divider" {...frameAttrs}>
-                  {frameStart && frame !== undefined && (
-                    <span class="frame-tab">{frame.label}</span>
-                  )}
-                  <span class="divider-line" aria-hidden="true"></span>
-                  <span class="divider-text" set:html={richHtml(step.text)} />
-                </li>
-              );
+            <li
+              class="step"
+              data-step="divider"
+              style={`--i:${slot.at}`}
+              {...frameAttrs}
+            >
+              {
+                frameStart && frame !== undefined && (
+                  <span class="frame-tab">{frame.label}</span>
+                )
+              }
+              <span class="divider-line" aria-hidden="true"></span>
+              <span class="divider-text" set:html={richHtml(step.text)} />
+            </li>
+          );
             }
 
             if (step.type === 'note') {
               const lane = laneIndex(step.lane);
               return (
-                <li
-                  class="step"
-                  data-step="note"
-                  style={`--lane:${lane}`}
-                  {...frameAttrs}
-                >
-                  {frameStart && frame !== undefined && (
-                    <span class="frame-tab">{frame.label}</span>
-                  )}
-                  <div class="note-zone" data-align={edgeOf(lane)}>
-                    <div class="note">
-                      <span
-                        class="cfig-sr"
-                        set:html={richHtml(`${laneName(step.lane)}: `)}
-                      />
-                      <span set:html={richHtml(step.text)} />
-                    </div>
-                  </div>
-                  {step.callout !== undefined && (
-                    <div class="callout-row">
-                      <div
-                        class="cfig-callout"
-                        data-tone={step.callout.tone}
-                        data-tail="top"
-                      >
-                        <span class="cfig-callout-label">
-                          {step.callout.label}
-                        </span>
-                        <span set:html={richHtml(step.callout.text)} />
-                      </div>
-                    </div>
-                  )}
-                </li>
-              );
-            }
-
-            const from = laneIndex(step.from);
-            const to = laneIndex(step.to);
-            return (
-              <li
-                class="step"
-                data-step="message"
-                data-style={step.style ?? 'call'}
-                data-dir={from <= to ? 'right' : 'left'}
-                style={`--min:${Math.min(from, to)};--max:${Math.max(from, to)};--lane:${to}`}
-                {...frameAttrs}
-              >
-                {frameStart && frame !== undefined && (
+            <li
+              class="step"
+              data-step="note"
+              style={`--lane:${lane};--i:${slot.at}`}
+              {...frameAttrs}
+            >
+              {
+                frameStart && frame !== undefined && (
                   <span class="frame-tab">{frame.label}</span>
-                )}
-                <span
-                  class="cfig-sr"
-                  set:html={richHtml(
-                    `${laneName(step.from)}から${laneName(step.to)}へ: `,
-                  )}
-                />
-                <div class="label">
-                  <span class="label-text" set:html={richHtml(step.text)} />
+                )
+              }
+              <div class="note-zone" data-align={edgeOf(lane)}>
+                <div class="note">
+                  <span
+                    class="cfig-sr"
+                    set:html={richHtml(`${laneName(step.lane)}: `)}
+                  />
+                  <span set:html={richHtml(step.text)} />
                 </div>
-                <span class="arrow" aria-hidden="true"></span>
-                {step.callout !== undefined && (
-                  <div class="callout-row">
+              </div>
+              {
+                step.callout !== undefined && (
+                  <div
+                    class="callout-row"
+                    style={`--i:${slot.calloutAt ?? slot.at}`}
+                  >
                     <div
                       class="cfig-callout"
                       data-tone={step.callout.tone}
@@ -140,9 +129,61 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
                       <span set:html={richHtml(step.callout.text)} />
                     </div>
                   </div>
+                )
+              }
+            </li>
+          );
+            }
+
+            const from = laneIndex(step.from);
+            const to = laneIndex(step.to);
+            return (
+            <li
+              class="step"
+              data-step="message"
+              data-style={step.style ?? 'call'}
+              data-dir={from <= to ? 'right' : 'left'}
+              style={`--min:${Math.min(from, to)};--max:${
+                Math.max(from, to)
+              };--lane:${to};--i:${slot.at}`}
+              {...frameAttrs}
+            >
+              {
+                frameStart && frame !== undefined && (
+                  <span class="frame-tab">{frame.label}</span>
+                )
+              }
+              <span
+                class="cfig-sr"
+                set:html={richHtml(
+                  `${laneName(step.from)}から${laneName(step.to)}へ: `,
                 )}
-              </li>
-            );
+              />
+              <div class="label">
+                <span class="label-text" set:html={richHtml(step.text)} />
+              </div>
+              <span class="arrow" aria-hidden="true"></span>
+              {
+                step.callout !== undefined && (
+                  <div
+                    class="callout-row"
+                    style={`--i:${slot.calloutAt ?? slot.at}`}
+                  >
+                    <div
+                      class="cfig-callout"
+                      data-tone={step.callout.tone}
+                      data-tail="top"
+                    >
+                      <span class="cfig-callout-label">
+                        {step.callout.label}
+                      </span>
+                      <span set:html={richHtml(step.callout.text)} />
+                    </div>
+                  </div>
+                )
+              }
+            </li>
+          );
           })
         }
       </ol>
@@ -152,6 +193,9 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
 
 <style>
 .cfig.sequence {
+  word-break: auto-phrase;
+  --fig-small: var(--text-note);
+  --fig-code: var(--text-note);
   container-type: inline-size;
   gap: 0;
   padding-block: var(--space-2);
@@ -178,9 +222,8 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   margin: 0 0.125rem;
   border: 1px solid var(--role-border);
   background: var(--role-ground);
-  padding: var(--space-1) 0.125rem;
-  font-size: 0.875rem;
-  font-weight: var(--weight-bold);
+  padding: 0.125rem;
+  font-size: var(--fig-label);
   line-height: var(--leading-tight);
   text-align: center;
   overflow-wrap: anywhere;
@@ -192,11 +235,11 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   border-radius: var(--radius-sm);
 }
 .head[data-kind="table"] {
-  border-top: 0.375rem solid var(--role-accent-strong);
+  border-top: 0.25rem solid var(--role-accent-strong);
   border-radius: var(--radius-sm);
 }
 :global(.content) .cfig.sequence .head :global(code) {
-  font-size: 0.875em;
+  font-size: 0.9em;
 }
 
 .body {
@@ -225,18 +268,22 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   margin: 0;
   padding: 0;
 }
+:global(.scene[data-scenario]) :global(.doc-paper) .cfig .step + .step {
+  margin-top: 0;
+}
 
 .label {
   position: relative;
   left: calc(max(0.02, var(--min) - 1) * 100% / var(--lanes));
   width: calc(
     (
-        min(var(--lanes) - 0.02, var(--max) + 2) -
-          max(0.02, var(--min) - 1)
-      ) * 100% / var(--lanes)
+      min(var(--lanes) - 0.02, var(--max) + 2) - max(0.02, var(--min) - 1)
+    ) *
+      100% /
+      var(--lanes)
   );
   font-size: var(--fig-label);
-  line-height: var(--leading-tight);
+  line-height: 1.2;
   text-align: center;
   text-wrap: balance;
 }
@@ -254,7 +301,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   left: calc((var(--min) + 0.5) * 100% / var(--lanes));
   display: block;
   width: calc((var(--max) - var(--min)) * 100% / var(--lanes));
-  height: 0.5rem;
+  height: 0.375rem;
   color: var(--role-fg);
 }
 .arrow::before {
@@ -301,9 +348,11 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   justify-content: center;
   width: calc(
     (
-        min(var(--lanes) - 0.02, var(--lane) + 1.45) -
-          max(0.02, var(--lane) - 0.45)
-      ) * 100% / var(--lanes)
+      min(var(--lanes) - 0.02, var(--lane) + 1.45) -
+        max(0.02, var(--lane) - 0.45)
+    ) *
+      100% /
+      var(--lanes)
   );
 }
 .note-zone[data-align="start"] {
@@ -327,9 +376,9 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
 }
 
 .callout-row {
-  --cw: min(2.5, var(--lanes));
+  --cw: min(3, var(--lanes));
   --bx: clamp(0, var(--lane) + 0.5 - var(--cw) / 2, var(--lanes) - var(--cw));
-  padding: 0.5rem 0 0.0625rem;
+  padding: 0.4375rem 0 0.0625rem;
 }
 .callout-row .cfig-callout {
   --cfig-tail-at: calc((var(--lane) + 0.5 - var(--bx)) / var(--cw) * 100%);
@@ -343,7 +392,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
 .step[data-step="divider"] {
   display: flex;
   align-items: center;
-  min-height: 1rem;
+  min-height: 1.25rem;
 }
 .divider-line {
   position: absolute;
@@ -359,7 +408,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   padding: 0 var(--space-1);
   color: var(--role-muted);
   font-size: var(--fig-label);
-  line-height: var(--leading-tight);
+  line-height: 1.2;
 }
 
 .step[data-frame]::before {
@@ -371,7 +420,7 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   pointer-events: none;
 }
 .cfig .step[data-frame-start] {
-  padding-top: 1.5rem;
+  padding-top: 1.25rem;
 }
 .step[data-frame-start]::before {
   border-top: 1px solid var(--role-accent-strong);
@@ -396,8 +445,57 @@ const edgeOf = (index: number): 'start' | 'end' | 'center' =>
   padding: 0 var(--space-2);
   color: var(--role-on-strong);
   font-size: var(--fig-label);
-  font-weight: var(--weight-bold);
   line-height: 1.25rem;
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .step {
+    animation: step-in 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.45s);
+  }
+  .step[data-step="message"] .arrow {
+    animation: arrow-grow 0.4s ease-out both;
+    animation-delay: calc(var(--i) * 0.45s);
+  }
+  .step[data-dir="right"] .arrow {
+    transform-origin: left center;
+  }
+  .step[data-dir="left"] .arrow {
+    transform-origin: right center;
+  }
+  .callout-row {
+    transform-origin: calc((var(--lane) + 0.5) * 100% / var(--lanes)) top;
+    animation: callout-in 0.3s ease-out both;
+    animation-delay: calc(var(--i) * 0.45s);
+  }
+}
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes arrow-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes callout-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 </style>

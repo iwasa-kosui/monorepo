@@ -86,7 +86,6 @@
   margin-right: var(--space-1);
   color: var(--cfig-callout-line);
   font-size: var(--fig-label);
-  font-weight: var(--weight-bold);
 }
 .content .cfig .cfig-callout[data-tail]::before,
 .content .cfig .cfig-callout[data-tail]::after {

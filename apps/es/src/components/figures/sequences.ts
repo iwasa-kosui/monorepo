@@ -42,7 +42,6 @@ export const cancelInquirySequence: Sequence = {
     { type: 'divider', text: '後日' },
     { type: 'message', from: 'clinic', to: 'support', text: '誰が、なぜキャンセルしたのか', style: 'call' },
     { type: 'message', from: 'support', to: 'app', text: '調査を依頼', style: 'call' },
-    { type: 'message', from: 'app', to: 'visits', text: '来院の行を参照', style: 'call' },
     {
       type: 'message',
       from: 'visits',
@@ -50,15 +49,32 @@ export const cancelInquirySequence: Sequence = {
       text: '`status` が `cancelled` であることだけ',
       style: 'return',
     },
+    { type: 'message', from: 'support', to: 'clinic', text: '回答できない', style: 'fail' },
+  ],
+};
+
+export const cancelDecisionSequence: Sequence = {
+  id: 'cancel-decision',
+  label: '来院の更新と、キャンセルの記録の追記を、同じトランザクションで実行する図',
+  lanes: [
+    { id: 'caller', name: '呼び出し元', kind: 'system' },
+    { id: 'app', name: '`cancelVisit`', kind: 'system' },
+    { id: 'visits', name: '`visits` テーブル', kind: 'table' },
+    { id: 'records', name: '`visit_cancellations` テーブル', kind: 'table' },
+  ],
+  steps: [
+    { type: 'message', from: 'caller', to: 'app', text: '理由と、キャンセルした人を渡す', style: 'call' },
+    { type: 'message', from: 'app', to: 'visits', text: '`status` を `cancelled` に更新', style: 'call' },
     {
       type: 'message',
-      from: 'support',
-      to: 'clinic',
-      text: '回答できない',
-      style: 'fail',
-      callout: { tone: 'problem', label: '課題', text: '人と理由が、どこにも残っていない' },
+      from: 'app',
+      to: 'records',
+      text: '人、理由、日時を1行追記',
+      style: 'call',
+      callout: { tone: 'ok', label: '欠落しない', text: 'どちらかが失敗すると、両方をロールバックする' },
     },
   ],
+  frame: { label: '同じトランザクション', from: 1, to: 2 },
 };
 
 export const externalCancelProblemSequence: Sequence = {
@@ -77,7 +93,11 @@ export const externalCancelProblemSequence: Sequence = {
       type: 'note',
       lane: 'app',
       text: '診察が終わった来院なので、反映できない。診察済みのまま',
-      callout: { tone: 'problem', label: '課題', text: '反映できなかったキャンセルを、届いていないキャンセルと区別できない' },
+      callout: {
+        tone: 'problem',
+        label: '課題',
+        text: '反映できなかったキャンセルを、届いていないキャンセルと区別できない',
+      },
     },
     { type: 'divider', text: '後日' },
     { type: 'message', from: 'owner', to: 'app', text: 'キャンセルになっていない', style: 'call' },
